@@ -75,7 +75,6 @@ jobs:
           MAL_API: ${{ secrets.MAL_API }}
           IGDB_ID: ${{ secrets.IGDB_ID }}
           IGDB_SECRET: ${{ secrets.IGDB_SECRET }}
-          DEBUG: True
         run: |
           coverage run --parallel-mode src/manage.py test app
           coverage run --parallel-mode src/manage.py test users
