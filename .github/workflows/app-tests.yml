@@ -80,6 +80,7 @@ jobs:
           coverage run --parallel-mode src/manage.py test users
           coverage run --parallel-mode src/manage.py test integrations
           coverage run --parallel-mode src/manage.py test lists
+          coverage run --parallel-mode src/manage.py test events
 
       - name: Build Coverage Report
         run: |
