@@ -19,11 +19,8 @@ Description of what you expected to happen.
 **Screenshots**
 If applicable, add screenshots to help explain your problem.
 
-### Environment
-- **Yamtrack version**: [e.g. 0.19.0]
-- **Database**: 
-  - [ ] SQLite (default)
-  - [ ] PostgreSQL
-
-### Error logs
+**Error logs**
  If you have any error logs, paste them here:
+
+**Yamtrack version**:
+**Database**: SQLite (default) or PostgreSQL
