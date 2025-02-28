@@ -1,7 +1,6 @@
 {
   "editor.formatOnSave": true,
   "[django-html]": {
-    "editor.defaultFormatter": "vscode.html-language-features",
     "editor.tabSize": 2
   },
   "[css]": {
