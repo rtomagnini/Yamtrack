@@ -1,15 +1,16 @@
 name: Cleanup Docker Images
 on:
+  # every day at 01:30am
+  schedule:
+    - cron: "30 1 * * *"
+  # or manually
   workflow_dispatch:
 jobs:
-  cleanup:
+  ghcr-cleanup-image:
+    name: ghcr cleanup action
     runs-on: ubuntu-latest
     steps:
-      # https://github.com/actions/delete-package-versions
-      - name: Delete old untagged images
-        uses: actions/delete-package-versions@v5
+      - uses: dataaxiom/ghcr-cleanup-action@v1
         with:
-          package-name: "yamtrack"
-          package-type: "container"
-          min-versions-to-keep: 15
-          delete-only-untagged-versions: "true"
+          dry-run: true
+          keep-n-untagged: 20
