@@ -1,7 +1,5 @@
 name: Cleanup Docker Images
 on:
-  schedule:
-    - cron: "30 1 * * *"
   workflow_dispatch:
 
 jobs:
@@ -14,6 +12,7 @@ jobs:
         with:
           package: yamtrack
           keep-n-untagged: 15
+          delete-ghost-images: true
           validate: true
 
 
