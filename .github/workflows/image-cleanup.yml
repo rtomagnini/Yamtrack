@@ -12,5 +12,8 @@ jobs:
     steps:
       - uses: dataaxiom/ghcr-cleanup-action@v1
         with:
-          keep-n-untagged: 15
           package: yamtrack
+          keep-n-untagged: 15
+          validate: true
+
+
