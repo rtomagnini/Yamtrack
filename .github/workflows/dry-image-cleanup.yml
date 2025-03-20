@@ -1,4 +1,4 @@
-name: Cleanup Docker Images
+name: Dry Run Cleanup Docker Images
 on:
   workflow_dispatch:
 
