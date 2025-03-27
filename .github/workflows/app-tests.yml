@@ -76,15 +76,10 @@ jobs:
           IGDB_ID: ${{ secrets.IGDB_ID }}
           IGDB_SECRET: ${{ secrets.IGDB_SECRET }}
         run: |
-          coverage run --parallel-mode src/manage.py test app
-          coverage run --parallel-mode src/manage.py test users
-          coverage run --parallel-mode src/manage.py test integrations
-          coverage run --parallel-mode src/manage.py test lists
-          coverage run --parallel-mode src/manage.py test events
+          coverage run src/manage.py test app users integrations lists events
 
       - name: Build Coverage Report
         run: |
-          coverage combine
           coverage report
           coverage xml
 
