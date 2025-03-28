@@ -76,7 +76,7 @@ jobs:
           IGDB_ID: ${{ secrets.IGDB_ID }}
           IGDB_SECRET: ${{ secrets.IGDB_SECRET }}
         run: |
-          coverage run src/manage.py test app users integrations lists events
+          coverage run src/manage.py test app users integrations lists events --parallel
 
       - name: Build Coverage Report
         run: |
