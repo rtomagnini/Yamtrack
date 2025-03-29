@@ -80,6 +80,7 @@ jobs:
 
       - name: Build Coverage Report
         run: |
+          coverage combine
           coverage report
           coverage xml
 
