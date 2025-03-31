@@ -5,6 +5,7 @@ coverage:
       default:
         paths:
         - "src/app"
+        - "src/events"
         - "src/integrations"
         - "src/users"
         - "src/lists"
