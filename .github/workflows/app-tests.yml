@@ -1,10 +1,9 @@
 name: App Tests
 
-# Change trigger to pull_request_target for handling fork PRs safely
 on:
-  pull_request_target:
+  pull_request:
     paths-ignore:
-      - '.github/workflows/**'
+      - ".github/workflows/**"
   push:
     branches:
       - main
@@ -19,7 +18,7 @@ permissions:
 jobs:
   check-workflow-changes:
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request_target'
+    if: github.event_name == 'pull_request'
     steps:
       - name: Check for workflow modifications
         uses: dorny/paths-filter@v3
@@ -28,7 +27,6 @@ jobs:
           filters: |
             workflows:
               - '.github/workflows/**'
-      
       - name: Fail if workflows were modified
         if: steps.changes.outputs.workflows == 'true'
         run: |
@@ -37,7 +35,6 @@ jobs:
 
   test:
     needs: check-workflow-changes
-    if: always()
     runs-on: ubuntu-latest
     strategy:
       max-parallel: 4
@@ -49,11 +46,11 @@ jobs:
           github.event_name == 'pull_request_target' && 
           needs.check-workflow-changes.result == 'failure'
         run: exit 1
-        
+
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Python ${{ matrix.python-version }}
+      - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
@@ -84,7 +81,7 @@ jobs:
           coverage report
           coverage xml
 
-      - name: Upload coverage reports to Codecov with GitHub Action
+      - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
