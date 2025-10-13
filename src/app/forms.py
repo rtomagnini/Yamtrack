@@ -111,9 +111,11 @@ class ManualItemForm(forms.ModelForm):
             "season_number",
             "episode_number",
             "air_date",
+            "runtime",
         ]
         widgets = {
             "air_date": forms.DateInput(attrs={"type": "date"}),
+            "runtime": forms.NumberInput(attrs={"placeholder": "Duration in minutes"}),
         }
 
     def __init__(self, *args, **kwargs):

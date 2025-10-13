@@ -141,6 +141,7 @@ def process_episodes(season_metadata, episodes_in_db):
             "season_number": season_metadata["season_number"],
             "episode_number": episode_number,
             "air_date": episode["air_date"],
+            "runtime": episode["runtime"],
             "image": episode["image"],
             "title": episode["title"],
             "overview": "No synopsis available.",
@@ -161,6 +162,7 @@ def build_episodes_response(season_episodes):
             "image": episode.image,
             "episode_number": episode.episode_number,
             "air_date": episode.air_date,
+            "runtime": episode.runtime,
         }
         for episode in season_episodes
     ]

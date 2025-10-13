@@ -80,6 +80,7 @@ class Item(CalendarTriggerMixin, models.Model):
     season_number = models.PositiveIntegerField(null=True, blank=True)
     episode_number = models.PositiveIntegerField(null=True, blank=True)
     air_date = models.DateField(null=True, blank=True)
+    runtime = models.PositiveIntegerField(null=True, blank=True)  # Duration in minutes
 
     class Meta:
         """Meta options for the model."""

@@ -84,7 +84,7 @@
     
         // Episode fields
         else if (this.mediaType === 'episode') {
-          return ['parentSeason', 'title', 'episodeNumber', 'image', 'airDate'].includes(field);
+          return ['parentSeason', 'title', 'episodeNumber', 'image', 'airDate', 'runtime'].includes(field);
         }
     
         // Movie, Anime, Manga, Game, Book fields
@@ -486,6 +486,17 @@
           <input class="w-full p-2 bg-[#39404b] rounded-md text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-[#4a9eff] appearance-none"
                  name="air_date"
                  type="date"
+                 value="">
+        </div>
+
+        <!-- Runtime field (Episode) -->
+        <div x-show="showField('runtime')">
+          <label class="block text-sm font-medium mb-2 text-gray-300">Runtime (minutes)</label>
+          <input class="w-full p-2 bg-[#39404b] rounded-md text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-[#4a9eff] appearance-none"
+                 name="runtime"
+                 type="number"
+                 min="1"
+                 placeholder="Duration in minutes"
                  value="">
         </div>
 
