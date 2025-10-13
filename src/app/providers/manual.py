@@ -160,7 +160,7 @@ def build_episodes_response(season_episodes):
             "title": episode.title,
             "image": episode.image,
             "episode_number": episode.episode_number,
-            "air_date": None,
+            "air_date": episode.air_date,
         }
         for episode in season_episodes
     ]
