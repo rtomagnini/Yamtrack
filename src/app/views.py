@@ -60,6 +60,7 @@ def home(request):
 def progress_edit(request, media_type, instance_id):
     """Increase or decrease the progress of a media item from home page."""
     operation = request.POST["operation"]
+    confirm_completion = request.POST.get("confirm_completion")
 
     media = BasicMedia.objects.get_media_prefetch(
         request.user,
@@ -67,7 +68,50 @@ def progress_edit(request, media_type, instance_id):
         instance_id,
     )
 
-    if operation == "increase":
+    # Special handling for season increase operation
+    if operation == "increase" and media_type == MediaTypes.SEASON.value:
+        # Get season metadata to check if this will be the last episode
+        season_metadata = services.get_media_metadata(
+            MediaTypes.SEASON.value,
+            media.item.media_id,
+            media.item.source,
+            [media.item.season_number],
+        )
+        episodes = season_metadata["episodes"]
+        max_episodes = len(episodes)
+        current_progress = media.progress
+        
+        # Check if incrementing will complete the season
+        next_episode_number = None
+        if current_progress == 0:
+            next_episode_number = episodes[0]["episode_number"]
+        else:
+            next_episode_number = tmdb.find_next_episode(current_progress, episodes)
+        
+        is_last_episode = next_episode_number == max_episodes
+        
+        # If it's the last episode and no confirmation yet, ask for confirmation
+        if is_last_episode and confirm_completion not in ["yes", "no"]:
+            return JsonResponse({
+                "requires_confirmation": True,
+                "message": "This is the last episode of the season. Do you want to mark the season as completed?",
+                "season_data": {
+                    "media_type": media_type,
+                    "instance_id": instance_id,
+                    "operation": operation,
+                }
+            })
+        
+        # Handle the increase with auto_complete logic
+        if is_last_episode:
+            auto_complete = confirm_completion == "yes"
+            # Manually call watch instead of increase_progress to control auto_complete
+            now = timezone.now().replace(second=0, microsecond=0)
+            if next_episode_number:
+                media.watch(next_episode_number, now, auto_complete=auto_complete)
+        else:
+            media.increase_progress()
+    elif operation == "increase":
         media.increase_progress()
     elif operation == "decrease":
         media.decrease_progress()

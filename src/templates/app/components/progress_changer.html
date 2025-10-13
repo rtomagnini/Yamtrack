@@ -1,58 +1,144 @@
 {% load app_tags %}
 
-<div class="flex items-center justify-center space-x-4">
-  <button class="p-1 bg-gray-700 hover:bg-gray-600 rounded-md transition-colors cursor-pointer disabled:opacity-50 disabled:hover:bg-gray-700 disabled:cursor-not-allowed"
-          {% if media.progress == 0 %}disabled{% endif %}
-          hx-post="{% url 'progress_edit' media.item.media_type media.id %}"
-          hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
-          hx-vals='{"operation": "decrease"}'
-          hx-swap="innerHTML"
-          hx-target="#progress-{{ media.item.media_type }}-{{ media.id }}">
-    <svg xmlns="http://www.w3.org/2000/svg"
-         width="24"
-         height="24"
-         viewBox="0 0 24 24"
-         fill="none"
-         stroke="currentColor"
-         stroke-width="2"
-         stroke-linecap="round"
-         stroke-linejoin="round"
-         class="w-3 h-3">
-      <path d="M5 12h14"></path>
-    </svg>
-  </button>
+<div class="flex items-center justify-center space-x-4" 
+     x-data="{ 
+       showConfirmation: false, 
+       confirmationData: null,
+       async handleIncreaseClick() {
+         try {
+           const response = await fetch('{% url 'progress_edit' media.item.media_type media.id %}', {
+             method: 'POST',
+             headers: {
+               'X-CSRFToken': '{{ csrf_token }}',
+               'X-Requested-With': 'XMLHttpRequest'
+             },
+             body: new URLSearchParams({
+               'operation': 'increase'
+             })
+           });
 
-  <div class="text-xs text-indigo-400 font-medium min-w-[4ch] text-center">
-    {{ media.formatted_progress }}
+           if (response.headers.get('content-type')?.includes('application/json')) {
+             const data = await response.json();
+             if (data.requires_confirmation) {
+               this.showConfirmation = true;
+               this.confirmationData = data;
+               return;
+             }
+           }
 
-    {% if media.item.media_type != MediaTypes.GAME.value and media.item.media_type != MediaTypes.MOVIE.value %}
-      {% if media.max_progress %}
-        / {{ media.max_progress }} {{ media.item.media_type|long_unit }}{{ media.max_progress|pluralize }}
-      {% else %}
-        {{ media.item.media_type|long_unit }}{{ media.progress|pluralize }}
+           // If we get here, it was successful - reload the progress component
+           if (response.ok) {
+             const html = await response.text();
+             document.getElementById('progress-{{ media.item.media_type }}-{{ media.id }}').innerHTML = html;
+           }
+         } catch (error) {
+           console.error('Error:', error);
+         }
+       },
+       async submitWithConfirmation(choice) {
+         try {
+           const response = await fetch('{% url 'progress_edit' media.item.media_type media.id %}', {
+             method: 'POST',
+             headers: {
+               'X-CSRFToken': '{{ csrf_token }}',
+               'X-Requested-With': 'XMLHttpRequest'
+             },
+             body: new URLSearchParams({
+               'operation': 'increase',
+               'confirm_completion': choice
+             })
+           });
+
+           if (response.ok) {
+             const html = await response.text();
+             document.getElementById('progress-{{ media.item.media_type }}-{{ media.id }}').innerHTML = html;
+           }
+         } catch (error) {
+           console.error('Error:', error);
+         }
+       }
+     }">
+  
+  {# Normal progress controls #}
+  <div x-show="!showConfirmation" class="flex items-center justify-center space-x-4">
+    <button class="p-1 bg-gray-700 hover:bg-gray-600 rounded-md transition-colors cursor-pointer disabled:opacity-50 disabled:hover:bg-gray-700 disabled:cursor-not-allowed"
+            {% if media.progress == 0 %}disabled{% endif %}
+            hx-post="{% url 'progress_edit' media.item.media_type media.id %}"
+            hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
+            hx-vals='{"operation": "decrease"}'
+            hx-swap="innerHTML"
+            hx-target="#progress-{{ media.item.media_type }}-{{ media.id }}">
+      <svg xmlns="http://www.w3.org/2000/svg"
+           width="24"
+           height="24"
+           viewBox="0 0 24 24"
+           fill="none"
+           stroke="currentColor"
+           stroke-width="2"
+           stroke-linecap="round"
+           stroke-linejoin="round"
+           class="w-3 h-3">
+        <path d="M5 12h14"></path>
+      </svg>
+    </button>
+
+    <div class="text-xs text-indigo-400 font-medium min-w-[4ch] text-center">
+      {{ media.formatted_progress }}
+
+      {% if media.item.media_type != MediaTypes.GAME.value and media.item.media_type != MediaTypes.MOVIE.value %}
+        {% if media.max_progress %}
+          / {{ media.max_progress }} {{ media.item.media_type|long_unit }}{{ media.max_progress|pluralize }}
+        {% else %}
+          {{ media.item.media_type|long_unit }}{{ media.progress|pluralize }}
+        {% endif %}
       {% endif %}
-    {% endif %}
+    </div>
+
+    <button class="p-1 bg-gray-700 hover:bg-gray-600 rounded-md transition-colors cursor-pointer disabled:opacity-50 disabled:hover:bg-gray-700 disabled:cursor-not-allowed"
+            {% if media.progress == media.max_progress %}disabled{% endif %}
+            {% if media.item.media_type == MediaTypes.SEASON.value %}
+              @click="handleIncreaseClick()"
+            {% else %}
+              hx-post="{% url 'progress_edit' media.item.media_type media.id %}"
+              hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
+              hx-vals='{"operation": "increase"}'
+              hx-swap="innerHTML"
+              hx-target="#progress-{{ media.item.media_type }}-{{ media.id }}"
+            {% endif %}>
+      <svg xmlns="http://www.w3.org/2000/svg"
+           width="24"
+           height="24"
+           viewBox="0 0 24 24"
+           fill="none"
+           stroke="currentColor"
+           stroke-width="2"
+           stroke-linecap="round"
+           stroke-linejoin="round"
+           class="w-3 h-3">
+        <path d="M5 12h14"></path>
+        <path d="M12 5v14"></path>
+      </svg>
+    </button>
   </div>
 
-  <button class="p-1 bg-gray-700 hover:bg-gray-600 rounded-md transition-colors cursor-pointer disabled:opacity-50 disabled:hover:bg-gray-700 disabled:cursor-not-allowed"
-          {% if media.progress == media.max_progress %}disabled{% endif %}
-          hx-post="{% url 'progress_edit' media.item.media_type media.id %}"
-          hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
-          hx-vals='{"operation": "increase"}'
-          hx-swap="innerHTML"
-          hx-target="#progress-{{ media.item.media_type }}-{{ media.id }}">
-    <svg xmlns="http://www.w3.org/2000/svg"
-         width="24"
-         height="24"
-         viewBox="0 0 24 24"
-         fill="none"
-         stroke="currentColor"
-         stroke-width="2"
-         stroke-linecap="round"
-         stroke-linejoin="round"
-         class="w-3 h-3">
-      <path d="M5 12h14"></path>
-      <path d="M12 5v14"></path>
-    </svg>
-  </button>
+  {# Confirmation modal #}
+  <div x-show="showConfirmation" class="text-center space-y-3">
+    <div class="mb-2">
+      <svg class="mx-auto h-6 w-6 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+      </svg>
+    </div>
+    <p class="text-xs text-gray-300 mb-3">Complete Season?</p>
+    
+    <div class="flex justify-center gap-2">
+      <button @click="submitWithConfirmation('no')"
+              class="px-2 py-1 bg-gray-600 text-white rounded text-xs hover:bg-gray-700 transition-colors cursor-pointer">
+        No
+      </button>
+      <button @click="submitWithConfirmation('yes')"
+              class="px-2 py-1 bg-indigo-600 text-white rounded text-xs hover:bg-indigo-700 transition-colors cursor-pointer">
+        Yes
+      </button>
+    </div>
+  </div>
 </div>
