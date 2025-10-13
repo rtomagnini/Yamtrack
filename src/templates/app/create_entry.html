@@ -84,7 +84,7 @@
     
         // Episode fields
         else if (this.mediaType === 'episode') {
-          return ['parentSeason', 'image', 'episodeNumber', 'endDate'].includes(field);
+          return ['parentSeason', 'title', 'episodeNumber', 'image', 'airDate'].includes(field);
         }
     
         // Movie, Anime, Manga, Game, Book fields
@@ -453,7 +453,7 @@
           <div class="relative">
             <select class="w-full p-2 bg-[#39404b] rounded-md text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-[#4a9eff] appearance-none"
                     name="status">
-              {% for status in Status.values %}<option value="{{ status }}">{{ status }}</option>{% endfor %}
+              {% for status in Status.values %}<option value="{{ status }}" {% if status == Status.IN_PROGRESS.value %}selected{% endif %}>{{ status }}</option>{% endfor %}
             </select>
             <div class="absolute inset-y-0 right-2 flex items-center pointer-events-none">
               <svg xmlns="http://www.w3.org/2000/svg"
@@ -480,7 +480,16 @@
                  value="">
         </div>
 
-        <!-- End Date field (Episode, Movie, Anime, Manga, Game, Book) -->
+        <!-- Air Date field (Episode) -->
+        <div x-show="showField('airDate')">
+          <label class="block text-sm font-medium mb-2 text-gray-300">Air Date</label>
+          <input class="w-full p-2 bg-[#39404b] rounded-md text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-[#4a9eff] appearance-none"
+                 name="air_date"
+                 type="date"
+                 value="">
+        </div>
+
+        <!-- End Date field (Movie, Anime, Manga, Game, Book) -->
         <div x-show="showField('endDate')">
           <label class="block text-sm font-medium mb-2 text-gray-300">End Date</label>
           <input class="w-full p-2 bg-[#39404b] rounded-md text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-[#4a9eff] appearance-none"
@@ -520,4 +529,28 @@
     </div>
   </form>
 </div>
+
+<script>
+async function selectSeason(seasonId, seasonText) {
+  // Set the season selection
+  document.getElementById('parent-season-input').value = seasonText;
+  document.getElementById('parent-season-id').value = seasonId;
+  document.getElementById('parent-season-results').innerHTML = '';
+  
+  // Get the next episode number
+  try {
+    const response = await fetch(`{% url 'get_next_episode_number' %}?season_id=${seasonId}`);
+    const data = await response.json();
+    
+    // Set the episode number input
+    const episodeNumberInput = document.querySelector('input[name="episode_number"]');
+    if (episodeNumberInput) {
+      episodeNumberInput.value = data.next_episode;
+    }
+  } catch (error) {
+    console.error('Error getting next episode number:', error);
+  }
+}
+</script>
+
 {% endblock content %}

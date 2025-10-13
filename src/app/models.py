@@ -79,6 +79,7 @@ class Item(CalendarTriggerMixin, models.Model):
     image = models.URLField()  # if add default, custom media entry will show the value
     season_number = models.PositiveIntegerField(null=True, blank=True)
     episode_number = models.PositiveIntegerField(null=True, blank=True)
+    air_date = models.DateField(null=True, blank=True)
 
     class Meta:
         """Meta options for the model."""

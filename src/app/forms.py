@@ -110,7 +110,11 @@ class ManualItemForm(forms.ModelForm):
             "image",
             "season_number",
             "episode_number",
+            "air_date",
         ]
+        widgets = {
+            "air_date": forms.DateInput(attrs={"type": "date"}),
+        }
 
     def __init__(self, *args, **kwargs):
         """Initialize the form."""
@@ -159,7 +163,9 @@ class ManualItemForm(forms.ModelForm):
                         "Parent season is required for episodes",
                     )
                     return cleaned_data
-                cleaned_data["title"] = parent.item.title
+                # Keep the episode title as provided by user, don't override with parent title
+                if not cleaned_data.get("title"):
+                    self.add_error("title", "Episode title is required")
                 cleaned_data["season_number"] = parent.item.season_number
         else:
             # For standalone media, title is required
@@ -337,8 +343,14 @@ class SeasonForm(MediaForm):
         ]
 
 
-class EpisodeForm(forms.ModelForm):
-    """Form for episodes."""
+class EpisodeForm(forms.Form):
+    """Form for episodes - episodes don't have status, they're just created."""
+    
+    pass  # Episodes don't need additional fields beyond the base item creation
+
+
+class EpisodeTrackingForm(forms.ModelForm):
+    """Form for tracking episodes (marking as watched)."""
 
     class Meta:
         """Bind form to model."""
