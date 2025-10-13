@@ -80,5 +80,10 @@ urlpatterns = [
         views.search_parent_season,
         name="search_parent_season",
     ),
+    path(
+        "get_next_episode_number",
+        views.get_next_episode_number,
+        name="get_next_episode_number",
+    ),
     path("statistics", views.statistics, name="statistics"),
 ]

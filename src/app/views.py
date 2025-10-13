@@ -6,6 +6,7 @@ from django.contrib import messages
 from django.core.cache import cache
 from django.core.paginator import Paginator
 from django.db import IntegrityError
+from django.db import models
 from django.db.models import prefetch_related_objects
 from django.http import HttpResponse, HttpResponseBadRequest, JsonResponse
 from django.shortcuts import redirect, render
@@ -17,7 +18,7 @@ from django.views.decorators.http import require_GET, require_http_methods, requ
 
 from app import helpers, history_processor
 from app import statistics as stats
-from app.forms import EpisodeForm, ManualItemForm, get_form_class
+from app.forms import EpisodeTrackingForm, ManualItemForm, get_form_class
 from app.models import TV, BasicMedia, Item, MediaTypes, Season, Sources, Status
 from app.providers import manual, services, tmdb
 from app.templatetags import app_tags
@@ -589,7 +590,7 @@ def episode_save(request):
     source = request.POST["source"]
     confirm_completion = request.POST.get("confirm_completion")
 
-    form = EpisodeForm(request.POST)
+    form = EpisodeTrackingForm(request.POST)
     if not form.is_valid():
         logger.error("Form validation failed: %s", form.errors)
         return HttpResponseBadRequest("Invalid form data")
@@ -674,7 +675,10 @@ def create_entry(request):
     """Return the form for manually adding media items."""
     if request.method == "GET":
         media_types = MediaTypes.values
-        return render(request, "app/create_entry.html", {"media_types": media_types})
+        return render(request, "app/create_entry.html", {
+            "media_types": media_types,
+            "Status": Status
+        })
 
     # Process the form submission
     form = ManualItemForm(request.POST, user=request.user)
@@ -699,32 +703,32 @@ def create_entry(request):
         messages.error(request, f"{media_name} already exists in the database.")
         return redirect("create_entry")
 
-    # Prepare and validate the media form
-    updated_request = request.POST.copy()
-    updated_request.update({"source": item.source, "media_id": item.media_id})
-    media_form = get_form_class(item.media_type)(updated_request)
+    # Episodes don't need media instances - they're just Item entries
+    if item.media_type != MediaTypes.EPISODE.value:
+        # Prepare and validate the media form
+        updated_request = request.POST.copy()
+        updated_request.update({"source": item.source, "media_id": item.media_id})
+        media_form = get_form_class(item.media_type)(updated_request)
 
-    if not media_form.is_valid():
-        # Handle media form validation errors
-        logger.error(media_form.errors.as_json())
-        helpers.form_error_messages(media_form, request)
+        if not media_form.is_valid():
+            # Handle media form validation errors
+            logger.error(media_form.errors.as_json())
+            helpers.form_error_messages(media_form, request)
 
-        # Delete the item since the media creation failed
-        item.delete()
-        logger.info("%s was deleted due to media form validation failure", item)
-        return redirect("create_entry")
+            # Delete the item since the media creation failed
+            item.delete()
+            logger.info("%s was deleted due to media form validation failure", item)
+            return redirect("create_entry")
 
-    # Save the media instance
-    media_form.instance.user = request.user
-    media_form.instance.item = item
+        # Save the media instance
+        media_form.instance.user = request.user
+        media_form.instance.item = item
 
-    # Handle relationships based on media type
-    if item.media_type == MediaTypes.SEASON.value:
-        media_form.instance.related_tv = form.cleaned_data["parent_tv"]
-    elif item.media_type == MediaTypes.EPISODE.value:
-        media_form.instance.related_season = form.cleaned_data["parent_season"]
+        # Handle relationships based on media type
+        if item.media_type == MediaTypes.SEASON.value:
+            media_form.instance.related_tv = form.cleaned_data["parent_tv"]
 
-    media_form.save()
+        media_form.save()
 
     # Success message
     msg = f"{item} added successfully."
@@ -788,6 +792,32 @@ def search_parent_season(request):
         "app/components/search_parent_season.html",
         {"results": parent_seasons, "query": query},
     )
+
+
+@require_GET
+def get_next_episode_number(request):
+    """Return the next episode number for a season."""
+    season_id = request.GET.get("season_id")
+    
+    if not season_id:
+        return JsonResponse({"next_episode": 1})
+    
+    try:
+        # Get the highest episode number for this season
+        highest_episode = Item.objects.filter(
+            media_id__in=Season.objects.filter(id=season_id).values_list('item__media_id', flat=True),
+            source=Sources.MANUAL.value,
+            media_type=MediaTypes.EPISODE.value,
+            season_number__in=Season.objects.filter(id=season_id).values_list('item__season_number', flat=True)
+        ).aggregate(
+            max_episode=models.Max('episode_number')
+        )['max_episode']
+        
+        next_episode = (highest_episode or 0) + 1
+        return JsonResponse({"next_episode": next_episode})
+        
+    except Exception:
+        return JsonResponse({"next_episode": 1})
 
 
 @require_GET
