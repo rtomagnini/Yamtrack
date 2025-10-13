@@ -699,10 +699,12 @@
           {% for episode in media.episodes %}
             <div class="bg-[#2a2f35] rounded-lg overflow-hidden shadow-lg">
               <div class="flex flex-col md:flex-row">
-                <img src="{{ IMG_NONE }}"
-                     alt="E{{ episode.episode_number }}"
-                     data-src="{{ episode.image }}"
-                     class="lazyload md:w-64 md:h-40 flex-shrink-0 {% if episode.image != IMG_NONE %}object-cover{% endif %}">
+                <div class="md:w-64 flex-shrink-0">
+                  <img src="{{ IMG_NONE }}"
+                       alt="E{{ episode.episode_number }}"
+                       data-src="{{ episode.image }}"
+                       class="lazyload w-full aspect-video {% if episode.image != IMG_NONE %}object-cover{% else %}object-contain{% endif %}">
+                </div>
                 <div class="py-3 flex-1 flex flex-col">
                   <div class="flex-1">
                     <div class="flex justify-between items-start mb-2 space-x-2 px-4">
