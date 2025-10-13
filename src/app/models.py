@@ -1267,7 +1267,7 @@ class Season(Media):
         else:
             logger.info("No more episodes to watch.")
 
-    def watch(self, episode_number, end_date):
+    def watch(self, episode_number, end_date, auto_complete=True):
         """Create or add a repeat to an episode of the season."""
         item = self.get_episode_item(episode_number)
 
@@ -1276,6 +1276,10 @@ class Season(Media):
             item=item,
             end_date=end_date,
         )
+        
+        # Save with auto_complete parameter
+        episode.save(auto_complete=auto_complete)
+        
         logger.info(
             "%s created successfully.",
             episode,
@@ -1466,6 +1470,9 @@ class Episode(models.Model):
 
     def save(self, *args, **kwargs):
         """Save the episode instance."""
+        # Extract the auto_complete parameter from kwargs
+        auto_complete = kwargs.pop('auto_complete', True)
+        
         super().save(*args, **kwargs)
 
         season_number = self.item.season_number
@@ -1482,7 +1489,7 @@ class Episode(models.Model):
         self.related_season.refresh_from_db()
 
         season_just_completed = False
-        if self.item.episode_number == max_progress:
+        if self.item.episode_number == max_progress and auto_complete:
             self.related_season.status = Status.COMPLETED.value
             bulk_update_with_history(
                 [self.related_season],

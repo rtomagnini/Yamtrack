@@ -543,6 +543,7 @@ def episode_save(request):
     season_number = int(request.POST["season_number"])
     episode_number = int(request.POST["episode_number"])
     source = request.POST["source"]
+    confirm_completion = request.POST.get("confirm_completion")
 
     form = EpisodeForm(request.POST)
     if not form.is_valid():
@@ -585,8 +586,41 @@ def episode_save(request):
         )
 
         logger.info("%s did not exist, it was created successfully.", related_season)
+    else:
+        # Get season metadata for existing season
+        tv_with_seasons_metadata = services.get_media_metadata(
+            "tv_with_seasons",
+            media_id,
+            source,
+            [season_number],
+        )
+        season_metadata = tv_with_seasons_metadata[f"season/{season_number}"]
 
-    related_season.watch(episode_number, form.cleaned_data["end_date"])
+    # Check if this is the last episode and if completion needs confirmation
+    max_episodes = len(season_metadata["episodes"])
+    is_last_episode = episode_number == max_episodes
+    
+    if is_last_episode and confirm_completion not in ["yes", "no"]:
+        # Return a JSON response indicating confirmation is needed
+        return JsonResponse({
+            "requires_confirmation": True,
+            "message": "This is the last episode of the season. Do you want to mark the season as completed?",
+            "episode_data": {
+                "media_id": media_id,
+                "season_number": season_number,
+                "episode_number": episode_number,
+                "source": source,
+                "end_date": form.cleaned_data["end_date"].isoformat(),
+            }
+        })
+
+    # Determine if auto-completion should happen
+    if is_last_episode:
+        auto_complete = confirm_completion == "yes"
+    else:
+        auto_complete = True
+    
+    related_season.watch(episode_number, form.cleaned_data["end_date"], auto_complete=auto_complete)
 
     return helpers.redirect_back(request)
 
