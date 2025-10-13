@@ -295,6 +295,20 @@ def season_details(request, source, media_id, title, season_number):  # noqa: AR
             if episode.get("history")
         ]
 
+    # Sort episodes by episode number
+    sort_order = request.GET.get("sort", "asc")
+    if sort_order == "desc":
+        season_metadata["episodes"] = sorted(
+            season_metadata["episodes"], 
+            key=lambda x: x["episode_number"], 
+            reverse=True
+        )
+    else:  # Default to ascending
+        season_metadata["episodes"] = sorted(
+            season_metadata["episodes"], 
+            key=lambda x: x["episode_number"]
+        )
+
     context = {
         "media": season_metadata,
         "tv": tv_with_seasons_metadata,
@@ -302,6 +316,7 @@ def season_details(request, source, media_id, title, season_number):  # noqa: AR
         "user_medias": user_medias,
         "current_instance": current_instance,
         "current_filter": episode_filter,
+        "current_sort": sort_order,
     }
     return render(request, "app/media_details.html", context)
 

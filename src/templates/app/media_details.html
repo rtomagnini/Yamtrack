@@ -656,19 +656,41 @@
       <div class="w-full">
         <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 gap-2">
           <h2 class="text-xl font-bold">Episodes</h2>
-          <div class="flex space-x-2">
-            <a href="?{% for key, value in request.GET.items %}{% if key != 'filter' %}{{ key }}={{ value }}&{% endif %}{% endfor %}filter=all" 
-               class="px-3 py-1 rounded-full text-sm {% if current_filter == 'all' or not current_filter %}bg-indigo-600 text-white{% else %}bg-gray-700 text-gray-300 hover:bg-gray-600{% endif %} transition duration-200">
-              Todos
-            </a>
-            <a href="?{% for key, value in request.GET.items %}{% if key != 'filter' %}{{ key }}={{ value }}&{% endif %}{% endfor %}filter=watched" 
-               class="px-3 py-1 rounded-full text-sm {% if current_filter == 'watched' %}bg-indigo-600 text-white{% else %}bg-gray-700 text-gray-300 hover:bg-gray-600{% endif %} transition duration-200">
-              Vistos
-            </a>
-            <a href="?{% for key, value in request.GET.items %}{% if key != 'filter' %}{{ key }}={{ value }}&{% endif %}{% endfor %}filter=unwatched" 
-               class="px-3 py-1 rounded-full text-sm {% if current_filter == 'unwatched' %}bg-indigo-600 text-white{% else %}bg-gray-700 text-gray-300 hover:bg-gray-600{% endif %} transition duration-200">
-              No vistos
-            </a>
+          <div class="flex items-center space-x-2">
+            <!-- Filter buttons -->
+            <div class="flex space-x-2">
+              <a href="?{% for key, value in request.GET.items %}{% if key != 'filter' %}{{ key }}={{ value }}&{% endif %}{% endfor %}filter=all" 
+                 class="px-3 py-1 rounded-full text-sm {% if current_filter == 'all' or not current_filter %}bg-indigo-600 text-white{% else %}bg-gray-700 text-gray-300 hover:bg-gray-600{% endif %} transition duration-200">
+                All
+              </a>
+              <a href="?{% for key, value in request.GET.items %}{% if key != 'filter' %}{{ key }}={{ value }}&{% endif %}{% endfor %}filter=watched" 
+                 class="px-3 py-1 rounded-full text-sm {% if current_filter == 'watched' %}bg-indigo-600 text-white{% else %}bg-gray-700 text-gray-300 hover:bg-gray-600{% endif %} transition duration-200">
+                Watched
+              </a>
+              <a href="?{% for key, value in request.GET.items %}{% if key != 'filter' %}{{ key }}={{ value }}&{% endif %}{% endfor %}filter=unwatched" 
+                 class="px-3 py-1 rounded-full text-sm {% if current_filter == 'unwatched' %}bg-indigo-600 text-white{% else %}bg-gray-700 text-gray-300 hover:bg-gray-600{% endif %} transition duration-200">
+                Unwatched
+              </a>
+            </div>
+            
+            <!-- Sort button -->
+            <div class="border-l border-gray-600 pl-2">
+              <a href="?{% for key, value in request.GET.items %}{% if key != 'sort' %}{{ key }}={{ value }}&{% endif %}{% endfor %}sort={% if current_sort == 'desc' or not current_sort %}asc{% else %}desc{% endif %}" 
+                 class="p-2 rounded-full text-gray-300 hover:text-white hover:bg-gray-600 transition duration-200" 
+                 title="{% if current_sort == 'desc' or not current_sort %}Sort ascending{% else %}Sort descending{% endif %}">
+                {% if current_sort == 'desc' or not current_sort %}
+                  <!-- Arrow down icon (descending, will change to ascending) -->
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 5v14M19 12l-7 7-7-7"/>
+                  </svg>
+                {% else %}
+                  <!-- Arrow up icon (ascending, will change to descending) -->
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 19V5M5 12l7-7 7 7"/>
+                  </svg>
+                {% endif %}
+              </a>
+            </div>
           </div>
         </div>
         
