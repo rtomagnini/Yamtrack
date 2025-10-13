@@ -237,12 +237,26 @@ def season_details(request, source, media_id, title, season_number):  # noqa: AR
             episodes_in_db,
         )
 
+    # Filter episodes by watched status if requested
+    episode_filter = request.GET.get("filter", "all")
+    if episode_filter == "unwatched":
+        season_metadata["episodes"] = [
+            episode for episode in season_metadata["episodes"]
+            if not episode.get("history")
+        ]
+    elif episode_filter == "watched":
+        season_metadata["episodes"] = [
+            episode for episode in season_metadata["episodes"]
+            if episode.get("history")
+        ]
+
     context = {
         "media": season_metadata,
         "tv": tv_with_seasons_metadata,
         "media_type": MediaTypes.SEASON.value,
         "user_medias": user_medias,
         "current_instance": current_instance,
+        "current_filter": episode_filter,
     }
     return render(request, "app/media_details.html", context)
 

@@ -652,9 +652,27 @@
     {% endif %}
 
     {# Episodes List #}
-    {% if media.episodes %}
+    {% if media.episodes or current_filter != 'all' %}
       <div class="w-full">
-        <h2 class="text-xl font-bold mb-4">Episodes</h2>
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 gap-2">
+          <h2 class="text-xl font-bold">Episodes</h2>
+          <div class="flex space-x-2">
+            <a href="?{% for key, value in request.GET.items %}{% if key != 'filter' %}{{ key }}={{ value }}&{% endif %}{% endfor %}filter=all" 
+               class="px-3 py-1 rounded-full text-sm {% if current_filter == 'all' or not current_filter %}bg-indigo-600 text-white{% else %}bg-gray-700 text-gray-300 hover:bg-gray-600{% endif %} transition duration-200">
+              Todos
+            </a>
+            <a href="?{% for key, value in request.GET.items %}{% if key != 'filter' %}{{ key }}={{ value }}&{% endif %}{% endfor %}filter=watched" 
+               class="px-3 py-1 rounded-full text-sm {% if current_filter == 'watched' %}bg-indigo-600 text-white{% else %}bg-gray-700 text-gray-300 hover:bg-gray-600{% endif %} transition duration-200">
+              Vistos
+            </a>
+            <a href="?{% for key, value in request.GET.items %}{% if key != 'filter' %}{{ key }}={{ value }}&{% endif %}{% endfor %}filter=unwatched" 
+               class="px-3 py-1 rounded-full text-sm {% if current_filter == 'unwatched' %}bg-indigo-600 text-white{% else %}bg-gray-700 text-gray-300 hover:bg-gray-600{% endif %} transition duration-200">
+              No vistos
+            </a>
+          </div>
+        </div>
+        
+        {% if media.episodes %}
         <div class="space-y-6">
           {% for episode in media.episodes %}
             <div class="bg-[#2a2f35] rounded-lg overflow-hidden shadow-lg">
@@ -801,6 +819,17 @@
             </div>
           {% endfor %}
         </div>
+        {% else %}
+          <div class="text-center py-8 text-gray-400">
+            {% if current_filter == 'watched' %}
+              No hay episodios vistos en esta temporada.
+            {% elif current_filter == 'unwatched' %}
+              No hay episodios sin ver en esta temporada.
+            {% else %}
+              No hay episodios disponibles para esta temporada.
+            {% endif %}
+          </div>
+        {% endif %}
       </div>
     {% endif %}
   </div>
