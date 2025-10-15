@@ -524,6 +524,33 @@ def get_related(related_medias, media_type, parent_response=None):
     return related
 
 
+def is_generic_episode_name(title):
+    """Check if an episode title is generic (like 'Episode 1', 'Episódio 1', etc.)"""
+    if not title or not title.strip():
+        return True
+    
+    title_lower = title.lower().strip()
+    
+    # Common generic patterns in multiple languages
+    generic_patterns = [
+        r'^episode\s+\d+$',      # "Episode 1", "Episode 2"
+        r'^episódio\s+\d+$',     # "Episódio 1", "Episódio 2" 
+        r'^episodio\s+\d+$',     # "Episodio 1", "Episodio 2"
+        r'^ep\s+\d+$',           # "Ep 1", "Ep 2"
+        r'^capítulo\s+\d+$',     # "Capítulo 1", "Capítulo 2"
+        r'^capitulo\s+\d+$',     # "Capitulo 1", "Capitulo 2"
+        r'^\d+$',                # "1", "2", "3"
+        r'^#\d+$',               # "#1", "#2", "#3"
+    ]
+    
+    import re
+    for pattern in generic_patterns:
+        if re.match(pattern, title_lower):
+            return True
+    
+    return False
+
+
 def fetch_episodes_by_language(media_id, season_number, language):
     """Fetch episode data for a specific language."""
     url = f"{base_url}/tv/{media_id}/season/{season_number}"
@@ -619,13 +646,27 @@ def process_episodes(season_metadata, episodes_in_db):
             language_priority.append(original_language)
         language_priority.extend(["en", "pt", "es"])
         
-        # Try each language in order until we find a non-empty title
+        # Try each language in order until we find a non-generic, descriptive title
+        selected_lang = None
         for lang in language_priority:
             if lang in multilingual_episodes:
                 lang_title = multilingual_episodes[lang].get(episode_number, "")
-                if lang_title and lang_title.strip():
+                if lang_title and lang_title.strip() and not is_generic_episode_name(lang_title):
                     episode_title = lang_title
-                    break  # Use first available title in priority order
+                    selected_lang = lang
+                    break  # Use first available non-generic title in priority order
+        
+        # If no non-generic title found, fall back to any available title (including generic ones)
+        if not selected_lang:
+            for lang in language_priority:
+                if lang in multilingual_episodes:
+                    lang_title = multilingual_episodes[lang].get(episode_number, "")
+                    if lang_title and lang_title.strip():
+                        episode_title = lang_title
+                        selected_lang = f"{lang} (generic)"
+                        break
+        
+
 
         episodes_metadata.append(
             {
