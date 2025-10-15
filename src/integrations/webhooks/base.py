@@ -57,7 +57,7 @@ class BaseWebhookProcessor:
             self._process_movie(payload, user, ids)
 
     def _process_tv(self, payload, user, ids):
-        media_id, season_number, episode_number = self._find_tv_media_id(ids)
+        media_id, season_number, episode_number = self._find_tv_media_id(ids, payload)
         if not media_id:
             logger.warning("No matching TMDB ID found for TV show")
             return
@@ -125,8 +125,22 @@ class BaseWebhookProcessor:
             logger.warning("No TMDB or IMDB ID found for movie, skipping processing")
             return
 
-    def _find_tv_media_id(self, ids):
+    def _find_tv_media_id(self, ids, payload):
         """Find TV media ID from external IDs."""
+        # First, try to use TMDB ID directly if available
+        if ids["tmdb_id"]:
+            # Extract season and episode from Plex payload
+            season_number = payload["Metadata"].get("parentIndex")
+            episode_number = payload["Metadata"].get("index")
+            
+            if season_number is not None and episode_number is not None:
+                logger.info(
+                    "Using TMDB ID directly: %s, Season: %d, Episode: %d", 
+                    ids["tmdb_id"], season_number, episode_number
+                )
+                return int(ids["tmdb_id"]), season_number, episode_number
+        
+        # Fallback to searching by other external IDs
         for ext_id, ext_type in [
             (ids["imdb_id"], "imdb_id"),
             (ids["tvdb_id"], "tvdb_id"),
