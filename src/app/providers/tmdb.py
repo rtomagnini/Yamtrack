@@ -255,6 +255,7 @@ def tv_with_seasons(media_id, season_numbers):
             season_data["title"] = data["title"]
             season_data["tvdb_id"] = data["tvdb_id"]
             season_data["genres"] = data["genres"]
+            season_data["original_language"] = data.get("original_language", "en")
             if season_data["synopsis"] == "No synopsis available.":
                 season_data["synopsis"] = data["synopsis"]
             cache.set(
@@ -311,6 +312,7 @@ def process_tv(response):
         "genres": get_genres(response["genres"]),
         "score": get_score(response["vote_average"]),
         "score_count": response["vote_count"],
+        "original_language": response.get("original_language", "en"),
         "details": {
             "format": "TV",
             "first_air_date": get_start_date(response["first_air_date"]),
@@ -522,6 +524,76 @@ def get_related(related_medias, media_type, parent_response=None):
     return related
 
 
+def fetch_season_multilingual(media_id, season_number, original_language):
+    """Fetch season data in both English and original language for fallback episode names."""
+    url = f"{base_url}/tv/{media_id}/season/{season_number}"
+    
+    english_episodes = {}
+    original_episodes = {}
+    
+    # Cache key for English episode names  
+    english_cache_key = f"{Sources.TMDB.value}_episodes_en_{media_id}_{season_number}"
+    cached_english = cache.get(english_cache_key)
+    
+    if cached_english:
+        english_episodes = cached_english
+    else:
+        # Fetch English episode data
+        english_params = {
+            "api_key": settings.TMDB_API,
+            "language": "en",
+        }
+        
+        try:
+            english_response = services.api_request(
+                Sources.TMDB.value,
+                "GET", 
+                url,
+                params=english_params,
+            )
+            # Store English episode names by episode number
+            for ep in english_response.get("episodes", []):
+                english_episodes[ep["episode_number"]] = ep["name"]
+            
+            # Cache the English episode names
+            cache.set(english_cache_key, english_episodes)
+        except requests.exceptions.HTTPError:
+            # If English request fails, cache empty dict to avoid repeated failed requests
+            cache.set(english_cache_key, {})
+    
+    # If original language is different from English, fetch original language data
+    if original_language and original_language != "en":
+        original_cache_key = f"{Sources.TMDB.value}_episodes_{original_language}_{media_id}_{season_number}"
+        cached_original = cache.get(original_cache_key)
+        
+        if cached_original:
+            original_episodes = cached_original
+        else:
+            original_params = {
+                "api_key": settings.TMDB_API,
+                "language": original_language,
+            }
+            
+            try:
+                original_response = services.api_request(
+                    Sources.TMDB.value,
+                    "GET",
+                    url, 
+                    params=original_params,
+                )
+                # Store original language episode names by episode number
+                for ep in original_response.get("episodes", []):
+                    original_episodes[ep["episode_number"]] = ep["name"]
+                
+                # Cache the original language episode names
+                cache.set(original_cache_key, original_episodes)
+            except requests.exceptions.HTTPError:
+                # If original language request fails, cache empty dict to avoid repeated failed requests
+                cache.set(original_cache_key, {})
+    
+    return english_episodes, original_episodes
+
+
 def process_episodes(season_metadata, episodes_in_db):
     """Process the episodes for the selected season."""
     episodes_metadata = []
@@ -534,8 +606,36 @@ def process_episodes(season_metadata, episodes_in_db):
             tracked_episodes[episode_number] = []
         tracked_episodes[episode_number].append(ep)
 
+    # Get multilingual episode names for fallback logic
+    original_language = season_metadata.get("original_language", "en")
+    english_episodes = {}
+    original_episodes = {}
+    
+    # Only fetch multilingual data if original language is not English
+    if original_language != "en":
+        english_episodes, original_episodes = fetch_season_multilingual(
+            season_metadata["media_id"],
+            season_metadata["season_number"],
+            original_language
+        )
+
     for episode in season_metadata["episodes"]:
         episode_number = episode["episode_number"]
+        
+        # Determine the best episode title with fallback logic
+        episode_title = episode["name"]
+        
+        # If we have multilingual data and original language is not English
+        if original_language != "en":
+            english_title = english_episodes.get(episode_number, "")
+            original_title = original_episodes.get(episode_number, "")
+            
+            # Use English title if available and not empty, otherwise use original language title
+            if english_title and english_title.strip():
+                episode_title = english_title
+            elif original_title and original_title.strip():
+                episode_title = original_title
+            # Otherwise keep the default episode["name"] from the current response
 
         episodes_metadata.append(
             {
@@ -546,7 +646,7 @@ def process_episodes(season_metadata, episodes_in_db):
                 "episode_number": episode_number,
                 "air_date": episode["air_date"],  # when unknown, response returns null
                 "image": get_image_url(episode["still_path"]),
-                "title": episode["name"],
+                "title": episode_title,
                 "overview": episode["overview"],
                 "history": tracked_episodes.get(episode_number, []),
                 "runtime": get_readable_duration(episode["runtime"]),
