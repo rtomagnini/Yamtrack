@@ -8,7 +8,7 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
+  IMAGE_NAME: rtomagnini/yamtrack
 
 jobs:
   build-and-push:
@@ -37,20 +37,12 @@ jobs:
           type=ref,event=branch
           type=ref,event=pr
           type=sha,prefix={{branch}}-
-
-    - name: Generate additional tags for master branch
-      id: tags
-      run: |
-        TAGS="${{ steps.meta.outputs.tags }}"
-        if [[ "${{ github.ref }}" == "refs/heads/master" ]]; then
-          TAGS="${TAGS},${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest"
-        fi
-        echo "tags=${TAGS}" >> $GITHUB_OUTPUT
+          type=raw,value=latest,enable={{is_default_branch}}
 
     - name: Build and push Docker image
       uses: docker/build-push-action@v5
       with:
         context: .
         push: true
-        tags: ${{ steps.tags.outputs.tags }}
+        tags: ${{ steps.meta.outputs.tags }}
         labels: ${{ steps.meta.outputs.labels }}
