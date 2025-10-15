@@ -74,6 +74,7 @@ urlpatterns = [
         name="delete_history_record",
     ),
     path("create", views.create_entry, name="create_entry"),
+    path("api/youtube/metadata", views.youtube_metadata, name="youtube_metadata"),
     path("search/parent_tv", views.search_parent_tv, name="search_parent_tv"),
     path(
         "search/parent_season",

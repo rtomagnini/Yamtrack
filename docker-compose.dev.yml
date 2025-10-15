@@ -1,0 +1,29 @@
+services:
+  yamtrack:
+    container_name: yamtrack-dev
+    build: . # Construir desde el Dockerfile local
+    restart: unless-stopped
+    depends_on:
+      - redis
+    env_file:
+      - .env.dev # Cargar variables desde archivo .env.dev
+    environment:
+      - TZ=Europe/Madrid
+      - SECRET=longdevstring123456789
+      - REDIS_URL=redis://redis:6379
+      - DEBUG=1 # Para desarrollo
+    volumes:
+      - ./db:/yamtrack/db
+      - ./media:/yamtrack/media # Para archivos de media si los tienes
+    ports:
+      - "8337:8000" # Usar el puerto que mencionaste en el ejemplo
+
+  redis:
+    container_name: yamtrack-redis-dev
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+
+volumes:
+  redis_data:

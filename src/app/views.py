@@ -15,12 +15,14 @@ from django.utils import timezone
 from django.utils.dateparse import parse_date
 from django.utils.timezone import datetime
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
+from django.views.decorators.csrf import csrf_exempt
+from django.contrib.auth.decorators import login_required
 
 from app import helpers, history_processor
 from app import statistics as stats
 from app.forms import EpisodeTrackingForm, ManualItemForm, get_form_class
 from app.models import TV, BasicMedia, Item, MediaTypes, Season, Sources, Status
-from app.providers import manual, services, tmdb
+from app.providers import manual, services, tmdb, youtube
 from app.templatetags import app_tags
 from users.models import HomeSortChoices, MediaSortChoices, MediaStatusChoices
 
@@ -751,6 +753,49 @@ def create_entry(request):
     logger.info(msg)
 
     return redirect("create_entry")
+
+
+@require_POST
+def youtube_metadata(request):
+    """Extract metadata from YouTube URL via AJAX."""
+    import json
+    
+    try:
+        data = json.loads(request.body)
+        youtube_url = data.get('url', '').strip()
+        
+        if not youtube_url:
+            return JsonResponse({'success': False, 'error': 'No URL provided'}, status=400)
+        
+        # Extract video ID from URL
+        video_id = youtube.extract_video_id(youtube_url)
+        if not video_id:
+            return JsonResponse({
+                'success': False, 
+                'error': 'Invalid YouTube URL format'
+            }, status=400)
+        
+        # Fetch metadata from YouTube API
+        metadata = youtube.fetch_video_metadata(video_id)
+        if not metadata:
+            return JsonResponse({
+                'success': False, 
+                'error': 'Could not fetch video metadata'
+            }, status=404)
+        
+        return JsonResponse({
+            'success': True,
+            'metadata': metadata
+        })
+        
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'error': 'Invalid JSON'}, status=400)
+    except Exception as e:
+        logger.error(f"Error extracting YouTube metadata: {e}")
+        return JsonResponse({
+            'success': False, 
+            'error': 'Internal server error'
+        }, status=500)
 
 
 @require_GET

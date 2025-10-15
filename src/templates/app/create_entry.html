@@ -84,7 +84,7 @@
     
         // Episode fields
         else if (this.mediaType === 'episode') {
-          return ['parentSeason', 'title', 'episodeNumber', 'image', 'airDate', 'runtime'].includes(field);
+          return ['parentSeason', 'title', 'episodeNumber', 'youtubeUrl', 'image', 'airDate', 'runtime'].includes(field);
         }
     
         // Movie, Anime, Manga, Game, Book fields
@@ -314,6 +314,37 @@
               </button>
             </div>
           </div>
+        </div>
+
+        <!-- YouTube URL field (Episode) -->
+        <div x-show="showField('youtubeUrl')"
+             x-data="youtubeExtractor()"
+             class="youtube-url-container">
+          <label class="block text-sm font-medium mb-2 text-gray-300">
+            YouTube URL 
+            <span class="text-xs text-gray-400">(optional - auto-fills episode info)</span>
+          </label>
+          <div class="flex gap-2">
+            <input x-ref="youtubeInput"
+                   class="flex-1 p-2 bg-[#39404b] rounded-md text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-[#4a9eff] appearance-none"
+                   name="youtube_url"
+                   placeholder="https://www.youtube.com/watch?v=..."
+                   type="url"
+                   value="">
+            <button type="button"
+                    @click="extractMetadata()"
+                    :disabled="loading"
+                    class="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white rounded-md font-medium transition-colors flex items-center gap-2">
+              <svg x-show="loading" class="animate-spin w-4 h-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="m4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+              <span x-text="loading ? 'Extracting...' : 'Extract Info'"></span>
+            </button>
+          </div>
+          <p class="text-xs text-gray-400 mt-1">
+            Paste a YouTube URL and click "Extract Info" to automatically fill episode title, thumbnail, air date, and duration.
+          </p>
         </div>
 
         <!-- Image URL field (All types) -->
@@ -561,6 +592,67 @@ async function selectSeason(seasonId, seasonText) {
   } catch (error) {
     console.error('Error getting next episode number:', error);
   }
+}
+
+// YouTube extractor Alpine.js component
+function youtubeExtractor() {
+  return {
+    loading: false,
+    
+    async extractMetadata() {
+      const url = this.$refs.youtubeInput.value.trim();
+      if (!url) return;
+      
+      this.loading = true;
+      
+      try {
+        const response = await fetch('{% url "youtube_metadata" %}', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token }}'
+          },
+          body: JSON.stringify({ url: url })
+        });
+        
+        const data = await response.json();
+        this.loading = false;
+        
+        if (data.success) {
+          const metadata = data.metadata;
+          
+          // Auto-fill form fields
+          if (metadata.title) {
+            document.querySelector('input[name="title"]').value = metadata.title;
+          }
+          
+          if (metadata.thumbnail) {
+            const imageInput = document.querySelector('input[name="image"]');
+            imageInput.value = metadata.thumbnail;
+            // Trigger image preview update
+            const event = new Event('input', { bubbles: true });
+            imageInput.dispatchEvent(event);
+          }
+          
+          if (metadata.published_date) {
+            document.querySelector('input[name="air_date"]').value = metadata.published_date;
+          }
+          
+          if (metadata.duration_minutes) {
+            document.querySelector('input[name="runtime"]').value = metadata.duration_minutes;
+          }
+          
+          console.log('YouTube metadata extracted successfully:', metadata);
+        } else {
+          alert('Error: ' + data.error);
+        }
+      } catch (error) {
+        this.loading = false;
+        console.error('Error extracting YouTube metadata:', error);
+        alert('Error extracting YouTube metadata. Please try again.');
+      }
+    }
+  };
 }
 </script>
 

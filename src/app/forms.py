@@ -100,6 +100,16 @@ class ManualItemForm(forms.ModelForm):
         label="Parent Season",
     )
 
+    youtube_url = forms.URLField(
+        required=False,
+        label="YouTube URL",
+        help_text="Paste a YouTube URL to automatically extract episode information",
+        widget=forms.URLInput(attrs={
+            "placeholder": "https://www.youtube.com/watch?v=...",
+            "class": "youtube-url-input",
+        }),
+    )
+
     class Meta:
         """Bind form to model."""
 
@@ -180,8 +190,18 @@ class ManualItemForm(forms.ModelForm):
 
     def save(self, commit=True):  # noqa: FBT002
         """Save the form and handle manual media ID generation."""
+        # Handle YouTube URL if provided for episodes
+        youtube_url = self.cleaned_data.get("youtube_url")
+        if youtube_url and self.cleaned_data.get("media_type") == MediaTypes.EPISODE.value:
+            # Set the source to YouTube for episodes with YouTube URLs
+            self.cleaned_data["source"] = Sources.YOUTUBE.value
+        
+        # Remove youtube_url from cleaned_data since it's not a model field
+        if "youtube_url" in self.cleaned_data:
+            del self.cleaned_data["youtube_url"]
+        
         instance = super().save(commit=False)
-        instance.source = Sources.MANUAL.value
+        instance.source = self.cleaned_data.get("source", Sources.MANUAL.value)
 
         if instance.media_type == MediaTypes.SEASON.value:
             parent_tv = self.cleaned_data["parent_tv"]

@@ -334,6 +334,10 @@ TMDB_API = config(
 TMDB_NSFW = config("TMDB_NSFW", default=False, cast=bool)
 TMDB_LANG = config("TMDB_LANG", default="en")
 
+# YouTube Data API v3 configuration
+YOUTUBE_API_KEY = config("YOUTUBE_API_KEY", default=None)
+YOUTUBE_API_ENABLED = config("YOUTUBE_API_ENABLED", default=False, cast=bool)
+
 MAL_API = config(
     "MAL_API",
     default=secret(
