@@ -1,29 +1,26 @@
 # 🚀 Guía de Actualización del Servidor Yamtrack
 
-Esta guía te ayudará a actualizar tu servidor Yamtrack con los nuevos cambios desde tu fork sin pérdida de datos.
+Esta guía te ayudará a actualizar tu servidor Yamtrack con los nuevos cambios desde tu fork **modificando solo el docker-compose.yml**.
 
 ## 📋 Nuevas Funcionalidades Incluidas
 
-1. ✅ **Filtros de episodios** (visto/no visto) en detalles de temporada
-2. ✅ **Modal de confirmación** para completar temporadas automáticamente
-3. ✅ **Mejoras en Create Custom** con auto-incremento de números de episodio
-4. ✅ **Campo Air Date** para episodios (fecha de emisión)
-5. ✅ **Campo Runtime** para episodios (duración en minutos)
+1. ✅ **Filtros de episodios** (All/Watched/Unwatched) en detalles de temporada
+2. ✅ **Ordenamiento de episodios** (ascendente/descendente) con botón "Order"
+3. ✅ **Thumbnails 16:9** para episodios con proporción correcta
+4. ✅ **Modal de confirmación** para completar temporadas automáticamente
+5. ✅ **Mejoras en Create Custom** con auto-incremento de números de episodio
+6. ✅ **Campo Air Date** para episodios (fecha de emisión)
+7. ✅ **Campo Runtime** para episodios (duración en minutos con sufijo "min")
 
-## ⚠️ IMPORTANTE: Proceso de Actualización
+## 🎯 MÉTODO RECOMENDADO: Actualización via Docker Compose
 
-### 🔄 Commits Subidos al Fork
-Los siguientes commits están ahora disponibles en tu fork:
-- `8822ea24` - feat: Add 'min' suffix to episode runtime display
-- `d4654057` - feat: Add runtime field for episodes  
-- `c71843be` - refactor: Optimize Dockerfile build order
-- `f1066c27` - feat: Add episode auto-increment and improve episode creation
-- `628325bf` - fix: Display air_date for manual episodes in UI
-- `d12bdd27` - feat: Add air_date field for episodes
-- `3bf13852` - feat: Add completion confirmation for season progress cards
-- `7db0fe09` - feat: Add completion confirmation modal for season's last episode
+### ⚡ Ventajas de este método:
+- **Sin descargar código**: Docker construye directamente desde tu repositorio Git
+- **Actualización simple**: Solo cambiar una línea en docker-compose.yml
+- **Sin conflictos**: No hay riesgo de conflictos Git locales
+- **Automático**: Las migraciones se aplican automáticamente
 
-## 🛠️ Instrucciones para el Servidor
+## 🛠️ Instrucciones de Actualización Rápida
 
 ### 1. 💾 Backup de la Base de Datos (CRÍTICO)
 
@@ -48,34 +45,52 @@ docker-compose down
 docker compose down
 ```
 
-### 3. 🔄 Cambiar Remoto a tu Fork
+### 3. ✏️ Modificar docker-compose.yml
 
-```bash
-# Cambiar el remoto origin para apuntar a tu fork
-git remote set-url origin https://github.com/rtomagnini/Yamtrack.git
+Edita tu archivo `docker-compose.yml` y cambia la sección `build` del servicio web para apuntar a tu fork:
 
-# Verificar que cambió correctamente
-git remote -v
+**Antes (construcción local):**
+```yaml
+services:
+  web:
+    build: .
+    # ... resto de configuración
 ```
 
-### 4. 📥 Obtener los Nuevos Cambios
-
-```bash
-# Hacer pull de todos los cambios desde tu fork
-git pull origin master
-
-# Verificar que tienes todos los commits
-git log --oneline -10
+**Después (construcción desde tu fork):**
+```yaml
+services:
+  web:
+    build:
+      context: https://github.com/rtomagnini/Yamtrack.git
+      dockerfile: Dockerfile
+    # ... resto de configuración
 ```
 
-### 5. 🚀 Reconstruir y Aplicar Cambios
+**Alternativamente, puedes usar una imagen pre-construida si la tienes:**
+```yaml
+services:
+  web:
+    image: ghcr.io/rtomagnini/yamtrack:latest
+    # ... resto de configuración
+```
+
+### 4. 🚀 Reconstruir y Aplicar Cambios
 
 ```bash
-# Reconstruir contenedores con los nuevos cambios
+# Reconstruir contenedores con los nuevos cambios desde tu fork
 docker-compose up -d --build
 
 # O si usas docker compose (sin guión):
 docker compose up -d --build
+```
+
+### 5. 🔄 Forzar Reconstrucción (si es necesario)
+
+```bash
+# Si Docker usa caché y no ve los cambios, fuerza la reconstrucción:
+docker-compose build --no-cache web
+docker-compose up -d
 ```
 
 ## 🔧 Migraciones de Base de Datos
@@ -102,6 +117,97 @@ print(f'runtime field exists: {hasattr(episode, \"runtime\")}')
 "
 ```
 
+## 🔄 Actualizaciones Futuras
+
+Una vez configurado este método, las actualizaciones futuras serán **súper simples**:
+
+```bash
+# 1. Hacer backup (siempre)
+docker-compose exec db pg_dump -U yamtrack_user yamtrack_db > backup_$(date +%Y%m%d_%H%M%S).sql
+
+# 2. Parar servicios
+docker-compose down
+
+# 3. Reconstruir (Docker tomará automáticamente los últimos cambios de tu fork)
+docker-compose up -d --build
+
+# ¡Listo! Tu aplicación estará actualizada con los últimos cambios
+```
+
+## 📌 Configuración Avanzada: Imagen Pre-construida
+
+### ⚡ Ventajas de usar imagen pre-construida:
+- **Actualizaciones súper rápidas**: No necesita construir, solo descargar
+- **Menos recursos**: Tu servidor no gasta CPU/memoria construyendo
+- **Más confiable**: La imagen se construye en GitHub con recursos dedicados
+- **Versionado**: Cada commit genera una imagen etiquetada
+
+### 🏗️ Configurar GitHub Actions (Una sola vez)
+
+**Paso 1:** Crea el archivo `.github/workflows/docker-build.yml` en tu repositorio con el contenido del workflow.
+
+**Paso 2:** En tu repositorio GitHub:
+- Ve a **Settings** → **Actions** → **General**
+- En **Workflow permissions**, selecciona **"Read and write permissions"**
+- Marca **"Allow GitHub Actions to create and approve pull requests"**
+
+**Paso 3:** Haz push del archivo workflow:
+```bash
+git add .github/workflows/docker-build.yml
+git commit -m "ci: Add GitHub Actions workflow for Docker image building"
+git push origin master
+```
+
+### 🐳 Usar la Imagen Pre-construida
+
+Una vez configurado, modifica tu `docker-compose.yml` en el servidor:
+
+```yaml
+services:
+  web:
+    image: ghcr.io/rtomagnini/yamtrack:latest
+    pull_policy: always  # Siempre obtener la última versión
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgres://yamtrack_user:password@db:5432/yamtrack_db
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      - db
+      - redis
+    volumes:
+      - media_files:/yamtrack/media
+      - static_files:/yamtrack/staticfiles
+```
+
+### 🔄 Actualizaciones con Imagen Pre-construida
+
+```bash
+# 1. Backup (siempre)
+docker-compose exec db pg_dump -U yamtrack_user yamtrack_db > backup_$(date +%Y%m%d_%H%M%S).sql
+
+# 2. Parar servicios
+docker-compose down
+
+# 3. Obtener última imagen y reiniciar
+docker-compose pull
+docker-compose up -d
+
+# ¡Súper rápido! No necesita construir nada
+```
+
+### Actualizaciones con Tags
+
+Para más control, puedes usar tags específicos:
+
+```yaml
+services:
+  web:
+    build:
+      context: https://github.com/rtomagnini/Yamtrack.git#v1.2.0  # Tag específico
+      dockerfile: Dockerfile
+```
+
 ## 🧪 Verificación Post-Actualización
 
 ### 1. Verificar que la aplicación funciona
@@ -126,16 +232,119 @@ docker-compose ps
 docker-compose exec db psql -U yamtrack_user yamtrack_db < backup_YYYYMMDD_HHMMSS.sql
 ```
 
-### Volver al Código Anterior
+### Volver a Versión Anterior
+
+**Método 1: Cambiar a commit específico**
+```yaml
+# En docker-compose.yml, especifica un commit anterior:
+services:
+  web:
+    build:
+      context: https://github.com/rtomagnini/Yamtrack.git#COMMIT_HASH_ANTERIOR
+      dockerfile: Dockerfile
+```
+
+**Método 2: Usar repositorio original**
+```yaml
+# En docker-compose.yml, volver al repositorio original:
+services:
+  web:
+    build:
+      context: https://github.com/FuzzyGrim/Yamtrack.git
+      dockerfile: Dockerfile
+```
+
+Luego ejecuta:
 ```bash
-# Ver commits disponibles
-git log --oneline
-
-# Volver a un commit anterior específico
-git reset --hard COMMIT_HASH_ANTERIOR
-
-# Reconstruir con el código anterior
+docker-compose down
 docker-compose up -d --build
+```
+
+## 📝 Ejemplos de docker-compose.yml
+
+### Opción 1: Construcción desde Git (Método actual)
+
+```yaml
+version: '3.8'
+
+services:
+  web:
+    build:
+      context: https://github.com/rtomagnini/Yamtrack.git
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgres://yamtrack_user:password@db:5432/yamtrack_db
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      - db
+      - redis
+    volumes:
+      - media_files:/yamtrack/media
+      - static_files:/yamtrack/staticfiles
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_DB=yamtrack_db
+      - POSTGRES_USER=yamtrack_user
+      - POSTGRES_PASSWORD=password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - redis_data:/data
+
+volumes:
+  postgres_data:
+  redis_data:
+  media_files:
+  static_files:
+```
+
+### Opción 2: Imagen Pre-construida (Recomendado)
+
+```yaml
+version: '3.8'
+
+services:
+  web:
+    image: ghcr.io/rtomagnini/yamtrack:latest
+    pull_policy: always
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgres://yamtrack_user:password@db:5432/yamtrack_db
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      - db
+      - redis
+    volumes:
+      - media_files:/yamtrack/media
+      - static_files:/yamtrack/staticfiles
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_DB=yamtrack_db
+      - POSTGRES_USER=yamtrack_user
+      - POSTGRES_PASSWORD=password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - redis_data:/data
+
+volumes:
+  postgres_data:
+  redis_data:
+  media_files:
+  static_files:
 ```
 
 ## 📝 Notas Importantes
@@ -144,17 +353,30 @@ docker-compose up -d --build
 2. **Migraciones automáticas**: Django las aplicará automáticamente
 3. **Sin pérdida de datos**: Los nuevos campos son opcionales (null=True, blank=True)
 4. **Compatibilidad**: Compatible con episodios existentes
-5. **Nuevos campos**: `air_date` y `runtime` solo aparecen en episodios
+5. **Actualización simple**: Solo cambiar la URL del repositorio
+6. **Sin Git local**: No necesitas clonar ni manejar Git en el servidor
 
 ## 🎉 Después de la Actualización
 
 Una vez completada la actualización, tendrás acceso a:
 
-- **Filtros de episodios** en `/details/manual/tv/ID/TITLE/season/NUM`
+- **Filtros de episodios** (All/Watched/Unwatched) con botón "Order"
+- **Thumbnails 16:9** perfectamente proporcionadas
 - **Modals de confirmación** cuando completes temporadas
 - **Auto-incremento** de números de episodio en Create Custom
 - **Campos Air Date y Runtime** en la creación de episodios
-- **Mejor experiencia de usuario** en general
+- **Interfaz en inglés** y mejor UX general
+
+## 🔮 Actualizaciones Futuras
+
+Con este método configurado, cada vez que subas nuevos cambios a tu fork, solo necesitarás:
+
+```bash
+docker-compose down
+docker-compose up -d --build
+```
+
+**¡Docker automáticamente tomará los últimos cambios!**
 
 ---
 
