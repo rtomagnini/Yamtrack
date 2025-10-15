@@ -1,0 +1,42 @@
+# CHANGELOG - RT Fork
+
+## [0.24.8.RT] - 2025-10-15
+
+### 🔧 Mejoras
+- **Plex Webhook Fix**: Corregido el problema de identificación de series de TV
+  - Ahora usa TMDB ID directamente cuando está disponible
+  - Extrae season/episode del payload de Plex correctamente
+  - Elimina el error "No matching TMDB ID found for TV show"
+  - Mejora significativamente la detección de contenido con metadatos de TMDB
+
+### 🌟 Funcionalidades Nuevas
+- **YouTube Integration**: Integración completa con YouTube Data API v3
+  - Extracción automática de metadatos desde URLs de YouTube
+  - Soporte para títulos, duración, thumbnails y fecha de publicación
+  - Formulario mejorado con auto-completado de información
+  - Configuración segura de API keys via variables de entorno
+
+### 📦 Infraestructura
+- **Versionado RT**: Sistema de versionado para el fork con sufijo `.RT`
+- **Environment Configuration**: Plantillas mejoradas para desarrollo y producción
+- **Documentation**: Documentación actualizada del proceso de instalación
+
+### 🔧 Técnico
+- Modificado `_find_tv_media_id()` en `src/integrations/webhooks/base.py`
+- Creado `src/app/providers/youtube.py` con extractor completo
+- Mejorado manejo de API keys y variables de entorno
+- Tests unitarios mantenidos para compatibilidad
+
+---
+
+## Notas de Versionado RT
+
+**Formato**: `{version_base}.RT`
+- **Base Version**: Versión original de Yamtrack como referencia  
+- **RT Suffix**: Indica fork personalizado de Rodrigo Tomagnini
+- **Semantic**: Incrementa version_base para nuevas funcionalidades significativas
+
+**Ejemplo**:
+- Original: `0.24.7` → RT Fork: `0.24.8.RT`
+- Siguiente: `0.24.8.RT` → `0.24.9.RT` (nueva funcionalidad)
+- Bugfix: `0.24.8.RT` → `0.24.8.1.RT` (si es necesario)

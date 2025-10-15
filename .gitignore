@@ -2,6 +2,7 @@ __pycache__
 *.pyc
 .env
 .env.*
+!.env.prod.template
 .coverage*
 venv
 src/staticfiles
