@@ -623,6 +623,7 @@ def process_episodes(season_metadata, episodes_in_db):
         episode_number = episode["episode_number"]
         
         # Determine the best episode title with fallback logic
+        # Priority: Original language name > English name > Default name
         episode_title = episode["name"]
         
         # If we have multilingual data and original language is not English
@@ -630,11 +631,11 @@ def process_episodes(season_metadata, episodes_in_db):
             english_title = english_episodes.get(episode_number, "")
             original_title = original_episodes.get(episode_number, "")
             
-            # Use English title if available and not empty, otherwise use original language title
-            if english_title and english_title.strip():
-                episode_title = english_title
-            elif original_title and original_title.strip():
+            # Use original language title first (more descriptive), then English as fallback
+            if original_title and original_title.strip():
                 episode_title = original_title
+            elif english_title and english_title.strip():
+                episode_title = english_title
             # Otherwise keep the default episode["name"] from the current response
 
         episodes_metadata.append(
