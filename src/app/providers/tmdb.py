@@ -524,74 +524,63 @@ def get_related(related_medias, media_type, parent_response=None):
     return related
 
 
-def fetch_season_multilingual(media_id, season_number, original_language):
-    """Fetch season data in both English and original language for fallback episode names."""
+def fetch_episodes_by_language(media_id, season_number, language):
+    """Fetch episode data for a specific language."""
     url = f"{base_url}/tv/{media_id}/season/{season_number}"
+    cache_key = f"{Sources.TMDB.value}_episodes_{language}_{media_id}_{season_number}"
     
-    english_episodes = {}
-    original_episodes = {}
+    # Check cache first
+    cached_episodes = cache.get(cache_key)
+    if cached_episodes:
+        return cached_episodes
     
-    # Cache key for English episode names  
-    english_cache_key = f"{Sources.TMDB.value}_episodes_en_{media_id}_{season_number}"
-    cached_english = cache.get(english_cache_key)
+    # Fetch from API
+    params = {
+        "api_key": settings.TMDB_API,
+        "language": language,
+    }
     
-    if cached_english:
-        english_episodes = cached_english
-    else:
-        # Fetch English episode data
-        english_params = {
-            "api_key": settings.TMDB_API,
-            "language": "en",
-        }
+    episodes_data = {}
+    try:
+        response = services.api_request(
+            Sources.TMDB.value,
+            "GET",
+            url,
+            params=params,
+        )
+        # Store episode names by episode number
+        for ep in response.get("episodes", []):
+            episodes_data[ep["episode_number"]] = ep["name"]
         
-        try:
-            english_response = services.api_request(
-                Sources.TMDB.value,
-                "GET", 
-                url,
-                params=english_params,
+        # Cache the episode names
+        cache.set(cache_key, episodes_data)
+    except requests.exceptions.HTTPError:
+        # If request fails, cache empty dict to avoid repeated failed requests
+        cache.set(cache_key, {})
+    
+    return episodes_data
+
+
+def fetch_season_multilingual(media_id, season_number, original_language):
+    """Fetch season data in multiple languages with fallback priority."""
+    # Define language priority: original → english → portuguese → spanish
+    languages = [original_language] if original_language else []
+    
+    # Add fallback languages if not already in list
+    fallback_languages = ["en", "pt", "es"]
+    for lang in fallback_languages:
+        if lang not in languages:
+            languages.append(lang)
+    
+    # Fetch episode data for each language
+    multilingual_episodes = {}
+    for language in languages:
+        if language:  # Skip None/empty languages
+            multilingual_episodes[language] = fetch_episodes_by_language(
+                media_id, season_number, language
             )
-            # Store English episode names by episode number
-            for ep in english_response.get("episodes", []):
-                english_episodes[ep["episode_number"]] = ep["name"]
-            
-            # Cache the English episode names
-            cache.set(english_cache_key, english_episodes)
-        except requests.exceptions.HTTPError:
-            # If English request fails, cache empty dict to avoid repeated failed requests
-            cache.set(english_cache_key, {})
     
-    # If original language is different from English, fetch original language data
-    if original_language and original_language != "en":
-        original_cache_key = f"{Sources.TMDB.value}_episodes_{original_language}_{media_id}_{season_number}"
-        cached_original = cache.get(original_cache_key)
-        
-        if cached_original:
-            original_episodes = cached_original
-        else:
-            original_params = {
-                "api_key": settings.TMDB_API,
-                "language": original_language,
-            }
-            
-            try:
-                original_response = services.api_request(
-                    Sources.TMDB.value,
-                    "GET",
-                    url, 
-                    params=original_params,
-                )
-                # Store original language episode names by episode number
-                for ep in original_response.get("episodes", []):
-                    original_episodes[ep["episode_number"]] = ep["name"]
-                
-                # Cache the original language episode names
-                cache.set(original_cache_key, original_episodes)
-            except requests.exceptions.HTTPError:
-                # If original language request fails, cache empty dict to avoid repeated failed requests
-                cache.set(original_cache_key, {})
-    
-    return english_episodes, original_episodes
+    return multilingual_episodes
 
 
 def process_episodes(season_metadata, episodes_in_db):
@@ -608,35 +597,35 @@ def process_episodes(season_metadata, episodes_in_db):
 
     # Get multilingual episode names for fallback logic
     original_language = season_metadata.get("original_language", "en")
-    english_episodes = {}
-    original_episodes = {}
+    multilingual_episodes = {}
     
-    # Only fetch multilingual data if original language is not English
-    if original_language != "en":
-        english_episodes, original_episodes = fetch_season_multilingual(
-            season_metadata["media_id"],
-            season_metadata["season_number"],
-            original_language
-        )
+    # Always fetch multilingual data for better fallback options
+    multilingual_episodes = fetch_season_multilingual(
+        season_metadata["media_id"],
+        season_metadata["season_number"],
+        original_language
+    )
 
     for episode in season_metadata["episodes"]:
         episode_number = episode["episode_number"]
         
-        # Determine the best episode title with fallback logic
-        # Priority: Original language name > English name > Default name
-        episode_title = episode["name"]
+        # Determine the best episode title with cascading fallback logic
+        # Priority: Original language > English > Portuguese > Spanish > Default
+        episode_title = episode["name"]  # Default fallback
         
-        # If we have multilingual data and original language is not English
-        if original_language != "en":
-            english_title = english_episodes.get(episode_number, "")
-            original_title = original_episodes.get(episode_number, "")
-            
-            # Use original language title first (more descriptive), then English as fallback
-            if original_title and original_title.strip():
-                episode_title = original_title
-            elif english_title and english_title.strip():
-                episode_title = english_title
-            # Otherwise keep the default episode["name"] from the current response
+        # Define language priority for fallback
+        language_priority = []
+        if original_language and original_language != "en":
+            language_priority.append(original_language)
+        language_priority.extend(["en", "pt", "es"])
+        
+        # Try each language in order until we find a non-empty title
+        for lang in language_priority:
+            if lang in multilingual_episodes:
+                lang_title = multilingual_episodes[lang].get(episode_number, "")
+                if lang_title and lang_title.strip():
+                    episode_title = lang_title
+                    break  # Use first available title in priority order
 
         episodes_metadata.append(
             {
