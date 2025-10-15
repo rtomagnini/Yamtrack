@@ -165,7 +165,7 @@ Una vez configurado, modifica tu `docker-compose.yml` en el servidor:
 ```yaml
 services:
   web:
-    image: ghcr.io/rtomagnini/yamtrack:latest
+    image: ghcr.io/rtomagnini/yamtrack:master
     pull_policy: always  # Siempre obtener la última versión
     ports:
       - "8000:8000"
@@ -179,6 +179,13 @@ services:
       - media_files:/yamtrack/media
       - static_files:/yamtrack/staticfiles
 ```
+
+### 🏷️ Tags Disponibles
+
+Después de cada push a master, se generan automáticamente estos tags:
+- `ghcr.io/rtomagnini/yamtrack:master` - Última versión de la rama master
+- `ghcr.io/rtomagnini/yamtrack:latest` - Alias para la última versión
+- `ghcr.io/rtomagnini/yamtrack:master-HASH` - Versión específica por commit
 
 ### 🔄 Actualizaciones con Imagen Pre-construida
 
@@ -194,6 +201,20 @@ docker-compose pull
 docker-compose up -d
 
 # ¡Súper rápido! No necesita construir nada
+```
+
+### 🎯 Usando Tags Específicos
+
+Para más control, puedes usar tags específicos:
+
+```yaml
+services:
+  web:
+    image: ghcr.io/rtomagnini/yamtrack:master-7ac4c43  # Versión específica
+    # O
+    image: ghcr.io/rtomagnini/yamtrack:master  # Última de master
+    # O  
+    image: ghcr.io/rtomagnini/yamtrack:latest  # Última versión
 ```
 
 ### Actualizaciones con Tags
@@ -312,7 +333,7 @@ version: '3.8'
 
 services:
   web:
-    image: ghcr.io/rtomagnini/yamtrack:latest
+    image: ghcr.io/rtomagnini/yamtrack:master
     pull_policy: always
     ports:
       - "8000:8000"
