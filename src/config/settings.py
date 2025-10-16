@@ -319,30 +319,16 @@ def get_version():
     
     base_dir = Path(__file__).resolve().parent.parent.parent
     
-    # Check if we have uncommitted changes first
-    has_changes = False
     try:
-        result = subprocess.run(
-            ["git", "status", "--porcelain"], 
-            capture_output=True, 
-            text=True, 
-            cwd=base_dir
-        )
-        has_changes = bool(result.stdout.strip())
-    except (subprocess.SubprocessError, FileNotFoundError):
+        # 1. Always try VERSION file first (most reliable for Docker/production)
+        version_file = base_dir / "VERSION"
+        if version_file.exists():
+            return version_file.read_text().strip()
+    except (IOError, OSError):
         pass
     
-    # If we have uncommitted changes, prioritize VERSION file over Git tags
-    if has_changes:
-        try:
-            version_file = base_dir / "VERSION"
-            if version_file.exists():
-                return version_file.read_text().strip()
-        except (IOError, OSError):
-            pass
-    
     try:
-        # Try to get version from git tag (for clean releases)
+        # 2. Try to get version from git tag (for development)
         result = subprocess.run(
             ["git", "describe", "--tags", "--abbrev=0"], 
             capture_output=True, 
@@ -359,20 +345,12 @@ def get_version():
     except (subprocess.SubprocessError, FileNotFoundError):
         pass
     
-    try:
-        # Fallback to VERSION file if git failed
-        version_file = base_dir / "VERSION"
-        if version_file.exists():
-            return version_file.read_text().strip()
-    except (IOError, OSError):
-        pass
-    
-    # Fallback to environment variable
+    # 3. Fallback to environment variable
     env_version = config("VERSION", default=None)
     if env_version:
         return env_version
     
-    # Final fallback to dev
+    # 4. Final fallback to dev
     return "dev"
 
 VERSION = get_version()
