@@ -193,8 +193,8 @@ class ManualItemForm(forms.ModelForm):
         # Handle YouTube URL if provided for episodes
         youtube_url = self.cleaned_data.get("youtube_url")
         if youtube_url and self.cleaned_data.get("media_type") == MediaTypes.EPISODE.value:
-            # Set the source to YouTube for episodes with YouTube URLs
-            self.cleaned_data["source"] = Sources.YOUTUBE.value
+            # Set the source to Manual for episodes with YouTube URLs (custom episodes)
+            self.cleaned_data["source"] = Sources.MANUAL.value
         
         # Remove youtube_url from cleaned_data since it's not a model field
         if "youtube_url" in self.cleaned_data:
