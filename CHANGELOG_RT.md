@@ -1,5 +1,16 @@
 # CHANGELOG - RT Fork
 
+## [0.24.9.RT] - 2025-10-16
+
+### 🔧 Correcciones
+- **YouTube Episodes Source Fix**: Cambiada la fuente de episodios de YouTube de `youtube` a `manual`
+  - Resuelve problemas de restricciones de base de datos
+  - Mejor clasificación semántica: episodios personalizados usan fuente `manual`
+  - Mantiene toda la funcionalidad de extracción de metadatos de YouTube
+  - Compatibilidad con bases de datos que no tienen `youtube` como fuente permitida
+
+---
+
 ## [0.24.8.RT] - 2025-10-15
 
 ### 🔧 Mejoras
