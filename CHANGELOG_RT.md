@@ -1,5 +1,16 @@
 # CHANGELOG - RT Fork
 
+## [0.24.9.1.RT] - 2025-10-16
+
+### 🐛 Hotfix
+- **Parent Season Search Fix**: Corregido problema de búsqueda de temporadas padre
+  - Aumentado límite de resultados de 5 a 20 temporadas
+  - Agregada ordenación por número de temporada y título
+  - Resuelve el problema donde temporadas con números altos (2023, 2024, 2025) no aparecían
+  - Mejora la experiencia al crear episodios personalizados
+
+---
+
 ## [0.24.9.RT] - 2025-10-16
 
 ### 🔧 Correcciones
