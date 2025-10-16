@@ -86,6 +86,96 @@ class BasicMediaForm(TestCase):
         form = SeasonForm(data=form_data)
         self.assertTrue(form.is_valid())
 
+    def test_season_form_intelligent_status_assignment(self):
+        """Test that seasons get IN_PROGRESS status when parent TV is completed."""
+        # Create TV show items
+        tv_item = Item.objects.create(
+            media_id="123",
+            source=Sources.TMDB.value,
+            media_type=MediaTypes.TV.value,
+            title="Test Show",
+            image="http://example.com/image.jpg",
+        )
+        
+        season_item = Item.objects.create(
+            media_id="123",
+            source=Sources.TMDB.value,
+            media_type=MediaTypes.SEASON.value,
+            title="Test Show",
+            season_number=2,
+            image="http://example.com/image.jpg",
+        )
+
+        # Create completed TV instance
+        completed_tv = TV.objects.create(
+            item=tv_item,
+            user=self.user,
+            status=Status.COMPLETED.value,
+        )
+
+        # Test 1: New season with PLANNING should become IN_PROGRESS
+        form_data = {
+            "status": Status.PLANNING.value,
+            "score": None,
+            "notes": "",
+        }
+        
+        new_season = Season(
+            item=season_item,
+            user=self.user,
+        )
+        
+        form = SeasonForm(data=form_data, instance=new_season)
+        self.assertTrue(form.is_valid())
+        
+        saved_season = form.save()
+        self.assertEqual(saved_season.status, Status.IN_PROGRESS.value)
+
+        # Test 2: TV not completed - season should keep PLANNING status
+        completed_tv.status = Status.IN_PROGRESS.value
+        completed_tv.save()
+        
+        season_item_2 = Item.objects.create(
+            media_id="123",
+            source=Sources.TMDB.value,
+            media_type=MediaTypes.SEASON.value,
+            title="Test Show",
+            season_number=3,
+            image="http://example.com/image.jpg",
+        )
+        
+        new_season_2 = Season(
+            item=season_item_2,
+            user=self.user,
+        )
+        
+        form_2 = SeasonForm(data=form_data, instance=new_season_2)
+        self.assertTrue(form_2.is_valid())
+        
+        saved_season_2 = form_2.save()
+        self.assertEqual(saved_season_2.status, Status.PLANNING.value)
+
+        # Test 3: No TV instance exists - season should keep PLANNING status
+        season_item_3 = Item.objects.create(
+            media_id="456",  # Different media_id (no TV exists)
+            source=Sources.TMDB.value,
+            media_type=MediaTypes.SEASON.value,
+            title="Another Show",
+            season_number=1,
+            image="http://example.com/image.jpg",
+        )
+        
+        new_season_3 = Season(
+            item=season_item_3,
+            user=self.user,
+        )
+        
+        form_3 = SeasonForm(data=form_data, instance=new_season_3)
+        self.assertTrue(form_3.is_valid())
+        
+        saved_season_3 = form_3.save()
+        self.assertEqual(saved_season_3.status, Status.PLANNING.value)
+
     def test_valid_episode_form(self):
         """Test the episode form with valid data."""
         form_data = {

@@ -15,6 +15,7 @@ from app.models import (
     Movie,
     Season,
     Sources,
+    Status,
 )
 
 
@@ -363,6 +364,34 @@ class SeasonForm(MediaForm):
             "status",
             "notes",
         ]
+
+    def save(self, commit=True):
+        """Save season with intelligent status assignment."""
+        season = super().save(commit=False)
+        
+        # If this is a new season (no pk yet) and status is PLANNING,
+        # check if parent TV series is completed
+        if not season.pk and season.status == Status.PLANNING.value:
+            try:
+                # Try to find existing TV instance for this series
+                tv_instance = TV.objects.get(
+                    item__media_id=season.item.media_id,
+                    item__source=season.item.source,
+                    item__media_type=MediaTypes.TV.value,
+                    user=season.user,
+                )
+                
+                # If TV series is completed, set new season to IN_PROGRESS
+                if tv_instance.status == Status.COMPLETED.value:
+                    season.status = Status.IN_PROGRESS.value
+                    
+            except TV.DoesNotExist:
+                # No TV instance exists yet, keep original status
+                pass
+        
+        if commit:
+            season.save()
+        return season
 
 
 class EpisodeForm(forms.Form):
