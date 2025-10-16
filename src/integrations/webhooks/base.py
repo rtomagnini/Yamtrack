@@ -134,11 +134,37 @@ class BaseWebhookProcessor:
             episode_number = payload["Metadata"].get("index")
             
             if season_number is not None and episode_number is not None:
-                logger.info(
-                    "Using TMDB ID directly: %s, Season: %d, Episode: %d", 
-                    ids["tmdb_id"], season_number, episode_number
-                )
-                return int(ids["tmdb_id"]), season_number, episode_number
+                try:
+                    # Verify if TMDB ID actually exists
+                    logger.info(
+                        "Attempting to use TMDB ID directly: %s, Season: %d, Episode: %d", 
+                        ids["tmdb_id"], season_number, episode_number
+                    )
+                    app.providers.tmdb.tv(int(ids["tmdb_id"]))
+                    logger.info("TMDB ID %s is valid", ids["tmdb_id"])
+                    return int(ids["tmdb_id"]), season_number, episode_number
+                    
+                except Exception as e:
+                    logger.warning("TMDB ID %s is invalid (%s), checking for mapping...", ids["tmdb_id"], e)
+                    
+                    # Look for external ID mapping
+                    try:
+                        mapping = app.models.ExternalIdMapping.objects.filter(
+                            tmdb_id_plex=ids["tmdb_id"],
+                            external_source="plex",
+                            media_type=app.models.MediaTypes.TV.value
+                        ).first()
+                        
+                        if mapping:
+                            logger.info(
+                                "Found mapping: Plex fake TMDB ID %s → Real TMDB ID %s (%s)", 
+                                ids["tmdb_id"], mapping.real_tmdb_id, mapping.title
+                            )
+                            return int(mapping.real_tmdb_id), season_number, episode_number
+                        else:
+                            logger.error("No mapping found for Plex fake TMDB ID: %s", ids["tmdb_id"])
+                    except Exception as mapping_error:
+                        logger.error("Error checking ID mapping: %s", mapping_error)
         
         # Fallback to searching by other external IDs
         for ext_id, ext_type in [

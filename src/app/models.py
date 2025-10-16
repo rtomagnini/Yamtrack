@@ -63,6 +63,32 @@ class MediaTypes(models.TextChoices):
     COMIC = "comic", "Comic"
 
 
+class ExternalIdMapping(models.Model):
+    """Mapping from external fake IDs (like Plex fake TMDB IDs) to valid TMDB IDs."""
+    
+    tmdb_id_plex = models.CharField(max_length=50, help_text="Fake TMDB ID from external source")
+    external_source = models.CharField(max_length=20, default="plex", help_text="Source of fake ID")
+    real_tmdb_id = models.CharField(max_length=20, help_text="Valid TMDB ID that actually exists")
+    media_type = models.CharField(
+        max_length=10,
+        choices=MediaTypes.choices,
+        default=MediaTypes.TV.value,
+        help_text="Type of media being mapped"
+    )
+    title = models.CharField(max_length=255, help_text="Series/movie title for reference")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        """Meta options for the ExternalIdMapping model."""
+        unique_together = ['tmdb_id_plex', 'external_source', 'media_type']
+        verbose_name = "External ID Mapping"
+        verbose_name_plural = "External ID Mappings"
+        
+    def __str__(self):
+        return f"{self.external_source} {self.tmdb_id_plex} → TMDB {self.real_tmdb_id} ({self.title})"
+
+
 class Item(CalendarTriggerMixin, models.Model):
     """Model to store basic information about media items."""
 

@@ -6,6 +6,7 @@ from django.contrib.admin.sites import AlreadyRegistered
 
 from app.models import (
     Episode,
+    ExternalIdMapping,
     Item,
 )
 
@@ -33,6 +34,15 @@ class EpisodeAdmin(admin.ModelAdmin):
     list_display = ["__str__", "end_date"]
 
 
+class ExternalIdMappingAdmin(admin.ModelAdmin):
+    """Custom admin for ExternalIdMapping model."""
+
+    search_fields = ["title", "tmdb_id_plex", "real_tmdb_id"]
+    list_display = ["title", "tmdb_id_plex", "real_tmdb_id", "external_source", "media_type", "created_at"]
+    list_filter = ["external_source", "media_type", "created_at"]
+    readonly_fields = ["created_at", "updated_at"]
+
+
 class MediaAdmin(admin.ModelAdmin):
     """Custom admin for regular media model with search and filter options."""
 
@@ -44,11 +54,12 @@ class MediaAdmin(admin.ModelAdmin):
 # Register models with custom admin classes
 admin.site.register(Item, ItemAdmin)
 admin.site.register(Episode, EpisodeAdmin)
+admin.site.register(ExternalIdMapping, ExternalIdMappingAdmin)
 
 
 # Auto-register remaining models
 app_models = apps.get_app_config("app").get_models()
-SpecialModels = ["Item", "Episode", "BasicMedia"]
+SpecialModels = ["Item", "Episode", "BasicMedia", "ExternalIdMapping"]
 for model in app_models:
     if (
         not model.__name__.startswith("Historical")
