@@ -311,7 +311,71 @@ AUTH_USER_MODEL = "users.User"
 # For CSV imports
 FILE_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024  # 10 MB
 
-VERSION = config("VERSION", default="dev")
+def get_version():
+    """Get version from multiple sources in order of preference."""
+    import subprocess
+    import os
+    from pathlib import Path
+    
+    base_dir = Path(__file__).resolve().parent.parent.parent
+    
+    # Check if we have uncommitted changes first
+    has_changes = False
+    try:
+        result = subprocess.run(
+            ["git", "status", "--porcelain"], 
+            capture_output=True, 
+            text=True, 
+            cwd=base_dir
+        )
+        has_changes = bool(result.stdout.strip())
+    except (subprocess.SubprocessError, FileNotFoundError):
+        pass
+    
+    # If we have uncommitted changes, prioritize VERSION file over Git tags
+    if has_changes:
+        try:
+            version_file = base_dir / "VERSION"
+            if version_file.exists():
+                return version_file.read_text().strip()
+        except (IOError, OSError):
+            pass
+    
+    try:
+        # Try to get version from git tag (for clean releases)
+        result = subprocess.run(
+            ["git", "describe", "--tags", "--abbrev=0"], 
+            capture_output=True, 
+            text=True, 
+            cwd=base_dir
+        )
+        if result.returncode == 0:
+            git_version = result.stdout.strip()
+            # If it's a RT fork version, keep it as is, otherwise add .RT suffix
+            if ".RT" in git_version:
+                return git_version
+            else:
+                return f"{git_version}.RT"
+    except (subprocess.SubprocessError, FileNotFoundError):
+        pass
+    
+    try:
+        # Fallback to VERSION file if git failed
+        version_file = base_dir / "VERSION"
+        if version_file.exists():
+            return version_file.read_text().strip()
+    except (IOError, OSError):
+        pass
+    
+    # Fallback to environment variable
+    env_version = config("VERSION", default=None)
+    if env_version:
+        return env_version
+    
+    # Final fallback to dev
+    return "dev"
+
+VERSION = get_version()
 
 ADMIN_ENABLED = config("ADMIN_ENABLED", default=False, cast=bool)
 

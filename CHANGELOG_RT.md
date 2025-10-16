@@ -1,5 +1,15 @@
 # CHANGELOG - RT Fork
 
+## [0.24.10.RT] - 2025-10-16
+
+### ✨ Nuevas Funcionalidades
+- **Intelligent Season Status Assignment**: Nueva lógica inteligente para el estado de temporadas
+  - Cuando una serie está completada y se añade una nueva temporada, se establece automáticamente como "In Progress" en lugar de "Planning"
+  - Facilita el seguimiento de series que el usuario ya terminó pero obtienen nuevas temporadas
+  - Mejora la experiencia de usuario al evitar cambios manuales de estado
+
+---
+
 ## [0.24.9.1.RT] - 2025-10-16
 
 ### 🐛 Hotfix
