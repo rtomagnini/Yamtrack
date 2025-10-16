@@ -142,7 +142,7 @@ class ManualItemForm(forms.ModelForm):
                 user=self.user,
                 item__source=Sources.MANUAL.value,
                 item__media_type=MediaTypes.SEASON.value,
-            )
+            ).order_by('item__season_number', 'item__title')
         self.fields["image"].required = False
         self.fields["title"].required = False
 

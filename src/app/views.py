@@ -845,7 +845,7 @@ def search_parent_season(request):
         item__source=Sources.MANUAL.value,
         item__media_type=MediaTypes.SEASON.value,
         item__title__icontains=query,
-    )[:5]
+    ).order_by('item__season_number', 'item__title')[:20]
 
     return render(
         request,
