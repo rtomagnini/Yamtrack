@@ -28,6 +28,9 @@ RUN apk add --no-cache nginx shadow \
 # Django app
 COPY src ./
 
+# Copy VERSION file to container root
+COPY VERSION ./
+
 # Copy and set permissions for entrypoint
 COPY ./entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh \

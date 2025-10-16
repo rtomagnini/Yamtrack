@@ -1211,34 +1211,15 @@ class Season(Media):
 
     @property
     def progress(self):
-        """Return the current episode number of the season."""
+        """Return the highest episode number that has been watched."""
         episodes = self.episodes.all()
         if not episodes:
             return 0
 
-        if self.status == Status.IN_PROGRESS.value:
-            # Calculate repeat counts for each episode number
-            episode_counts = {}
-            for ep in episodes:
-                ep_num = ep.item.episode_number
-                episode_counts[ep_num] = episode_counts.get(ep_num, 0) + 1
-
-            # Sort by repeat count then episode_number
-            sorted_episodes = sorted(
-                episodes,
-                key=lambda e: (
-                    -episode_counts[e.item.episode_number],
-                    -e.item.episode_number,
-                ),
-            )
-        else:
-            # Default sorting by episode_number
-            sorted_episodes = sorted(
-                episodes,
-                key=lambda e: -e.item.episode_number,
-            )
-
-        return sorted_episodes[0].item.episode_number
+        # Return the highest episode number that has been watched
+        # This shows the furthest progress regardless of duplicates/repeats
+        watched_episode_numbers = [ep.item.episode_number for ep in episodes]
+        return max(watched_episode_numbers)
 
     @property
     def progressed_at(self):
@@ -1280,21 +1261,26 @@ class Season(Media):
         )
         episodes = season_metadata["episodes"]
 
-        if self.progress == 0:
-            # start watching from the first episode
-            next_episode_number = episodes[0]["episode_number"]
-        else:
-            next_episode_number = providers.tmdb.find_next_episode(
-                self.progress,
-                episodes,
-            )
+        # Find the next unwatched episode instead of using progress (which counts repeats)
+        watched_episode_numbers = set(
+            episode.item.episode_number for episode in self.episodes.all()
+        )
+        
+        # Find first episode that hasn't been watched yet
+        next_episode_number = None
+        for episode in episodes:
+            ep_num = episode["episode_number"]
+            if ep_num not in watched_episode_numbers:
+                next_episode_number = ep_num
+                break
 
         now = timezone.now().replace(second=0, microsecond=0)
 
         if next_episode_number:
             self.watch(next_episode_number, now)
+            logger.info("Watched next unwatched episode: %d", next_episode_number)
         else:
-            logger.info("No more episodes to watch.")
+            logger.info("No more episodes to watch - all episodes have been seen.")
 
     def watch(self, episode_number, end_date, auto_complete=True):
         """Create or add a repeat to an episode of the season."""

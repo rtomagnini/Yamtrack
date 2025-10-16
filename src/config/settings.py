@@ -317,23 +317,29 @@ def get_version():
     import os
     from pathlib import Path
     
-    base_dir = Path(__file__).resolve().parent.parent.parent
+    # Try multiple possible locations for VERSION file
+    possible_paths = [
+        Path("/yamtrack/VERSION"),  # Docker container path
+        Path(__file__).resolve().parent.parent.parent / "VERSION",  # Development path
+        Path.cwd() / "VERSION",  # Current working directory
+    ]
     
     try:
         # 1. Always try VERSION file first (most reliable for Docker/production)
-        version_file = base_dir / "VERSION"
-        if version_file.exists():
-            return version_file.read_text().strip()
+        for version_file in possible_paths:
+            if version_file.exists():
+                return version_file.read_text().strip()
     except (IOError, OSError):
         pass
     
     try:
         # 2. Try to get version from git tag (for development)
+        git_base_dir = Path(__file__).resolve().parent.parent.parent
         result = subprocess.run(
             ["git", "describe", "--tags", "--abbrev=0"], 
             capture_output=True, 
             text=True, 
-            cwd=base_dir
+            cwd=git_base_dir
         )
         if result.returncode == 0:
             git_version = result.stdout.strip()
