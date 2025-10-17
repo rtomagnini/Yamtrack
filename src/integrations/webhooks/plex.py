@@ -79,20 +79,71 @@ class PlexWebhookProcessor(BaseWebhookProcessor):
         return title
 
     def _extract_external_ids(self, payload):
+        """Extract external IDs from Plex payload."""
+        
+        # For TV episodes, we need the series TMDB ID, not the episode TMDB ID
+        # Plex structure: Episode -> Season (parent) -> Series (grandparent)
+        media_type = self._get_media_type(payload)
+        
+        if media_type == MediaTypes.TV.value:
+            # For TV episodes, try to get the series TMDB ID from grandparent
+            tmdb_id = self._extract_series_tmdb_id(payload)
+        else:
+            # For movies, use the direct TMDB ID
+            guids = payload["Metadata"].get("Guid", [])
+            tmdb_id = self._get_id_from_guids(guids, "tmdb")
+        
+        # Extract other IDs from episode level (these are usually correct)
         guids = payload["Metadata"].get("Guid", [])
-
-        def get_id(prefix):
-            return next(
-                (
-                    guid["id"].replace(f"{prefix}://", "")
-                    for guid in guids
-                    if guid["id"].startswith(f"{prefix}://")
-                ),
-                None,
-            )
-
+        
         return {
-            "tmdb_id": get_id("tmdb"),
-            "imdb_id": get_id("imdb"),
-            "tvdb_id": get_id("tvdb"),
+            "tmdb_id": tmdb_id,
+            "imdb_id": self._get_id_from_guids(guids, "imdb"),
+            "tvdb_id": self._get_id_from_guids(guids, "tvdb"),
         }
+    
+    def _extract_series_tmdb_id(self, payload):
+        """Extract TMDB ID for the series (grandparent) from a TV episode payload."""
+        
+        # Method 1: Check if there's a grandparent section with GUIDs
+        grandparent = payload["Metadata"].get("grandparent", {})
+        if grandparent and "Guid" in grandparent:
+            tmdb_id = self._get_id_from_guids(grandparent["Guid"], "tmdb")
+            if tmdb_id:
+                logger.info("Found series TMDB ID from grandparent: %s", tmdb_id)
+                return tmdb_id
+        
+        # Method 2: Look for series-level TMDB in main Guid array
+        # Sometimes Plex includes multiple levels of GUIDs
+        guids = payload["Metadata"].get("Guid", [])
+        for guid in guids:
+            guid_id = guid.get("id", "")
+            # Look for patterns that indicate this is a series TMDB ID
+            if guid_id.startswith("tmdb://") and "show" in str(guid).lower():
+                tmdb_id = guid_id.replace("tmdb://", "")
+                logger.info("Found series TMDB ID from show context: %s", tmdb_id)
+                return tmdb_id
+        
+        # Method 3: Fallback to regular TMDB ID extraction
+        # This might be the episode TMDB ID, but better than nothing
+        tmdb_id = self._get_id_from_guids(guids, "tmdb")
+        if tmdb_id:
+            logger.warning("Using fallback TMDB ID (might be episode-level): %s", tmdb_id)
+            return tmdb_id
+        
+        logger.warning("No TMDB ID found for series")
+        return None
+    
+    def _get_id_from_guids(self, guids, prefix):
+        """Extract ID with given prefix from GUID array."""
+        if not guids:
+            return None
+            
+        return next(
+            (
+                guid["id"].replace(f"{prefix}://", "")
+                for guid in guids
+                if guid.get("id", "").startswith(f"{prefix}://")
+            ),
+            None,
+        )
