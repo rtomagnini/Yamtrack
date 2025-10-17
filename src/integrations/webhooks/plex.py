@@ -1,6 +1,9 @@
 import json
 import logging
+import requests
+from urllib.parse import quote
 
+from django.conf import settings
 from app.models import MediaTypes
 
 from .base import BaseWebhookProcessor
@@ -134,10 +137,119 @@ class PlexWebhookProcessor(BaseWebhookProcessor):
             "tvdb_id": self._get_id_from_guids(guids, "tvdb"),
         }
     
+    def _get_series_tmdb_from_plex_api(self, episode_tmdb_id, payload):
+        """Get series TMDB ID by querying Plex API with episode TMDB ID."""
+        
+        # Get Plex server info from payload
+        server = payload.get("Server", {})
+        plex_host = server.get("uuid")  # We might need to configure this differently
+        
+        # Try to get Plex configuration from settings
+        plex_url = getattr(settings, 'PLEX_SERVER_URL', None)
+        plex_token = getattr(settings, 'PLEX_TOKEN', None)
+        
+        if not plex_url or not plex_token:
+            logger.warning("Plex API credentials not configured in settings")
+            return None
+        
+        try:
+            # Query Plex API for the episode using its TMDB GUID
+            guid = f"tmdb://{episode_tmdb_id}"
+            encoded_guid = quote(guid)
+            
+            api_url = f"{plex_url}/library/all"
+            params = {
+                'guid': guid,
+                'X-Plex-Token': plex_token
+            }
+            
+            logger.info("Querying Plex API: %s with GUID: %s", api_url, guid)
+            
+            response = requests.get(api_url, params=params, timeout=10)
+            response.raise_for_status()
+            
+            # Parse XML response (Plex returns XML)
+            import xml.etree.ElementTree as ET
+            root = ET.fromstring(response.content)
+            
+            # Find the episode and get its parent info
+            for video in root.findall('.//Video'):
+                # Check if this is our episode
+                for guid_elem in video.findall('Guid'):
+                    if guid_elem.get('id') == guid:
+                        # Found our episode, now get parent info
+                        parent_rating_key = video.get('parentRatingKey')
+                        grandparent_rating_key = video.get('grandparentRatingKey')
+                        
+                        logger.info("Found episode - Parent: %s, Grandparent: %s", 
+                                  parent_rating_key, grandparent_rating_key)
+                        
+                        # Now query for the series (grandparent) metadata
+                        if grandparent_rating_key:
+                            series_tmdb_id = self._get_series_metadata_from_plex(
+                                grandparent_rating_key, plex_url, plex_token
+                            )
+                            if series_tmdb_id:
+                                return series_tmdb_id
+                        
+                        break
+            
+            logger.warning("Episode not found in Plex API response")
+            return None
+            
+        except Exception as e:
+            logger.error("Error querying Plex API: %s", str(e))
+            return None
+    
+    def _get_series_metadata_from_plex(self, rating_key, plex_url, plex_token):
+        """Get series metadata from Plex using rating key."""
+        
+        try:
+            api_url = f"{plex_url}/library/metadata/{rating_key}"
+            params = {'X-Plex-Token': plex_token}
+            
+            logger.info("Getting series metadata from: %s", api_url)
+            
+            response = requests.get(api_url, params=params, timeout=10)
+            response.raise_for_status()
+            
+            # Parse XML response
+            import xml.etree.ElementTree as ET
+            root = ET.fromstring(response.content)
+            
+            # Find TMDB GUID in series metadata
+            for directory in root.findall('.//Directory'):
+                for guid_elem in directory.findall('Guid'):
+                    guid_id = guid_elem.get('id', '')
+                    if guid_id.startswith('tmdb://'):
+                        tmdb_id = guid_id.replace('tmdb://', '')
+                        logger.info("Found series TMDB ID from Plex API: %s", tmdb_id)
+                        return tmdb_id
+            
+            logger.warning("No TMDB GUID found in series metadata")
+            return None
+            
+        except Exception as e:
+            logger.error("Error getting series metadata from Plex: %s", str(e))
+            return None
+    
     def _extract_series_tmdb_id(self, payload):
         """Extract TMDB ID for the series (grandparent) from a TV episode payload."""
         
         logger.info("=== EXTRACTING SERIES TMDB ID ===")
+        
+        # Method 0: Use Plex API to get series TMDB ID from episode TMDB ID
+        episode_guids = payload["Metadata"].get("Guid", [])
+        episode_tmdb_id = self._get_id_from_guids(episode_guids, "tmdb")
+        
+        if episode_tmdb_id:
+            logger.info("Found episode TMDB ID: %s, querying Plex API for series", episode_tmdb_id)
+            series_tmdb_id = self._get_series_tmdb_from_plex_api(episode_tmdb_id, payload)
+            if series_tmdb_id:
+                logger.info("Successfully got series TMDB ID from Plex API: %s", series_tmdb_id)
+                return series_tmdb_id
+            else:
+                logger.warning("Plex API method failed, trying payload analysis...")
         
         # Method 1: Check if there's a grandparent section with GUIDs
         grandparent = payload["Metadata"].get("Grandparent", {})

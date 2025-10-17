@@ -609,3 +609,7 @@ if not REGISTRATION:
     ACCOUNT_ADAPTER = "users.account_adapter.NoNewUsersAccountAdapter"
 
 REDIRECT_LOGIN_TO_SSO = config("REDIRECT_LOGIN_TO_SSO", default=False, cast=bool)
+
+# Plex API Configuration
+PLEX_SERVER_URL = config("PLEX_SERVER_URL", default=None)
+PLEX_TOKEN = config("PLEX_TOKEN", default=None)
