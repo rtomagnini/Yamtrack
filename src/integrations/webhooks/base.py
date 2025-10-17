@@ -402,11 +402,9 @@ class BaseWebhookProcessor:
                     )
 
             if should_create:
-                app.models.Episode.objects.create(
-                    item=episode_item,
-                    related_season=season_instance,
-                    end_date=now,
-                )
+                # Use season.watch() method with auto_complete=False to prevent 
+                # automatic completion when watching last episode
+                season_instance.watch(episode_number, now, auto_complete=False)
                 logger.info(
                     "Marked episode as played: %s S%02dE%02d",
                     tv_metadata["title"],

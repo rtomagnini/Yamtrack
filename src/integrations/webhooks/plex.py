@@ -18,37 +18,13 @@ class PlexWebhookProcessor(BaseWebhookProcessor):
         """Process the incoming Plex webhook payload."""
         logger.debug("Received Plex webhook payload: %s", json.dumps(payload, indent=2))
         
-        # Log detailed payload structure for debugging
-        logger.info("=== PLEX PAYLOAD ANALYSIS ===")
-        logger.info("Full payload: %s", json.dumps(payload, indent=2))
-        
-        # Log metadata structure specifically
+        # Log essential info only
         metadata = payload.get("Metadata", {})
-        logger.info("Metadata section: %s", json.dumps(metadata, indent=2))
-        
-        # Log parent information if available
-        if "Parent" in metadata:
-            logger.info("Parent section: %s", json.dumps(metadata["Parent"], indent=2))
-        
-        # Log grandparent information if available
-        if "Grandparent" in metadata:
-            logger.info("Grandparent section: %s", json.dumps(metadata["Grandparent"], indent=2))
-        
-        # Log all GUIDs for analysis
-        guids = metadata.get("Guid", [])
-        logger.info("Episode GUIDs: %s", json.dumps(guids, indent=2))
-        
-        # Check for parent GUIDs
-        parent_guids = metadata.get("Parent", {}).get("Guid", [])
-        if parent_guids:
-            logger.info("Parent GUIDs: %s", json.dumps(parent_guids, indent=2))
-        
-        # Check for grandparent GUIDs
-        grandparent_guids = metadata.get("Grandparent", {}).get("Guid", [])
-        if grandparent_guids:
-            logger.info("Grandparent GUIDs: %s", json.dumps(grandparent_guids, indent=2))
-        
-        logger.info("=== END PAYLOAD ANALYSIS ===")
+        logger.info("Processing Plex webhook: %s S%sE%s (Rating Key: %s)", 
+                   metadata.get("grandparentTitle", "Unknown"),
+                   metadata.get("parentIndex", "?"),
+                   metadata.get("index", "?"),
+                   metadata.get("ratingKey", "?"))
 
         event_type = payload.get("event")
         if not self._is_supported_event(payload.get("event")):
@@ -180,56 +156,34 @@ class PlexWebhookProcessor(BaseWebhookProcessor):
             api_url = f"{plex_url}/library/metadata/{rating_key}"
             params = {'X-Plex-Token': plex_token}
             
-            logger.info("Getting series metadata from: %s", api_url)
+            logger.info("Getting series metadata from Plex API (rating key: %s)", rating_key)
             
             response = requests.get(api_url, params=params, timeout=10)
             response.raise_for_status()
-            
-            logger.info("Plex API response status: %s", response.status_code)
-            logger.debug("Plex API response content: %s", response.text)
             
             # Parse XML response
             import xml.etree.ElementTree as ET
             root = ET.fromstring(response.content)
             
-            # Log the XML structure for debugging
-            logger.info("Series XML root tag: %s", root.tag)
-            logger.info("Series XML attributes: %s", root.attrib)
-            
             # Find TMDB GUID in series metadata - try multiple paths
             # Method 1: Look in Directory elements
             for directory in root.findall('.//Directory'):
-                logger.info("Found Directory element with attributes: %s", directory.attrib)
                 for guid_elem in directory.findall('Guid'):
                     guid_id = guid_elem.get('id', '')
-                    logger.info("Found GUID in Directory: %s", guid_id)
                     if guid_id.startswith('tmdb://'):
                         tmdb_id = guid_id.replace('tmdb://', '')
-                        logger.info("Found series TMDB ID from Directory: %s", tmdb_id)
+                        logger.info("Found series TMDB ID from Plex API: %s", tmdb_id)
                         return tmdb_id
             
             # Method 2: Look directly in root Guid elements
             for guid_elem in root.findall('.//Guid'):
                 guid_id = guid_elem.get('id', '')
-                logger.info("Found GUID in root: %s", guid_id)
                 if guid_id.startswith('tmdb://'):
                     tmdb_id = guid_id.replace('tmdb://', '')
-                    logger.info("Found series TMDB ID from root: %s", tmdb_id)
+                    logger.info("Found series TMDB ID from Plex API: %s", tmdb_id)
                     return tmdb_id
             
-            # Method 3: Look in any element that has GUIDs
-            for elem in root.iter():
-                if 'guid' in elem.tag.lower() or len(elem.findall('Guid')) > 0:
-                    logger.info("Element %s has potential GUIDs: %s", elem.tag, elem.attrib)
-                    for guid_elem in elem.findall('Guid'):
-                        guid_id = guid_elem.get('id', '')
-                        logger.info("Found GUID: %s", guid_id)
-                        if guid_id.startswith('tmdb://'):
-                            tmdb_id = guid_id.replace('tmdb://', '')
-                            logger.info("Found series TMDB ID: %s", tmdb_id)
-                            return tmdb_id
-            
-            logger.warning("No TMDB GUID found in series metadata")
+            logger.warning("No TMDB GUID found in Plex series metadata")
             return None
             
         except Exception as e:
@@ -239,7 +193,7 @@ class PlexWebhookProcessor(BaseWebhookProcessor):
     def _extract_series_tmdb_id(self, payload):
         """Extract TMDB ID for the series (grandparent) from a TV episode payload."""
         
-        logger.info("=== EXTRACTING SERIES TMDB ID ===")
+        logger.info("Extracting series TMDB ID...")
         
         # Method 0: Use Plex API to get series TMDB ID from episode TMDB ID
         episode_guids = payload["Metadata"].get("Guid", [])
@@ -256,9 +210,7 @@ class PlexWebhookProcessor(BaseWebhookProcessor):
         
         # Method 1: Check if there's a grandparent section with GUIDs
         grandparent = payload["Metadata"].get("Grandparent", {})
-        logger.info("Grandparent section found: %s", bool(grandparent))
         if grandparent and "Guid" in grandparent:
-            logger.info("Grandparent GUIDs: %s", json.dumps(grandparent["Guid"], indent=2))
             tmdb_id = self._get_id_from_guids(grandparent["Guid"], "tmdb")
             if tmdb_id:
                 logger.info("Found series TMDB ID from grandparent: %s", tmdb_id)
@@ -266,36 +218,20 @@ class PlexWebhookProcessor(BaseWebhookProcessor):
         
         # Method 2: Check parent section with GUIDs
         parent = payload["Metadata"].get("Parent", {})
-        logger.info("Parent section found: %s", bool(parent))
         if parent and "Guid" in parent:
-            logger.info("Parent GUIDs: %s", json.dumps(parent["Guid"], indent=2))
             tmdb_id = self._get_id_from_guids(parent["Guid"], "tmdb")
             if tmdb_id:
                 logger.info("Found series TMDB ID from parent: %s", tmdb_id)
                 return tmdb_id
         
-        # Method 3: Look for series-level TMDB in main Guid array
-        # Sometimes Plex includes multiple levels of GUIDs
+        # Method 3: Fallback to regular TMDB ID extraction
         guids = payload["Metadata"].get("Guid", [])
-        logger.info("Episode GUIDs: %s", json.dumps(guids, indent=2))
-        for guid in guids:
-            guid_id = guid.get("id", "")
-            logger.info("Checking GUID: %s", guid_id)
-            # Look for patterns that indicate this is a series TMDB ID
-            if guid_id.startswith("tmdb://") and "show" in str(guid).lower():
-                tmdb_id = guid_id.replace("tmdb://", "")
-                logger.info("Found series TMDB ID from show context: %s", tmdb_id)
-                return tmdb_id
-        
-        # Method 4: Fallback to regular TMDB ID extraction
-        # This might be the episode TMDB ID, but better than nothing
         tmdb_id = self._get_id_from_guids(guids, "tmdb")
         if tmdb_id:
             logger.warning("Using fallback TMDB ID (might be episode-level): %s", tmdb_id)
             return tmdb_id
         
         logger.warning("No TMDB ID found for series")
-        logger.info("=== END SERIES TMDB ID EXTRACTION ===")
         return None
     
     def _get_id_from_guids(self, guids, prefix):
