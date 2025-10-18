@@ -649,10 +649,9 @@ class MediaManager(models.Manager):
                 content_number__isnull=False,
             ).values_list('content_number', flat=True)
             
-            # Get watched episodes for this season
+            # Get UNIQUE watched episode numbers for this season
             watched_episodes = set(
-                episode.item.episode_number 
-                for episode in season.episodes.all()
+                season.episodes.values_list('item__episode_number', flat=True).distinct()
             )
             
             # Calculate pending episodes (aired but not watched)
