@@ -465,6 +465,10 @@ class MediaManager(models.Manager):
             self.annotate_max_progress(media_list, media_type)
             self._annotate_next_event(media_list)
 
+            # Filter seasons to only show those with pending episodes
+            if media_type == MediaTypes.SEASON.value:
+                media_list = [media for media in media_list if media.max_progress > 0]
+
             # Sort the media list
             sorted_list = self._sort_in_progress_media(media_list, sort_by)
 
@@ -487,12 +491,18 @@ class MediaManager(models.Manager):
         if specific_media_type:
             return [specific_media_type]
 
-        # Get active types excluding TV
-        return [
+        # Get active types excluding TV, but include Season for better granularity
+        active_types = [
             media_type
             for media_type in user.get_active_media_types()
             if media_type != MediaTypes.TV.value
         ]
+        
+        # If TV is active, include Season instead for better episode tracking
+        if MediaTypes.TV.value in user.get_active_media_types():
+            active_types.append(MediaTypes.SEASON.value)
+        
+        return active_types
 
     def _annotate_next_event(self, media_list):
         """Annotate next_event for media items."""
@@ -563,6 +573,10 @@ class MediaManager(models.Manager):
             self._annotate_tv_released_episodes(media_list, current_datetime)
             return
 
+        if media_type == MediaTypes.SEASON.value:
+            self._annotate_season_pending_episodes(media_list, current_datetime)
+            return
+
         # For other media types, calculate max_progress from events
         # Create a dictionary mapping item_id to max content_number
         max_progress_dict = {}
@@ -619,6 +633,35 @@ class MediaManager(models.Manager):
         for tv in tv_list:
             tv_episodes = released_episodes.get(tv.item.media_id, {})
             tv.max_progress = sum(tv_episodes.values()) if tv_episodes else 0
+
+    def _annotate_season_pending_episodes(self, season_list, current_datetime):
+        """Annotate seasons with count of pending episodes (aired but not watched)."""
+        from django.utils import timezone
+        
+        for season in season_list:
+            # Get all episodes that have aired for this season
+            aired_episodes = events.models.Event.objects.filter(
+                item__media_id=season.item.media_id,
+                item__source=season.item.source,
+                item__media_type=MediaTypes.SEASON.value,
+                item__season_number=season.item.season_number,
+                datetime__lte=current_datetime,
+                content_number__isnull=False,
+            ).values_list('content_number', flat=True)
+            
+            # Get watched episodes for this season
+            watched_episodes = set(
+                episode.item.episode_number 
+                for episode in season.episodes.all()
+            )
+            
+            # Calculate pending episodes (aired but not watched)
+            aired_set = set(aired_episodes)
+            pending_episodes = aired_set - watched_episodes
+            
+            # Only show seasons with pending episodes
+            season.max_progress = len(pending_episodes)
+            season.pending_episode_numbers = sorted(pending_episodes) if pending_episodes else []
 
     def get_media(
         self,
