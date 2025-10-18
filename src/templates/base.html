@@ -27,18 +27,26 @@
     <script defer src="{% static 'js/libraries/alpinejs-3.14.9.min.js' %}"></script>
     <script src="{% static 'js/libraries/lazysizes-5.3.2.min.js' %}" async></script>
 
+    <!-- iOS PWA Meta Tags -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Yamtrack">
+    
+    <!-- Icons -->
     <link rel="apple-touch-icon"
           sizes="180x180"
-          href="{% static "favicon/apple-touch-icon.png" %}">
+          href="{% static "favicon/apple-touch-icon.png" %}{% get_static_file_mtime "favicon/apple-touch-icon.png" %}">
     <link rel="icon"
           type="image/png"
           sizes="96x96"
-          href="{% static "favicon/favicon-96x96.png" %}">
+          href="{% static "favicon/favicon-96x96.png" %}{% get_static_file_mtime "favicon/favicon-96x96.png" %}">
     <link rel="icon"
           type="image/svg+xml"
-          href="{% static "favicon/favicon.svg" %}">
-    <link rel="manifest" href="{% static "favicon/site.webmanifest" %}">
-    <link rel="shortcut icon" href="{% static "favicon/favicon.ico" %}">
+          href="{% static "favicon/favicon.svg" %}{% get_static_file_mtime "favicon/favicon.svg" %}">
+    <link rel="manifest" href="{% static "favicon/site.webmanifest" %}{% get_static_file_mtime "favicon/site.webmanifest" %}">
+    <link rel="shortcut icon" href="{% static "favicon/favicon.ico" %}{% get_static_file_mtime "favicon/favicon.ico" %}">
+    
+    <!-- Theme and App Config -->
     <meta name="msapplication-TileColor" content="#181a1b">
     <meta name="msapplication-config"
           content="{% static "favicon/browserconfig.xml" %}">
