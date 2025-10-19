@@ -450,13 +450,23 @@ class MediaManager(models.Manager):
         media_types = self._get_media_types_to_process(user, specific_media_type)
 
         for media_type in media_types:
-            # Get base media list for in-progress media
-            media_list = self.get_media_list(
-                user=user,
-                media_type=media_type,
-                status_filter=Status.IN_PROGRESS.value,
-                sort_filter=None,
-            )
+            # For seasons, get all seasons and filter by pending episodes later
+            # For other media types, use IN_PROGRESS status filter
+            if media_type == MediaTypes.SEASON.value:
+                media_list = self.get_media_list(
+                    user=user,
+                    media_type=media_type,
+                    status_filter=users.models.MediaStatusChoices.ALL,  # Get all seasons
+                    sort_filter=None,
+                )
+            else:
+                # Get base media list for in-progress media
+                media_list = self.get_media_list(
+                    user=user,
+                    media_type=media_type,
+                    status_filter=Status.IN_PROGRESS.value,
+                    sort_filter=None,
+                )
 
             if not media_list:
                 continue
@@ -638,7 +648,11 @@ class MediaManager(models.Manager):
         """Annotate seasons with count of pending episodes (aired but not watched)."""
         from django.utils import timezone
         
+        logger = logging.getLogger(__name__)
+        
         for season in season_list:
+            season_title = f"{season.item.title} S{season.item.season_number}"
+            
             # Get all episodes that have aired for this season
             aired_episodes = events.models.Event.objects.filter(
                 item__media_id=season.item.media_id,
@@ -657,6 +671,13 @@ class MediaManager(models.Manager):
             # Calculate pending episodes (aired but not watched)
             aired_set = set(aired_episodes)
             pending_episodes = aired_set - watched_episodes
+            
+            # Debug logging
+            logger.debug("Season: %s", season_title)
+            logger.debug("  Aired episodes: %s", sorted(aired_set))
+            logger.debug("  Watched episodes: %s", sorted(watched_episodes))
+            logger.debug("  Pending episodes: %s", sorted(pending_episodes))
+            logger.debug("  Max progress: %d", len(pending_episodes))
             
             # Only show seasons with pending episodes
             season.max_progress = len(pending_episodes)
