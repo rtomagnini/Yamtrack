@@ -450,13 +450,13 @@ class MediaManager(models.Manager):
         media_types = self._get_media_types_to_process(user, specific_media_type)
 
         for media_type in media_types:
-            # For seasons, get all seasons and filter by pending episodes later
+            # For seasons, get only IN_PROGRESS seasons and filter by pending episodes later
             # For other media types, use IN_PROGRESS status filter
             if media_type == MediaTypes.SEASON.value:
                 media_list = self.get_media_list(
                     user=user,
                     media_type=media_type,
-                    status_filter=users.models.MediaStatusChoices.ALL,  # Get all seasons
+                    status_filter=Status.IN_PROGRESS.value,  # Only IN_PROGRESS seasons
                     sort_filter=None,
                 )
             else:
@@ -646,15 +646,14 @@ class MediaManager(models.Manager):
 
     def _annotate_season_pending_episodes(self, season_list, current_datetime):
         """Annotate seasons with count of pending episodes (aired but not watched)."""
-        from django.utils import timezone
         
         logger = logging.getLogger(__name__)
         
         for season in season_list:
             season_title = f"{season.item.title} S{season.item.season_number}"
             
-            # Get episodes that have aired (with dates) for this season
-            aired_episodes_with_dates = events.models.Event.objects.filter(
+            # Get only episodes that have aired (air_date <= today) for this season
+            aired_episodes = events.models.Event.objects.filter(
                 item__media_id=season.item.media_id,
                 item__source=season.item.source,
                 item__media_type=MediaTypes.SEASON.value,
@@ -663,34 +662,18 @@ class MediaManager(models.Manager):
                 content_number__isnull=False,
             ).values_list('content_number', flat=True)
             
-            # Get ALL episodes for this season (including those without dates)
-            # This covers episodes added manually before calendar implementation
-            all_episodes_in_calendar = events.models.Event.objects.filter(
-                item__media_id=season.item.media_id,
-                item__source=season.item.source,
-                item__media_type=MediaTypes.SEASON.value,
-                item__season_number=season.item.season_number,
-                content_number__isnull=False,
-            ).values_list('content_number', flat=True)
-            
-            # Combine aired episodes + episodes without dates (legacy episodes)
-            aired_set = set(aired_episodes_with_dates)
-            all_episodes_set = set(all_episodes_in_calendar)
-            
             # Get UNIQUE watched episode numbers for this season
             watched_episodes = set(
                 season.episodes.values_list('item__episode_number', flat=True).distinct()
             )
             
-            # Calculate pending episodes: episodes that exist but haven't been watched
-            # For episodes with dates: only if aired
-            # For episodes without dates: include them (legacy episodes)
-            pending_episodes = (aired_set | all_episodes_set) - watched_episodes
+            # Calculate pending episodes (aired but not watched)
+            aired_set = set(aired_episodes)
+            pending_episodes = aired_set - watched_episodes
             
             # Debug logging
             logger.debug("Season: %s", season_title)
-            logger.debug("  Episodes with aired dates: %s", sorted(aired_set))
-            logger.debug("  All episodes in calendar: %s", sorted(all_episodes_set))
+            logger.debug("  Aired episodes: %s", sorted(aired_set))
             logger.debug("  Watched episodes: %s", sorted(watched_episodes))
             logger.debug("  Pending episodes: %s", sorted(pending_episodes))
             logger.debug("  Max progress: %d", len(pending_episodes))
