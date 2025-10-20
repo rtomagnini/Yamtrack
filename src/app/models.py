@@ -686,7 +686,7 @@ class MediaManager(models.Manager):
             # Get completed episode numbers (only COMPLETED status = watched)
             completed_episodes = set(
                 season.episodes.filter(
-                    status=Status.COMPLETED.value
+                    item__status=Status.COMPLETED.value
                 ).values_list('item__episode_number', flat=True).distinct()
             )
             
