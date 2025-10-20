@@ -645,15 +645,15 @@ class MediaManager(models.Manager):
             tv.max_progress = sum(tv_episodes.values()) if tv_episodes else 0
 
     def _annotate_season_pending_episodes(self, season_list, current_datetime):
-        """Annotate seasons with count of pending episodes (aired but not watched)."""
+        """Annotate seasons with count of pending episodes (available but not watched)."""
         
         logger = logging.getLogger(__name__)
         
         for season in season_list:
             season_title = f"{season.item.title} S{season.item.season_number}"
             
-            # Get only episodes that have aired (air_date <= today) for this season
-            aired_episodes = events.models.Event.objects.filter(
+            # Get episodes that have aired (air_date <= today) from calendar events
+            aired_episodes_from_calendar = events.models.Event.objects.filter(
                 item__media_id=season.item.media_id,
                 item__source=season.item.source,
                 item__media_type=MediaTypes.SEASON.value,
@@ -662,23 +662,48 @@ class MediaManager(models.Manager):
                 content_number__isnull=False,
             ).values_list('content_number', flat=True)
             
-            # Get UNIQUE watched episode numbers for this season
-            watched_episodes = set(
-                season.episodes.values_list('item__episode_number', flat=True).distinct()
+            # Get episodes without airdate (manually added episodes) from calendar events
+            episodes_without_airdate = events.models.Event.objects.filter(
+                item__media_id=season.item.media_id,
+                item__source=season.item.source,
+                item__media_type=MediaTypes.SEASON.value,
+                item__season_number=season.item.season_number,
+                datetime__isnull=True,  # No airdate = available immediately
+                content_number__isnull=False,
+            ).values_list('content_number', flat=True)
+            
+            # For manual series (no calendar events), get all episodes from Episodes table
+            # These are considered available since they were added manually
+            all_episodes_in_db = season.episodes.values_list('item__episode_number', flat=True).distinct()
+            
+            # Available episodes: aired OR without airdate OR in DB (for manual series)
+            available_episodes = (
+                set(aired_episodes_from_calendar) | 
+                set(episodes_without_airdate) | 
+                set(all_episodes_in_db)
             )
             
-            # Calculate pending episodes (aired but not watched)
-            aired_set = set(aired_episodes)
-            pending_episodes = aired_set - watched_episodes
+            # Get completed episode numbers (only COMPLETED status = watched)
+            completed_episodes = set(
+                season.episodes.filter(
+                    status=Status.COMPLETED.value
+                ).values_list('item__episode_number', flat=True).distinct()
+            )
+            
+            # Pending episodes = available but not completed
+            pending_episodes = available_episodes - completed_episodes
             
             # Debug logging
-            logger.debug("Season: %s", season_title)
-            logger.debug("  Aired episodes: %s", sorted(aired_set))
-            logger.debug("  Watched episodes: %s", sorted(watched_episodes))
-            logger.debug("  Pending episodes: %s", sorted(pending_episodes))
+            logger.debug("Season: %s (Status: %s)", season_title, season.status)
+            logger.debug("  Aired episodes (<=today): %s", sorted(set(aired_episodes_from_calendar)))
+            logger.debug("  Episodes without airdate: %s", sorted(set(episodes_without_airdate)))
+            logger.debug("  All episodes in DB: %s", sorted(set(all_episodes_in_db)))
+            logger.debug("  Available episodes: %s", sorted(available_episodes))
+            logger.debug("  Completed episodes: %s", sorted(completed_episodes))
+            logger.debug("  Pending episodes (NOT WATCHED): %s", sorted(pending_episodes))
             logger.debug("  Max progress: %d", len(pending_episodes))
             
-            # Only show seasons with pending episodes
+            # Only show seasons with pending episodes (has unwatched content)
             season.max_progress = len(pending_episodes)
             season.pending_episode_numbers = sorted(pending_episodes) if pending_episodes else []
 
