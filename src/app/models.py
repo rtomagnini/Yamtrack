@@ -684,6 +684,7 @@ class MediaManager(models.Manager):
             )
             
             # Get completed episode numbers (only COMPLETED status = watched)
+            # Access status through item relation to avoid FieldError
             completed_episodes = set(
                 season.episodes.filter(
                     item__status=Status.COMPLETED.value
