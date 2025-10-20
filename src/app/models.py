@@ -477,7 +477,7 @@ class MediaManager(models.Manager):
 
             # Filter seasons to only show those with pending episodes
             if media_type == MediaTypes.SEASON.value:
-                media_list = [media for media in media_list if media.max_progress > 0]
+                media_list = [media for media in media_list if hasattr(media, 'pending_episode_numbers') and len(media.pending_episode_numbers) > 0]
 
             # Sort the media list
             sorted_list = self._sort_in_progress_media(media_list, sort_by)
@@ -647,66 +647,101 @@ class MediaManager(models.Manager):
     def _annotate_season_pending_episodes(self, season_list, current_datetime):
         """Annotate seasons with count of pending episodes (available but not watched)."""
         
-        logger = logging.getLogger(__name__)
-        
         for season in season_list:
-            season_title = f"{season.item.title} S{season.item.season_number}"
+            # Skip seasons that are not In Progress
+            if season.status != Status.IN_PROGRESS.value:
+                season.max_progress = 0
+                season.pending_episode_numbers = []
+                continue
             
-            # Get episodes that have aired (air_date <= today) from calendar events
-            aired_episodes_from_calendar = events.models.Event.objects.filter(
-                item__media_id=season.item.media_id,
-                item__source=season.item.source,
-                item__media_type=MediaTypes.SEASON.value,
-                item__season_number=season.item.season_number,
-                datetime__lte=current_datetime,
-                content_number__isnull=False,
-            ).values_list('content_number', flat=True)
-            
-            # Get episodes without airdate (manually added episodes) from calendar events
-            episodes_without_airdate = events.models.Event.objects.filter(
-                item__media_id=season.item.media_id,
-                item__source=season.item.source,
-                item__media_type=MediaTypes.SEASON.value,
-                item__season_number=season.item.season_number,
-                datetime__isnull=True,  # No airdate = available immediately
-                content_number__isnull=False,
-            ).values_list('content_number', flat=True)
-            
-            # For manual series (no calendar events), get all episodes from Episodes table
-            # These are considered available since they were added manually
-            all_episodes_in_db = season.episodes.values_list('item__episode_number', flat=True).distinct()
-            
-            # Available episodes: aired OR without airdate OR in DB (for manual series)
-            available_episodes = (
-                set(aired_episodes_from_calendar) | 
-                set(episodes_without_airdate) | 
-                set(all_episodes_in_db)
+            # Get watched episode numbers from Episode table (unique episodes with end_date)
+            watched_episode_numbers = set(
+                season.episodes.filter(end_date__isnull=False)
+                .values_list('item__episode_number', flat=True)
+                .distinct()
             )
             
-            # Get completed episode numbers (only COMPLETED status = watched)
-            # Access status through item relation to avoid FieldError
-            completed_episodes = set(
-                season.episodes.filter(
-                    item__status=Status.COMPLETED.value
-                ).values_list('item__episode_number', flat=True).distinct()
+            # Handle different sources
+            if season.item.source == Sources.TMDB.value:
+                # For TMDB: Get available episodes from TMDB API (like in detail pages)
+                available_episode_numbers = self._get_tmdb_available_episodes(
+                    season, current_datetime
+                )
+            else:
+                # For MANUAL and other sources: Use local database 
+                available_episode_numbers = self._get_local_available_episodes(
+                    season, current_datetime
+                )
+            
+            # Calculate pending episodes
+            pending_episode_numbers = available_episode_numbers - watched_episode_numbers
+            
+            # For display: watched / pending
+            season.max_progress = len(pending_episode_numbers)    # Pending episodes (denominator)
+            season.pending_episode_numbers = sorted(pending_episode_numbers) if pending_episode_numbers else []
+            
+            # Store watched count for the custom progress property
+            season._custom_progress = len(watched_episode_numbers)  # Watched episodes (numerator)
+    
+    def _get_local_available_episodes(self, season, current_datetime):
+        """Get available episodes from local database (for MANUAL sources)."""
+        episode_items = Item.objects.filter(
+            media_type=MediaTypes.EPISODE.value,
+            media_id=season.item.media_id,
+            source=season.item.source,
+            season_number=season.item.season_number
+        )
+        
+        # Filter available episodes: air_date <= today OR air_date IS NULL
+        available_episode_items = episode_items.filter(
+            Q(air_date__lte=current_datetime) | Q(air_date__isnull=True)
+        )
+        
+        return set(available_episode_items.values_list('episode_number', flat=True).distinct())
+    
+    def _get_tmdb_available_episodes(self, season, current_datetime):
+        """Get available episodes from TMDB API (for TMDB sources)."""
+        try:
+            from app.providers import tmdb
+            
+            # Get season metadata from TMDB using the correct function
+            tv_data = tmdb.tv_with_seasons(
+                season.item.media_id, 
+                [season.item.season_number]
             )
             
-            # Pending episodes = available but not completed
-            pending_episodes = available_episodes - completed_episodes
+            season_key = f"season/{season.item.season_number}"
+            if season_key not in tv_data:
+                # Fallback to local database if season not found
+                return self._get_local_available_episodes(season, current_datetime)
+                
+            season_metadata = tv_data[season_key]
             
-            # Debug logging
-            logger.debug("Season: %s (Status: %s)", season_title, season.status)
-            logger.debug("  Aired episodes (<=today): %s", sorted(set(aired_episodes_from_calendar)))
-            logger.debug("  Episodes without airdate: %s", sorted(set(episodes_without_airdate)))
-            logger.debug("  All episodes in DB: %s", sorted(set(all_episodes_in_db)))
-            logger.debug("  Available episodes: %s", sorted(available_episodes))
-            logger.debug("  Completed episodes: %s", sorted(completed_episodes))
-            logger.debug("  Pending episodes (NOT WATCHED): %s", sorted(pending_episodes))
-            logger.debug("  Max progress: %d", len(pending_episodes))
+            # Filter episodes by air date (same logic as detail pages)
+            available_episode_numbers = set()
+            for episode in season_metadata.get("episodes", []):
+                episode_number = episode.get("episode_number")
+                air_date_str = episode.get("air_date")
+                
+                if episode_number:
+                    # Include episode if: no air_date OR air_date <= today
+                    if not air_date_str:
+                        available_episode_numbers.add(episode_number)
+                    else:
+                        try:
+                            from datetime import datetime
+                            air_date = datetime.fromisoformat(air_date_str).replace(tzinfo=current_datetime.tzinfo)
+                            if air_date <= current_datetime:
+                                available_episode_numbers.add(episode_number)
+                        except (ValueError, TypeError):
+                            # If air_date parsing fails, include the episode
+                            available_episode_numbers.add(episode_number)
             
-            # Only show seasons with pending episodes (has unwatched content)
-            season.max_progress = len(pending_episodes)
-            season.pending_episode_numbers = sorted(pending_episodes) if pending_episodes else []
+            return available_episode_numbers
+            
+        except Exception:
+            # If TMDB API fails, fallback to local database
+            return self._get_local_available_episodes(season, current_datetime)
 
     def get_media(
         self,
@@ -1299,7 +1334,12 @@ class Season(Media):
 
     @property
     def progress(self):
-        """Return the highest episode number that has been watched."""
+        """Return the count of watched episodes for display purposes."""
+        # If we have a custom progress count (from home page filtering), use it
+        if hasattr(self, '_custom_progress'):
+            return self._custom_progress
+            
+        # Otherwise, return the highest episode number that has been watched
         episodes = self.episodes.all()
         if not episodes:
             return 0

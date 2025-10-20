@@ -15,6 +15,7 @@ services:
     volumes:
       - ./db:/yamtrack/db
       - ./media:/yamtrack/media # Para archivos de media si los tienes
+      - ./src:/yamtrack  # Mount source code for development
     ports:
       - "8337:8000" # Usar el puerto que mencionaste en el ejemplo
 
