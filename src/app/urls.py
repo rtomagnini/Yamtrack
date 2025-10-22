@@ -11,6 +11,11 @@ urlpatterns = [
     path("medialist/<media_type:media_type>", views.media_list, name="medialist"),
     path("search", views.media_search, name="search"),
     path(
+        "details/<source:source>/youtube/<str:media_id>/<str:title>",
+        views.youtube_channel_details,
+        name="youtube_channel_details",
+    ),
+    path(
         "details/<source:source>/<media_type:media_type>/<str:media_id>/<str:title>",
         views.media_details,
         name="media_details",

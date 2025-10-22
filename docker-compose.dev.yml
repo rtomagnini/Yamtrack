@@ -12,10 +12,11 @@ services:
       - SECRET=longdevstring123456789
       - REDIS_URL=redis://redis:6379
       - DEBUG=1 # Para desarrollo
+      - ADMIN_ENABLED=True
     volumes:
       - ./db:/yamtrack/db
       - ./media:/yamtrack/media # Para archivos de media si los tienes
-      - ./src:/yamtrack  # Mount source code for development
+      - ./src:/yamtrack # Mount source code for development
     ports:
       - "8337:8000" # Usar el puerto que mencionaste en el ejemplo
 

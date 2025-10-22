@@ -87,6 +87,16 @@
           return ['parentSeason', 'title', 'episodeNumber', 'youtubeUrl', 'image', 'airDate', 'runtime'].includes(field);
         }
     
+        // YouTube Channel fields
+        else if (this.mediaType === 'youtube') {
+          return ['title', 'channelUrl', 'image', 'score', 'status', 'notes'].includes(field);
+        }
+    
+        // YouTube Video fields
+        else if (this.mediaType === 'youtube_video') {
+          return ['title', 'youtubeUrl', 'image', 'airDate', 'runtime', 'notes'].includes(field);
+        }
+    
         // Movie, Anime, Manga, Game, Book fields
         else {
           return ['title', 'image', 'score', 'progress', 'status', 'startDate', 'endDate', 'notes'].includes(field);
@@ -154,6 +164,37 @@
                  value="">
         </div>
 
+        <!-- YouTube Channel URL field (YouTube) -->
+        <div x-show="showField('channelUrl')"
+             x-data="youtubeChannelExtractor()"
+             class="youtube-channel-container">
+          <label class="block text-sm font-medium mb-2 text-gray-300">
+            YouTube Channel URL 
+            <span class="text-xs text-gray-400">(auto-fills channel info)</span>
+          </label>
+          <div class="flex gap-2">
+            <input x-ref="channelInput"
+                   class="flex-1 p-2 bg-[#39404b] rounded-md text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-[#4a9eff] appearance-none"
+                   name="channel_url"
+                   placeholder="https://www.youtube.com/@channelname or https://www.youtube.com/c/channelname"
+                   type="url"
+                   value="">
+            <button type="button"
+                    @click="extractChannelMetadata()"
+                    :disabled="loading"
+                    class="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white rounded-md font-medium transition-colors flex items-center gap-2">
+              <svg x-show="loading" class="animate-spin w-4 h-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="m4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+              <span x-text="loading ? 'Extracting...' : 'Extract Info'"></span>
+            </button>
+          </div>
+          <p class="text-xs text-gray-400 mt-1">
+            Enter a YouTube channel URL to automatically fetch channel name, description, and thumbnail.
+          </p>
+        </div>
+
         <!-- Parent TV Show field (Season) -->
         <div x-show="showField('parentShow')">
           <label class="block text-sm font-medium mb-2 text-gray-300">Parent TV Show</label>
@@ -197,7 +238,7 @@
                    class="w-full p-2 pr-12 bg-[#39404b] rounded-md text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-[#4a9eff] [appearance:textfield] [&amp;::-webkit-outer-spin-button]:appearance-none [&amp;::-webkit-inner-spin-button]:appearance-none"
                    name="season_number"
                    type="number"
-                   value="1">
+                   x-bind:value="mediaType === 'season' ? '1' : ''">
             <div class="absolute inset-y-0 right-0 flex flex-col border-l border-gray-600">
               <button type="button"
                       onclick="this.parentElement.previousElementSibling.stepUp()"
@@ -278,7 +319,7 @@
                    class="w-full p-2 pr-12 bg-[#39404b] rounded-md text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-[#4a9eff] [appearance:textfield] [&amp;::-webkit-outer-spin-button]:appearance-none [&amp;::-webkit-inner-spin-button]:appearance-none"
                    name="episode_number"
                    type="number"
-                   value="1">
+                   x-bind:value="mediaType === 'episode' ? '1' : ''">
             <div class="absolute inset-y-0 right-0 flex flex-col border-l border-gray-600">
               <button type="button"
                       onclick="this.parentElement.previousElementSibling.stepUp()"
@@ -345,6 +386,21 @@
           <p class="text-xs text-gray-400 mt-1">
             Paste a YouTube URL and click "Extract Info" to automatically fill episode title, thumbnail, air date, and duration.
           </p>
+          
+          <!-- Channel info display -->
+          <div x-show="channelInfo" class="mt-3 p-3 bg-[#2a2f35] rounded-md border border-gray-600">
+            <div class="flex items-center gap-2">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-red-500">
+                <polygon points="6 3 20 12 6 21 6 3"/>
+                <rect width="20" height="14" x="2" y="5" rx="2"/>
+              </svg>
+              <span class="text-sm font-medium text-gray-300">Detected Channel:</span>
+              <span class="text-sm text-white" x-text="channelInfo ? channelInfo.title : ''"></span>
+            </div>
+            <div x-show="channelInfo && channelInfo.id" class="mt-1 text-xs text-gray-400">
+              Channel ID: <span x-text="channelInfo ? channelInfo.id : ''"></span>
+            </div>
+          </div>
         </div>
 
         <!-- Image URL field (All types) -->
@@ -598,12 +654,14 @@ async function selectSeason(seasonId, seasonText) {
 function youtubeExtractor() {
   return {
     loading: false,
+    channelInfo: null,
     
     async extractMetadata() {
       const url = this.$refs.youtubeInput.value.trim();
       if (!url) return;
       
       this.loading = true;
+      this.channelInfo = null;
       
       try {
         const response = await fetch('{% url "youtube_metadata" %}', {
@@ -620,6 +678,14 @@ function youtubeExtractor() {
         
         if (data.success) {
           const metadata = data.metadata;
+          
+          // Set channel info for display
+          if (metadata.channel_title && metadata.channel_id) {
+            this.channelInfo = {
+              title: metadata.channel_title,
+              id: metadata.channel_id
+            };
+          }
           
           // Auto-fill form fields
           if (metadata.title) {
@@ -650,6 +716,68 @@ function youtubeExtractor() {
         this.loading = false;
         console.error('Error extracting YouTube metadata:', error);
         alert('Error extracting YouTube metadata. Please try again.');
+      }
+    }
+  };
+}
+
+function youtubeChannelExtractor() {
+  return {
+    loading: false,
+    
+    async extractChannelMetadata() {
+      const url = this.$refs.channelInput.value.trim();
+      if (!url) return;
+      
+      this.loading = true;
+      
+      try {
+        const response = await fetch('{% url "youtube_metadata" %}', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token }}'
+          },
+          body: JSON.stringify({ url: url, type: 'channel' })
+        });
+        
+        const data = await response.json();
+        this.loading = false;
+        
+        if (data.success) {
+          const metadata = data.metadata;
+          
+          // Auto-fill form fields
+          if (metadata.title) {
+            document.querySelector('input[name="title"]').value = metadata.title;
+          }
+          
+          if (metadata.thumbnail) {
+            const imageInput = document.querySelector('input[name="image"]');
+            imageInput.value = metadata.thumbnail;
+            // Trigger image preview update
+            const event = new Event('input', { bubbles: true });
+            imageInput.dispatchEvent(event);
+          }
+          
+          // Store the channel_id in notes field for later use (to fetch videos)
+          if (metadata.channel_id) {
+            const notesInput = document.querySelector('textarea[name="notes"]');
+            if (notesInput) {
+              notesInput.value = `YouTube Channel ID: ${metadata.channel_id}`;
+            }
+          }
+          
+          console.log('YouTube channel extracted:', metadata.channel_id, metadata.title);
+          
+          console.log('YouTube channel metadata extracted successfully:', metadata);
+        } else {
+          alert('Error: ' + data.error);
+        }
+      } catch (error) {
+        this.loading = false;
+        console.error('Error extracting YouTube channel metadata:', error);
+        alert('Error extracting YouTube channel metadata. Please try again.');
       }
     }
   };

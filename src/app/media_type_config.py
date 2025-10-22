@@ -142,6 +142,34 @@ MEDIA_TYPE_CONFIG = {
             5.1c-.2-.5.1-1.1.6-1.3l1.9-.7c.5-.2 1.1.1 1.3.6Z"/>""",
         "unit": ("#", "Issue"),
     },
+    MediaTypes.YOUTUBE.value: {
+        "sources": [Sources.YOUTUBE],
+        "default_source": Sources.YOUTUBE.label,
+        "sample_query": "MrBeast",
+        "unicode_icon": "🎥",
+        "verb": ("watch", "watched"),
+        "text_color": "text-red-500",
+        "stats_color": "#ef4444",
+        "svg_icon": """
+            <polygon points="6 3 20 12 6 21 6 3"/>
+            <rect width="20" height="14" x="2" y="5" rx="2"/>""",
+        "unit": ("V", "Video"),
+        "date_key": "publish_date",
+    },
+    MediaTypes.YOUTUBE_VIDEO.value: {
+        "sources": [Sources.YOUTUBE],
+        "default_source": Sources.YOUTUBE.label,
+        "sample_query": "https://www.youtube.com/watch?v=...",
+        "unicode_icon": "📹",
+        "verb": ("watch", "watched"),
+        "text_color": "text-red-400",
+        "stats_color": "#f87171",
+        "svg_icon": """
+            <polygon points="6 3 20 12 6 21 6 3"/>
+            <circle cx="12" cy="12" r="2"/>""",
+        "unit": ("V", "Video"),
+        "date_key": "air_date",
+    },
 }
 
 

@@ -111,6 +111,16 @@ class ManualItemForm(forms.ModelForm):
         }),
     )
 
+    channel_url = forms.URLField(
+        required=False,
+        label="YouTube Channel URL",
+        help_text="Paste a YouTube channel URL to automatically extract channel information",
+        widget=forms.URLInput(attrs={
+            "placeholder": "https://www.youtube.com/@channelname",
+            "class": "youtube-channel-input",
+        }),
+    )
+
     class Meta:
         """Bind form to model."""
 
@@ -180,6 +190,12 @@ class ManualItemForm(forms.ModelForm):
                 if not cleaned_data.get("title"):
                     self.add_error("title", "Episode title is required")
                 cleaned_data["season_number"] = parent.item.season_number
+        elif media_type == MediaTypes.YOUTUBE.value:
+            # For YouTube channels, title is required (will be auto-filled from channel URL)
+            if not cleaned_data.get("title"):
+                self.add_error("title", "Channel title is required")
+            cleaned_data["season_number"] = None
+            cleaned_data["episode_number"] = None
         else:
             # For standalone media, title is required
             if not cleaned_data.get("title"):
@@ -197,9 +213,17 @@ class ManualItemForm(forms.ModelForm):
             # Set the source to Manual for episodes with YouTube URLs (custom episodes)
             self.cleaned_data["source"] = Sources.MANUAL.value
         
-        # Remove youtube_url from cleaned_data since it's not a model field
+        # Handle YouTube Channel URL if provided for YouTube media type
+        channel_url = self.cleaned_data.get("channel_url")
+        if channel_url and self.cleaned_data.get("media_type") == MediaTypes.YOUTUBE.value:
+            # Set the source to YouTube for channels
+            self.cleaned_data["source"] = Sources.YOUTUBE.value
+        
+        # Remove non-model fields from cleaned_data
         if "youtube_url" in self.cleaned_data:
             del self.cleaned_data["youtube_url"]
+        if "channel_url" in self.cleaned_data:
+            del self.cleaned_data["channel_url"]
         
         instance = super().save(commit=False)
         instance.source = self.cleaned_data.get("source", Sources.MANUAL.value)
@@ -211,6 +235,13 @@ class ManualItemForm(forms.ModelForm):
             parent_season = self.cleaned_data["parent_season"]
             instance.media_id = parent_season.item.media_id
             instance.season_number = parent_season.item.season_number
+        elif instance.media_type == MediaTypes.YOUTUBE.value:
+            # For YouTube channels, use auto-generated media_id specific to YouTube source
+            instance.media_id = Item.generate_next_id(Sources.YOUTUBE.value, instance.media_type)
+        elif instance.media_type == MediaTypes.YOUTUBE_VIDEO.value:
+            # YouTube videos will be handled by special logic in views.py
+            # This is just a placeholder - the real logic is in create_entry view
+            instance.media_id = Item.generate_next_id(Sources.YOUTUBE.value, MediaTypes.EPISODE.value)
         else:
             instance.media_id = Item.generate_manual_id(instance.media_type)
 
@@ -424,3 +455,13 @@ class EpisodeTrackingForm(forms.ModelForm):
             self.fields["end_date"].widget = forms.DateInput(
                 attrs={"type": "date"},
             )
+
+
+class YoutubeForm(MediaForm):
+    """Form for YouTube channels."""
+
+    class Meta(MediaForm.Meta):
+        """Bind form to model."""
+
+        model = TV
+        fields = ["score", "status", "notes"]

@@ -88,7 +88,7 @@ class User(AbstractUser):
     is_demo = models.BooleanField(default=False)
 
     last_search_type = models.CharField(
-        max_length=10,
+        max_length=15,
         default=MediaTypes.TV.value,
         choices=MediaTypes.choices,
     )
@@ -230,6 +230,23 @@ class User(AbstractUser):
         choices=MediaSortChoices.choices,
     )
     comic_status = models.CharField(
+        max_length=20,
+        default=MediaStatusChoices.ALL,
+        choices=MediaStatusChoices.choices,
+    )
+
+    youtube_enabled = models.BooleanField(default=True)
+    youtube_layout = models.CharField(
+        max_length=20,
+        default=LayoutChoices.GRID,
+        choices=LayoutChoices.choices,
+    )
+    youtube_sort = models.CharField(
+        max_length=20,
+        default=MediaSortChoices.SCORE,
+        choices=MediaSortChoices.choices,
+    )
+    youtube_status = models.CharField(
         max_length=20,
         default=MediaStatusChoices.ALL,
         choices=MediaStatusChoices.choices,

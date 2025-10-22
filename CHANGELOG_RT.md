@@ -1,5 +1,19 @@
 # CHANGELOG - RT Fork
 
+## [0.25.1.RT] - 2025-10-22
+
+### 🛠️ Release notes
+- Limpieza: eliminados artefactos y snapshots de pruebas (tests sueltos, `form_response.html`, `supervisord` logs/pid).
+- YouTube: soporte completo como media type separado
+  - Portadas de canales mostradas en formato 1:1 en la home
+  - Videos creados como Items (sin crear `Episode` automáticamente)
+  - Progreso y contadores: ahora muestran `vistos / totales` para canales de YouTube
+  - Home: los canales que están al día (progress == max_progress) no aparecen en la sección "YouTubes"
+  - Separación visual: los canales de YouTube ya no aparecen en TV Shows/TV Seasons
+- Varios fixes y mejoras menores: TMDB protection para YouTube, mejoras en templates y en la lógica de progreso.
+
+---
+
 ## [0.24.10.RT] - 2025-10-16
 
 ### ✨ Nuevas Funcionalidades
