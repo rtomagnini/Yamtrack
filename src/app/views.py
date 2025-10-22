@@ -15,7 +15,6 @@ from django.utils import timezone
 from django.utils.dateparse import parse_date
 from django.utils.timezone import datetime
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
-from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth.decorators import login_required
 
 from app import helpers, history_processor
@@ -273,7 +272,7 @@ def season_details(request, source, media_id, title, season_number):  # noqa: AR
     current_instance = user_medias[0] if user_medias else None
     episodes_in_db = current_instance.episodes.all() if current_instance else []
 
-    if source == Sources.MANUAL.value:
+    if source in [Sources.MANUAL.value, Sources.YOUTUBE.value]:
         season_metadata["episodes"] = manual.process_episodes(
             season_metadata,
             episodes_in_db,
@@ -352,8 +351,8 @@ def update_media_score(request, media_type, instance_id):
 @require_POST
 def sync_metadata(request, source, media_type, media_id, season_number=None):
     """Refresh the metadata for a media item."""
-    if source == Sources.MANUAL.value:
-        msg = "Manual items cannot be synced."
+    if source in [Sources.MANUAL.value, Sources.YOUTUBE.value]:
+        msg = "Manual and YouTube items cannot be synced."
         messages.error(request, msg)
         return HttpResponse(
             msg,
@@ -397,10 +396,16 @@ def sync_metadata(request, source, media_type, media_id, season_number=None):
             title += f" - Season {season_number}"
 
         if media_type == MediaTypes.SEASON.value:
-            metadata["episodes"] = tmdb.process_episodes(
-                metadata,
-                [],
-            )
+            if source in [Sources.MANUAL.value, Sources.YOUTUBE.value]:
+                metadata["episodes"] = manual.process_episodes(
+                    metadata,
+                    [],
+                )
+            else:
+                metadata["episodes"] = tmdb.process_episodes(
+                    metadata,
+                    [],
+                )
 
             # Create a dictionary of existing episodes keyed by episode number
             existing_episodes = {
@@ -602,15 +607,47 @@ def media_delete(request):
 def episode_save(request):
     """Handle the creation, deletion, and updating of episodes for a season."""
     media_id = request.POST["media_id"]
-    season_number = int(request.POST["season_number"])
-    episode_number = int(request.POST["episode_number"])
     source = request.POST["source"]
+    
+    # Debug logging
+    logger.error("DEBUG episode_save: media_id=%s, source=%s, Sources.YOUTUBE.value=%s", 
+                media_id, source, Sources.YOUTUBE.value)
+    
+    # Handle season_number safely - it might be empty for some sources
+    season_number_str = request.POST.get("season_number", "")
+    if season_number_str:
+        try:
+            season_number = int(season_number_str)
+        except ValueError:
+            logger.error("Invalid season_number: %s", season_number_str)
+            return HttpResponseBadRequest("Invalid season number")
+    else:
+        # For some sources like YouTube, season_number might be determined differently
+        # We'll need to look it up from the episode
+        season_number = None
+    
+    episode_number = int(request.POST["episode_number"])
     confirm_completion = request.POST.get("confirm_completion")
 
     form = EpisodeTrackingForm(request.POST)
     if not form.is_valid():
         logger.error("Form validation failed: %s", form.errors)
         return HttpResponseBadRequest("Invalid form data")
+
+    # If season_number is None, try to get it from the episode
+    if season_number is None:
+        try:
+            episode_item = Item.objects.get(
+                media_id=media_id,
+                source=source,
+                media_type=MediaTypes.EPISODE.value,
+                episode_number=episode_number,
+            )
+            season_number = episode_item.season_number
+        except Item.DoesNotExist:
+            logger.error("Episode not found: media_id=%s, source=%s, episode_number=%s", 
+                        media_id, source, episode_number)
+            return HttpResponseBadRequest("Episode not found")
 
     try:
         related_season = Season.objects.get(
@@ -621,6 +658,17 @@ def episode_save(request):
             user=request.user,
         )
     except Season.DoesNotExist:
+        # Skip TMDB calls for YouTube sources
+        if source == Sources.YOUTUBE.value:
+            logger.error("DEBUG: YouTube source detected, skipping Season creation")
+            logger.error("Season not found for YouTube video: media_id=%s, season_number=%s", 
+                        media_id, season_number)
+            return HttpResponseBadRequest("Season not found for YouTube video")
+        
+        logger.error("DEBUG: Not YouTube source, proceeding with TMDB call. source=%s, expected=%s", 
+                    source, Sources.YOUTUBE.value)
+        
+        # Original TMDB logic for other sources
         tv_with_seasons_metadata = services.get_media_metadata(
             "tv_with_seasons",
             media_id,
@@ -631,7 +679,7 @@ def episode_save(request):
 
         item, _ = Item.objects.get_or_create(
             media_id=media_id,
-            source=Sources.TMDB.value,
+            source=source,  # Use the actual source, not hardcoded TMDB
             media_type=MediaTypes.SEASON.value,
             season_number=season_number,
             defaults={
@@ -648,8 +696,19 @@ def episode_save(request):
         )
 
         logger.info("%s did not exist, it was created successfully.", related_season)
+    
+    # Get season metadata for existing season (skip for YouTube)
+    logger.error("DEBUG: About to check season metadata. source='%s', Sources.YOUTUBE.value='%s'", 
+                source, Sources.YOUTUBE.value)
+    logger.error("DEBUG: source type=%s, Sources.YOUTUBE.value type=%s", type(source), type(Sources.YOUTUBE.value))
+    logger.error("DEBUG: source == Sources.YOUTUBE.value: %s", source == Sources.YOUTUBE.value)
+    if source == Sources.YOUTUBE.value:
+        logger.error("DEBUG: YouTube source detected, skipping TMDB metadata call")
+        # For YouTube, we don't need TMDB metadata, just continue with the episode tracking
+        season_metadata = {"episodes": []}  # Dummy metadata to avoid errors
+        max_episodes = 999  # High number so YouTube videos don't trigger completion logic
     else:
-        # Get season metadata for existing season
+        logger.error("DEBUG: Not YouTube source, proceeding with TMDB metadata call")
         tv_with_seasons_metadata = services.get_media_metadata(
             "tv_with_seasons",
             media_id,
@@ -657,9 +716,9 @@ def episode_save(request):
             [season_number],
         )
         season_metadata = tv_with_seasons_metadata[f"season/{season_number}"]
+        max_episodes = len(season_metadata["episodes"])
 
     # Check if this is the last episode and if completion needs confirmation
-    max_episodes = len(season_metadata["episodes"])
     is_last_episode = episode_number == max_episodes
     
     if is_last_episode and confirm_completion not in ["yes", "no"]:
@@ -687,6 +746,136 @@ def episode_save(request):
     return helpers.redirect_back(request)
 
 
+def handle_youtube_video_creation(request, form):
+    """Handle creation of YouTube video with automatic channel/season detection and creation."""
+    from datetime import datetime
+    from app.providers import youtube
+    from app.models import Season, TV, Episode
+    
+    youtube_url = form.cleaned_data.get("youtube_url")
+    if not youtube_url:
+        messages.error(request, "YouTube URL is required for YouTube videos.")
+        return redirect("create_entry")
+    
+    # Extract video metadata
+    video_metadata = youtube.extract_video_metadata(youtube_url)
+    if not video_metadata:
+        messages.error(request, "Could not extract video metadata from YouTube URL.")
+        return redirect("create_entry")
+    
+    # Extract channel info from video metadata
+    channel_id = video_metadata.get("channel_id")
+    if not channel_id:
+        messages.error(request, "Could not determine channel from video.")
+        return redirect("create_entry")
+    
+    # Get channel metadata
+    channel_metadata = youtube.fetch_channel_metadata(channel_id)
+    if not channel_metadata:
+        messages.error(request, "Could not fetch channel information.")
+        return redirect("create_entry")
+    
+    # Get video year for season
+    published_date = video_metadata.get("published_date")
+    if published_date:
+        try:
+            video_year = datetime.strptime(published_date, "%Y-%m-%d").year
+        except ValueError:
+            video_year = datetime.now().year
+    else:
+        video_year = datetime.now().year
+    
+    # Find existing channel by searching TV instances with matching channel_id in notes
+    existing_tv = TV.objects.filter(
+        user=request.user,
+        item__source=Sources.YOUTUBE.value,
+        item__media_type=MediaTypes.YOUTUBE.value,
+        notes__contains=f"YouTube Channel ID: {channel_id}"
+    ).first()
+    
+    if existing_tv:
+        # Channel already exists
+        channel_item = existing_tv.item
+        tv_instance = existing_tv
+        channel_created = False
+    else:
+        # Create new channel
+        channel_item = Item.objects.create(
+            media_id=Item.generate_next_id(Sources.YOUTUBE.value, MediaTypes.YOUTUBE.value),
+            source=Sources.YOUTUBE.value,
+            media_type=MediaTypes.YOUTUBE.value,
+            title=channel_metadata.get("title", "Unknown Channel"),
+            image=channel_metadata.get("thumbnail", ""),
+        )
+        
+        tv_instance = TV.objects.create(
+            user=request.user,
+            item=channel_item,
+            notes=f"YouTube Channel ID: {channel_id}",
+        )
+        channel_created = True
+    
+    # Find or create season for the video's year
+    season_item, season_created = Item.objects.get_or_create(
+        media_id=channel_item.media_id,
+        source=Sources.YOUTUBE.value,
+        media_type=MediaTypes.SEASON.value,
+        season_number=video_year,
+        defaults={
+            "title": f"{channel_item.title} - {video_year}",
+            "image": channel_item.image,
+        }
+    )
+    
+    # Create Season instance if it was just created
+    if season_created:
+        season_instance = Season.objects.create(
+            user=request.user,
+            item=season_item,
+            related_tv=tv_instance,
+        )
+    else:
+        # Get existing season instance
+        season_instance = Season.objects.get(
+            item=season_item,
+            related_tv=tv_instance,
+        )
+    
+    # Create episode item for the video
+    episode_item = Item.objects.create(
+        media_id=channel_item.media_id,
+        source=Sources.YOUTUBE.value,
+        media_type=MediaTypes.EPISODE.value,
+        season_number=video_year,
+        episode_number=1,  # We'll update this to be the next available episode number
+        title=video_metadata.get("title", "Unknown Video"),
+        image=video_metadata.get("thumbnail", ""),
+        air_date=published_date,
+        runtime=video_metadata.get("duration_minutes", 0),
+    )
+    
+    # Get next episode number for this season
+    latest_episode = Item.objects.filter(
+        media_id=channel_item.media_id,
+        source=Sources.YOUTUBE.value,
+        media_type=MediaTypes.EPISODE.value,
+        season_number=video_year,
+    ).order_by('-episode_number').first()
+    
+    if latest_episode:
+        episode_item.episode_number = latest_episode.episode_number + 1
+    else:
+        episode_item.episode_number = 1
+    
+    episode_item.save()
+    
+    # Don't create Episode instance automatically - let user mark as watched manually
+    
+    # Success message
+    messages.success(request, f"Successfully added video '{episode_item.title}' to {channel_item.title} ({video_year})")
+    return redirect("home")
+
+
 @require_http_methods(["GET", "POST"])
 def create_entry(request):
     """Return the form for manually adding media items."""
@@ -704,6 +893,10 @@ def create_entry(request):
         logger.error(form.errors.as_json())
         helpers.form_error_messages(form, request)
         return redirect("create_entry")
+
+    # Special handling for YouTube Video
+    if form.cleaned_data.get("media_type") == MediaTypes.YOUTUBE_VIDEO.value:
+        return handle_youtube_video_creation(request, form)
 
     # Try to save the item
     try:
@@ -747,6 +940,28 @@ def create_entry(request):
 
         media_form.save()
 
+        # Auto-create current year season for YouTube channels
+        if item.media_type == MediaTypes.YOUTUBE.value:
+            from datetime import datetime
+            current_year = datetime.now().year
+            
+            # Create season item for current year
+            season_item = Item.objects.create(
+                media_id=item.media_id,  # Same media_id as parent channel
+                source=item.source,      # Same source (YOUTUBE)
+                media_type=MediaTypes.SEASON.value,
+                season_number=current_year,  # Use year as season number
+                title=f"{item.title} - {current_year}",
+            )
+            
+            # Create Season instance
+            from app.models import Season
+            Season.objects.create(
+                user=request.user,
+                item=season_item,
+                related_tv=media_form.instance,  # Link to the YouTube channel (TV)
+            )
+
     # Success message
     msg = f"{item} added successfully."
     messages.success(request, msg)
@@ -755,6 +970,7 @@ def create_entry(request):
     return redirect("create_entry")
 
 
+@login_required
 @require_POST
 def youtube_metadata(request):
     """Extract metadata from YouTube URL via AJAX."""
@@ -763,25 +979,45 @@ def youtube_metadata(request):
     try:
         data = json.loads(request.body)
         youtube_url = data.get('url', '').strip()
+        extract_type = data.get('type', 'video')  # 'video' or 'channel'
         
         if not youtube_url:
             return JsonResponse({'success': False, 'error': 'No URL provided'}, status=400)
         
-        # Extract video ID from URL
-        video_id = youtube.extract_video_id(youtube_url)
-        if not video_id:
-            return JsonResponse({
-                'success': False, 
-                'error': 'Invalid YouTube URL format'
-            }, status=400)
-        
-        # Fetch metadata from YouTube API
-        metadata = youtube.fetch_video_metadata(video_id)
-        if not metadata:
-            return JsonResponse({
-                'success': False, 
-                'error': 'Could not fetch video metadata'
-            }, status=404)
+        if extract_type == 'channel':
+            # Extract channel ID from URL
+            channel_id = youtube.extract_channel_id(youtube_url)
+            if not channel_id:
+                return JsonResponse({
+                    'success': False, 
+                    'error': 'Invalid YouTube channel URL format'
+                }, status=400)
+            
+            # Fetch channel metadata from YouTube API
+            metadata = youtube.fetch_channel_metadata(channel_id)
+            if not metadata:
+                return JsonResponse({
+                    'success': False, 
+                    'error': 'Could not fetch channel metadata'
+                }, status=404)
+            
+            # metadata already contains the correct channel_id from fetch_channel_metadata()
+        else:
+            # Extract video ID from URL
+            video_id = youtube.extract_video_id(youtube_url)
+            if not video_id:
+                return JsonResponse({
+                    'success': False, 
+                    'error': 'Invalid YouTube URL format'
+                }, status=400)
+            
+            # Fetch metadata from YouTube API
+            metadata = youtube.fetch_video_metadata(video_id)
+            if not metadata:
+                return JsonResponse({
+                    'success': False, 
+                    'error': 'Could not fetch video metadata'
+                }, status=404)
         
         return JsonResponse({
             'success': True,
@@ -1018,3 +1254,143 @@ def statistics(request):
     }
 
     return render(request, "app/statistics.html", context)
+
+
+@require_GET
+def youtube_channel_details(request, source, media_id, title):  # noqa: ARG001 title for URL
+    """Return the details page for a YouTube channel with year-based video filtering."""
+    user_medias = BasicMedia.objects.filter_media_prefetch(
+        request.user,
+        media_id,
+        "youtube",
+        source,
+    )
+    current_instance = user_medias[0] if user_medias else None
+    
+    # Extract the real YouTube channel_id from the TV notes
+    channel_id = None
+    if current_instance and current_instance.notes:
+        # Extract channel_id from notes like "YouTube Channel ID: UCTv-XvfzLX3i4IGWAm4sbmA"
+        import re
+        match = re.search(r'YouTube Channel ID: ([A-Za-z0-9_-]+)', current_instance.notes)
+        if match:
+            channel_id = match.group(1)
+    
+    # Get channel metadata using the real channel_id if available
+    if channel_id and source == Sources.YOUTUBE.value:
+        channel_metadata = services.get_media_metadata("youtube", channel_id, source)
+        # Override the media_id from API with our internal media_id
+        channel_metadata['media_id'] = media_id
+    else:
+        # Fallback to basic metadata from the database
+        channel_metadata = {
+            'title': current_instance.item.title if current_instance else f'Channel {media_id}',
+            'image': current_instance.item.image if current_instance else '',
+            'synopsis': '',
+            'media_type': 'youtube',
+            'source': source,
+            'media_id': media_id,
+            'videos': [],
+        }
+    
+    # For YouTube channels, get episode items (not Episode records) through seasons
+    episode_items = []
+    if current_instance:
+        # Get all episode Items from all seasons of this YouTube channel
+        from app.models import Episode, Item, MediaTypes
+        episode_items = Item.objects.filter(
+            media_type=MediaTypes.EPISODE.value,
+            source=Sources.YOUTUBE.value,
+            media_id=media_id
+        ).order_by('-air_date')
+
+    # For YouTube channels, we'll work with the episode items we have in the database
+    # Convert episode items to a structure that the template expects
+    episodes = []
+    for item in episode_items:
+        # Get all Episode records (watch history) for this item
+        episode_history = Episode.objects.filter(
+            item=item,
+            related_season__related_tv=current_instance
+        ).order_by('-end_date')
+        
+        episode_data = {
+            "title": item.title,
+            "air_date": item.air_date.strftime('%Y-%m-%d') if item.air_date else None,
+            "published_year": item.air_date.year if item.air_date else None,
+            "episode_number": item.episode_number,
+            "season_number": item.season_number,
+            "image": item.image,
+            "runtime": item.runtime,
+            "id": item.id,
+            "watched": episode_history.exists(),
+            "history": list(episode_history),
+            # Add required fields for template tags
+            "source": item.source,
+            "media_type": item.media_type,
+            "media_id": item.media_id,
+        }
+        episodes.append(episode_data)
+    
+    channel_metadata["episodes"] = episodes
+    
+    # Filter episodes by year if requested
+    year_filter = request.GET.get("year", "all")
+    if year_filter != "all":
+        try:
+            filter_year = int(year_filter)
+            episodes = [
+                episode for episode in episodes
+                if episode.get("published_year") == filter_year
+            ]
+        except ValueError:
+            pass  # Invalid year, show all episodes
+    
+    # Filter by watched status
+    status_filter = request.GET.get("filter", "all")
+    if status_filter == "unwatched":
+        episodes = [
+            episode for episode in episodes
+            if not episode.get("history")
+        ]
+    elif status_filter == "watched":
+        episodes = [
+            episode for episode in episodes
+            if episode.get("history")
+        ]
+    
+    # Sort episodes by publication date
+    sort_order = request.GET.get("sort", "desc")  # Default to newest first for YouTube
+    if sort_order == "asc":
+        episodes = sorted(
+            episodes, 
+            key=lambda x: x.get("air_date", ""), 
+        )
+    else:  # Default to descending (newest first)
+        episodes = sorted(
+            episodes, 
+            key=lambda x: x.get("air_date", ""), 
+            reverse=True
+        )
+    
+    # Get available years for filtering
+    available_years = sorted(list(set(
+        episode.get("published_year") for episode in channel_metadata.get("episodes", [])
+        if episode.get("published_year")
+    )), reverse=True)
+    
+    # Update channel metadata with filtered episodes
+    channel_metadata["episodes"] = episodes
+    
+    context = {
+        "media": channel_metadata,
+        "media_type": "youtube",
+        "user_medias": user_medias,
+        "current_instance": current_instance,
+        "current_filter": status_filter,
+        "current_sort": sort_order,
+        "current_year": year_filter,
+        "available_years": available_years,
+        "is_youtube_channel": True,  # Flag to customize template behavior
+    }
+    return render(request, "app/media_details.html", context)

@@ -18,6 +18,7 @@ from app.providers import (
     manual,
     openlibrary,
     tmdb,
+    youtube,
 )
 
 logger = logging.getLogger(__name__)
@@ -175,6 +176,7 @@ def get_media_metadata(
         if source == Sources.HARDCOVER.value
         else openlibrary.book(media_id),
         MediaTypes.COMIC.value: lambda: comicvine.comic(media_id),
+        MediaTypes.YOUTUBE.value: lambda: youtube.channel(media_id),
     }
     return metadata_retrievers[media_type]()
 
@@ -199,5 +201,16 @@ def search(media_type, query, page, source=None):
             response = hardcover.search(query, page)
     elif media_type == MediaTypes.COMIC.value:
         response = comicvine.search(query, page)
+    elif media_type == MediaTypes.YOUTUBE.value:
+        from . import youtube
+        response = youtube.search(query, page)
+    else:
+        # Default response for unsupported media types
+        response = {
+            "results": [],
+            "total_pages": 0,
+            "total_results": 0,
+            "page": page
+        }
 
     return response

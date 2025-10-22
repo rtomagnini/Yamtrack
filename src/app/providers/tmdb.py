@@ -213,6 +213,13 @@ def tv_with_seasons(media_id, season_numbers):
         }
 
         try:
+            # Debug: Log stack trace to see who's calling this
+            import traceback
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error("TMDB tv_with_seasons called for media_id=%s with seasons: %s", media_id, season_subset)
+            logger.error("Stack trace:\n%s", ''.join(traceback.format_stack()))
+            
             response = services.api_request(
                 Sources.TMDB.value,
                 "GET",

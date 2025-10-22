@@ -61,6 +61,8 @@ class MediaTypes(models.TextChoices):
     GAME = "game", "Game"
     BOOK = "book", "Book"
     COMIC = "comic", "Comic"
+    YOUTUBE = "youtube", "YouTube"
+    YOUTUBE_VIDEO = "youtube_video", "YouTube Video"
 
 
 class ExternalIdMapping(models.Model):
@@ -70,7 +72,7 @@ class ExternalIdMapping(models.Model):
     external_source = models.CharField(max_length=20, default="plex", help_text="Source of fake ID")
     real_tmdb_id = models.CharField(max_length=20, help_text="Valid TMDB ID that actually exists")
     media_type = models.CharField(
-        max_length=10,
+        max_length=15,
         choices=MediaTypes.choices,
         default=MediaTypes.TV.value,
         help_text="Type of media being mapped"
@@ -98,7 +100,7 @@ class Item(CalendarTriggerMixin, models.Model):
         choices=Sources.choices,
     )
     media_type = models.CharField(
-        max_length=10,
+        max_length=15,
         choices=MediaTypes.choices,
         default=MediaTypes.MOVIE.value,
     )
@@ -197,8 +199,13 @@ class Item(CalendarTriggerMixin, models.Model):
     @classmethod
     def generate_manual_id(cls, media_type):
         """Generate a new ID for manual items."""
+        return cls.generate_next_id(Sources.MANUAL.value, media_type)
+
+    @classmethod
+    def generate_next_id(cls, source, media_type):
+        """Generate a new ID for items of a specific source and media_type."""
         latest_item = (
-            cls.objects.filter(source=Sources.MANUAL.value, media_type=media_type)
+            cls.objects.filter(source=source, media_type=media_type)
             .annotate(
                 media_id_int=Cast("media_id", IntegerField()),
             )
@@ -214,6 +221,10 @@ class Item(CalendarTriggerMixin, models.Model):
     def fetch_releases(self, delay):
         """Fetch releases for the item."""
         if self._disable_calendar_triggers:
+            return
+
+        # Skip release fetching for YouTube items as they don't exist in TMDB
+        if self.source == Sources.YOUTUBE.value:
             return
 
         if self.media_type == MediaTypes.SEASON.value:
@@ -258,10 +269,29 @@ class MediaManager(models.Manager):
         """Return list of historical model names."""
         return [f"historical{media_type}" for media_type in MediaTypes.values]
 
+    def _get_model_name_for_media_type(self, media_type):
+        """Map media types to their corresponding Django model names."""
+        # Map YouTube to TV model since they have the same structure
+        if media_type == MediaTypes.YOUTUBE.value:
+            return "tv"
+        # For all other media types, the model name matches the media type
+        return media_type
+
     def get_media_list(self, user, media_type, status_filter, sort_filter, search=None):
         """Get media list based on filters, sorting and search."""
-        model = apps.get_model(app_label="app", model_name=media_type)
+        # Map media types to their corresponding models
+        model_name = self._get_model_name_for_media_type(media_type)
+        model = apps.get_model(app_label="app", model_name=model_name)
         queryset = model.objects.filter(user=user.id)
+        
+        # Filter by media_type to distinguish between different types using the same model
+        # Exclude YouTube from TV and Season queries to keep them separate
+        if media_type == MediaTypes.TV.value:
+            queryset = queryset.filter(item__media_type=media_type).exclude(item__source=Sources.YOUTUBE.value)
+        elif media_type == MediaTypes.SEASON.value:
+            queryset = queryset.filter(item__media_type=media_type).exclude(item__source=Sources.YOUTUBE.value)
+        else:
+            queryset = queryset.filter(item__media_type=media_type)
 
         if status_filter != users.models.MediaStatusChoices.ALL:
             queryset = queryset.filter(status=status_filter)
@@ -291,7 +321,7 @@ class MediaManager(models.Manager):
     def _apply_prefetch_related(self, queryset, media_type):
         """Apply appropriate prefetch_related based on media type."""
         # Apply media-specific prefetches
-        if media_type == MediaTypes.TV.value:
+        if media_type in [MediaTypes.TV.value, MediaTypes.YOUTUBE.value]:
             return queryset.prefetch_related(
                 Prefetch(
                     "seasons",
@@ -323,7 +353,7 @@ class MediaManager(models.Manager):
 
     def _sort_media_list(self, queryset, sort_filter, media_type=None):
         """Sort media list using SQL sorting with annotations for calculated fields."""
-        if media_type == MediaTypes.TV.value:
+        if media_type in [MediaTypes.TV.value, MediaTypes.YOUTUBE.value]:
             return self._sort_tv_media_list(queryset, sort_filter)
         if media_type == MediaTypes.SEASON.value:
             return self._sort_season_media_list(queryset, sort_filter)
@@ -475,9 +505,12 @@ class MediaManager(models.Manager):
             self.annotate_max_progress(media_list, media_type)
             self._annotate_next_event(media_list)
 
-            # Filter seasons to only show those with pending episodes
+            # Filter seasons and YouTube channels to only show those with pending episodes
             if media_type == MediaTypes.SEASON.value:
                 media_list = [media for media in media_list if hasattr(media, 'pending_episode_numbers') and len(media.pending_episode_numbers) > 0]
+            elif media_type == MediaTypes.YOUTUBE.value:
+                # For YouTube channels, filter out those that are up-to-date (progress == max_progress)
+                media_list = [media for media in media_list if media.progress < media.max_progress]
 
             # Sort the media list
             sorted_list = self._sort_in_progress_media(media_list, sort_by)
@@ -579,7 +612,7 @@ class MediaManager(models.Manager):
                 media.max_progress = 1
             return
 
-        if media_type == MediaTypes.TV.value:
+        if media_type in [MediaTypes.TV.value, MediaTypes.YOUTUBE.value]:
             self._annotate_tv_released_episodes(media_list, current_datetime)
             return
 
@@ -612,6 +645,19 @@ class MediaManager(models.Manager):
 
     def _annotate_tv_released_episodes(self, tv_list, current_datetime):
         """Annotate TV shows with the number of released episodes."""
+        # Handle YouTube sources differently
+        if tv_list and tv_list[0].item.source == Sources.YOUTUBE.value:
+            # For YouTube, count episode Items directly (YouTube videos are stored as episodes)
+            for tv in tv_list:
+                episode_count = Item.objects.filter(
+                    media_id=tv.item.media_id,
+                    source=Sources.YOUTUBE.value,
+                    media_type=MediaTypes.EPISODE.value
+                ).count()
+                tv.max_progress = episode_count
+            return
+        
+        # Original logic for TMDB sources
         # Prefetch all relevant events in one query
         released_events = events.models.Event.objects.filter(
             item__media_id__in=[tv.item.media_id for tv in tv_list],
@@ -662,12 +708,16 @@ class MediaManager(models.Manager):
             )
             
             # Handle different sources
+            logger.error("DEBUG Season source check: season.item.source='%s', Sources.TMDB.value='%s'", 
+                        season.item.source, Sources.TMDB.value)
             if season.item.source == Sources.TMDB.value:
+                logger.error("DEBUG: Using TMDB available episodes")
                 # For TMDB: Get available episodes from TMDB API (like in detail pages)
                 available_episode_numbers = self._get_tmdb_available_episodes(
                     season, current_datetime
                 )
             else:
+                logger.error("DEBUG: Using local available episodes for source: %s", season.item.source)
                 # For MANUAL and other sources: Use local database 
                 available_episode_numbers = self._get_local_available_episodes(
                     season, current_datetime
@@ -809,7 +859,8 @@ class MediaManager(models.Manager):
         episode_number=None,
     ):
         """Filter media objects based on parameters."""
-        model = apps.get_model(app_label="app", model_name=media_type)
+        model_name = self._get_model_name_for_media_type(media_type)
+        model = apps.get_model(app_label="app", model_name=model_name)
         params = self._filter_media_params(
             media_type,
             media_id,
@@ -1114,6 +1165,10 @@ class TV(Media):
 
     def _completed(self):
         """Create remaining seasons and episodes for a TV show."""
+        # Skip completion logic for YouTube and Manual sources
+        if self.item.source in [Sources.YOUTUBE.value, Sources.MANUAL.value]:
+            return
+            
         tv_metadata = providers.services.get_media_metadata(
             self.item.media_type,
             self.item.media_id,
@@ -1213,6 +1268,10 @@ class TV(Media):
         ).first()
 
         if not next_unwatched_season:
+            # For YouTube channels, don't try to auto-create seasons since they don't have traditional seasons
+            if self.item.source == Sources.YOUTUBE.value:
+                return
+                
             # If all existing seasons are watched, get the next available season
             tv_metadata = providers.services.get_media_metadata(
                 self.item.media_type,
@@ -1295,6 +1354,10 @@ class Season(Media):
 
         if self.tracker.has_changed("status"):
             if self.status == Status.COMPLETED.value:
+                # Skip TMDB metadata fetching for YouTube and Manual sources
+                if self.item.source in [Sources.YOUTUBE.value, Sources.MANUAL.value]:
+                    return
+                    
                 season_metadata = providers.services.get_media_metadata(
                     MediaTypes.SEASON.value,
                     self.item.media_id,
@@ -1339,12 +1402,16 @@ class Season(Media):
         if hasattr(self, '_custom_progress'):
             return self._custom_progress
             
-        # Otherwise, return the highest episode number that has been watched
         episodes = self.episodes.all()
         if not episodes:
             return 0
 
-        # Return the highest episode number that has been watched
+        # For YouTube sources, count unique watched episodes
+        if self.item.source == Sources.YOUTUBE.value:
+            watched_episode_numbers = set(ep.item.episode_number for ep in episodes)
+            return len(watched_episode_numbers)
+        
+        # For other sources, return the highest episode number that has been watched
         # This shows the furthest progress regardless of duplicates/repeats
         watched_episode_numbers = [ep.item.episode_number for ep in episodes]
         return max(watched_episode_numbers)
@@ -1544,12 +1611,16 @@ class Season(Media):
     def get_episode_item(self, episode_number, season_metadata=None):
         """Get the episode item instance, create it if it doesn't exist."""
         if not season_metadata:
-            season_metadata = providers.services.get_media_metadata(
-                MediaTypes.SEASON.value,
-                self.item.media_id,
-                self.item.source,
-                [self.item.season_number],
-            )
+            # Skip TMDB calls for YouTube and Manual sources
+            if self.item.source in [Sources.YOUTUBE.value, Sources.MANUAL.value]:
+                season_metadata = {"episodes": []}  # Empty metadata for non-TMDB sources
+            else:
+                season_metadata = providers.services.get_media_metadata(
+                    MediaTypes.SEASON.value,
+                    self.item.media_id,
+                    self.item.source,
+                    [self.item.season_number],
+                )
 
         image = settings.IMG_NONE
         for episode in season_metadata["episodes"]:
@@ -1617,6 +1688,10 @@ class Episode(models.Model):
         auto_complete = kwargs.pop('auto_complete', True)
         
         super().save(*args, **kwargs)
+
+        # Skip TMDB metadata fetching for YouTube and Manual episodes
+        if self.item.source in [Sources.YOUTUBE.value, Sources.MANUAL.value]:
+            return
 
         season_number = self.item.season_number
         tv_with_seasons_metadata = providers.services.get_media_metadata(
