@@ -888,7 +888,9 @@ def handle_youtube_video_creation(request, form):
     
     # Success message
     messages.success(request, f"Successfully added video '{episode_item.title}' to {channel_item.title} ({video_year})")
-    return redirect("home")
+    # After creating a YouTube video, redirect back to the Create Entry page
+    # and preselect the YouTube Video tab so the user can add another quickly.
+    return redirect(f"{reverse('create_entry')}?media_type={MediaTypes.YOUTUBE_VIDEO.value}")
 
 
 @require_http_methods(["GET", "POST"])
