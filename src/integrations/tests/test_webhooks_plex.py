@@ -591,4 +591,90 @@ class PlexWebhookTests(TestCase):
         ).count()
         
         self.assertEqual(video_count, 1, "Should not create duplicate video")
+    
+    def test_library_new_youtube_video_from_tubearchivist(self):
+        """Test that YouTube videos from TubeArchivist (file path only, no YouTube GUIDs) are detected."""
+        from unittest.mock import patch
+        from app.models import Sources
+        
+        # Mock YouTube API responses
+        mock_video_metadata = {
+            "video_id": "S3HTZSTcieQ",
+            "title": "SHOW COMPLETO EM MARÍLIA",
+            "channel_id": "UC_ATWjZ2hVwEVh4JiDpKccA",
+            "thumbnail": "https://i.ytimg.com/vi/S3HTZSTcieQ/maxresdefault.jpg",
+            "duration_minutes": 71,
+            "published_date": "2024-10-22",
+        }
+        
+        mock_channel_metadata = {
+            "title": "Raphael Ghanem",
+            "thumbnail": "https://yt3.ggpht.com/channel.jpg",
+        }
+        
+        # Payload similar to real TubeArchivist XML (no YouTube GUID, uses tv.plex.agents.none)
+        payload = {
+            "event": "library.new",
+            "Account": {
+                "title": "testuser",
+            },
+            "Metadata": {
+                "type": "movie",
+                "subtype": "clip",
+                "title": "SHOW COMPLETO EM MARÍLIA",
+                "Guid": [
+                    {
+                        "id": "tv.plex.agents.none://53701",  # No YouTube GUID
+                    },
+                ],
+                "Media": [
+                    {
+                        "Part": [
+                            {
+                                "file": "/volume1/Servidor/tubearchivist/UC_ATWjZ2hVwEVh4JiDpKccA/S3HTZSTcieQ.mp4",
+                            },
+                        ],
+                    },
+                ],
+            },
+        }
+        
+        data = {
+            "payload": json.dumps(payload),
+        }
+        
+        # Mock YouTube provider functions
+        with patch('app.providers.youtube.fetch_video_metadata') as mock_fetch_video, \
+             patch('app.providers.youtube.fetch_channel_metadata') as mock_fetch_channel:
+            
+            mock_fetch_video.return_value = mock_video_metadata
+            mock_fetch_channel.return_value = mock_channel_metadata
+            
+            # Send webhook
+            response = self.client.post(
+                self.url,
+                data=data,
+                format="multipart",
+            )
+            
+            self.assertEqual(response.status_code, 200)
+            
+            # Verify YouTube video Item was created
+            episode_item = Item.objects.filter(
+                source=Sources.YOUTUBE.value,
+                media_type=MediaTypes.EPISODE.value,
+                youtube_video_id="S3HTZSTcieQ",
+            ).first()
+            
+            self.assertIsNotNone(episode_item, "YouTube video Item should be created from file path")
+            self.assertEqual(episode_item.title, "SHOW COMPLETO EM MARÍLIA")
+            
+            # Verify channel was created
+            channel_item = Item.objects.filter(
+                source=Sources.YOUTUBE.value,
+                media_type=MediaTypes.YOUTUBE.value,
+            ).first()
+            
+            self.assertIsNotNone(channel_item, "YouTube channel Item should be created")
+            self.assertEqual(channel_item.title, "Raphael Ghanem")
 
