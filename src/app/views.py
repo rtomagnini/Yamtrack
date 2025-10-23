@@ -786,12 +786,13 @@ def handle_youtube_video_creation(request, form):
         video_year = datetime.now().year
     
     # Find existing channel by searching TV instances with matching channel_id in notes
+    # TV.notes used previously, but Item now stores youtube channel id on related TV.item.notes
+    # Search TV by related item's notes or by matching item's media_id stored for channels
     existing_tv = TV.objects.filter(
         user=request.user,
         item__source=Sources.YOUTUBE.value,
         item__media_type=MediaTypes.YOUTUBE.value,
-        notes__contains=f"YouTube Channel ID: {channel_id}"
-    ).first()
+    ).filter(models.Q(notes__contains=f"YouTube Channel ID: {channel_id}") | models.Q(item__media_id=channel_id)).first()
     
     if existing_tv:
         # Channel already exists
@@ -847,10 +848,11 @@ def handle_youtube_video_creation(request, form):
     # Avoid creating duplicates: check if an Item for this YouTube video already exists
     video_id = video_metadata.get("video_id")
     if video_id:
+        # Use the new youtube_video_id field for duplicate detection
         existing_video = Item.objects.filter(
             source=Sources.YOUTUBE.value,
             media_type=MediaTypes.EPISODE.value,
-            notes__contains=f"YouTube Video ID: {video_id}",
+            youtube_video_id=video_id,
         ).first()
         if existing_video:
             messages.info(request, f"El video '{existing_video.title}' ya existe en {channel_item.title}.")
@@ -866,7 +868,7 @@ def handle_youtube_video_creation(request, form):
         image=video_metadata.get("thumbnail", ""),
         air_date=published_date,
         runtime=video_metadata.get("duration_minutes", 0),
-        notes=(f"YouTube Video ID: {video_id}" if video_id else ""),
+        youtube_video_id=(video_id if video_id else None),
     )
     
     # Get next episode number for this season

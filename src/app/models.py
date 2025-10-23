@@ -110,6 +110,8 @@ class Item(CalendarTriggerMixin, models.Model):
     episode_number = models.PositiveIntegerField(null=True, blank=True)
     air_date = models.DateField(null=True, blank=True)
     runtime = models.PositiveIntegerField(null=True, blank=True)  # Duration in minutes
+    # Optional field to store YouTube video id for Episode items coming from YouTube
+    youtube_video_id = models.CharField(max_length=50, null=True, blank=True)
 
     class Meta:
         """Meta options for the model."""
@@ -183,6 +185,12 @@ class Item(CalendarTriggerMixin, models.Model):
             CheckConstraint(
                 condition=Q(media_type__in=MediaTypes.values),
                 name="%(app_label)s_%(class)s_media_type_valid",
+            ),
+            # Unique constraint to prevent duplicate YouTube video items when youtube_video_id is present
+            UniqueConstraint(
+                fields=["youtube_video_id"],
+                condition=Q(source=Sources.YOUTUBE.value, media_type=MediaTypes.EPISODE.value, youtube_video_id__isnull=False),
+                name="unique_youtube_video_id_for_youtube_episodes",
             ),
         ]
         ordering = ["media_id"]
