@@ -18,7 +18,7 @@ from django.views.decorators.http import require_GET, require_POST
 import users
 from integrations import exports, tasks
 from integrations.imports import helpers, simkl, trakt
-from integrations.webhooks import emby, jellyfin, plex
+from integrations.webhooks import emby, jellyfin, plex, tautulli
 
 logger = logging.getLogger(__name__)
 
@@ -421,5 +421,35 @@ def emby_webhook(request, token):
 
     payload = json.loads(data)
     processor = emby.EmbyWebhookProcessor()
+    processor.process_payload(payload, user)
+    return HttpResponse(status=200)
+
+
+@login_not_required
+@csrf_exempt
+@require_POST
+def tautulli_webhook(request, token):
+    """Handle Tautulli webhook notifications for media events."""
+    try:
+        user = users.models.User.objects.get(token=token)
+    except ObjectDoesNotExist:
+        logger.warning(
+            "Could not process Tautulli webhook: Invalid token: %s",
+            token,
+        )
+        return HttpResponse(status=401)
+
+    # Attach User instance
+    request.user = user
+
+    # Tautulli sends the payload as JSON in the request body
+    # Unlike Plex which uses multipart form data, Tautulli sends pure JSON
+    try:
+        payload = json.loads(request.body)
+    except json.JSONDecodeError:
+        logger.warning("Invalid JSON in Tautulli webhook request")
+        return HttpResponse("Invalid JSON payload", status=400)
+
+    processor = tautulli.TautulliWebhookProcessor()
     processor.process_payload(payload, user)
     return HttpResponse(status=200)

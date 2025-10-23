@@ -31,4 +31,9 @@ urlpatterns = [
         views.emby_webhook,
         name="emby_webhook",
     ),
+    path(
+        "webhook/tautulli/<str:token>",
+        views.tautulli_webhook,
+        name="tautulli_webhook",
+    ),
 ]

@@ -1,5 +1,28 @@
 # CHANGELOG - RT Fork
 
+## [0.25.5.RT] - 2025-10-23
+
+### ✨ Nuevas funcionalidades
+- feat(tautulli): Add Tautulli webhook integration for YouTube video auto-creation via "Recently Added" event.
+  - New endpoint: `/webhook/tautulli/<token>` (JSON POST).
+  - Detects YouTube videos from TubeArchivist file paths (e.g., `/CHANNEL_ID/VIDEO_ID.mp4`).
+  - Auto-creates channel (TV), season (by year), and episode Items in Yamtrack.
+  - Follows same logic as manual YouTube video creation (no auto-watch, no Episode instance).
+  - Prevents duplicates using `youtube_video_id` field.
+
+### 🔄 Cambios
+- refactor(plex): Removed Plex `library.new` webhook logic (replaced by more reliable Tautulli integration).
+  - Deleted YouTube auto-creation methods from Plex webhook processor.
+  - Removed `library.new` event support from Plex webhook.
+
+### 📚 Documentación
+- docs(tautulli): Add comprehensive Tautulli YouTube integration guide with configuration steps.
+
+### 🧪 Tests
+- test(tautulli): Add 7 comprehensive test cases for Tautulli webhook processor.
+
+---
+
 ## [0.25.4.RT] - 2025-10-23
 
 ### ✨ Nuevas funcionalidades
