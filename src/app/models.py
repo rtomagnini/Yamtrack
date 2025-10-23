@@ -716,16 +716,16 @@ class MediaManager(models.Manager):
             )
             
             # Handle different sources
-            logger.error("DEBUG Season source check: season.item.source='%s', Sources.TMDB.value='%s'", 
+            logger.debug("DEBUG Season source check: season.item.source='%s', Sources.TMDB.value='%s'", 
                         season.item.source, Sources.TMDB.value)
             if season.item.source == Sources.TMDB.value:
-                logger.error("DEBUG: Using TMDB available episodes")
+                logger.debug("DEBUG: Using TMDB available episodes")
                 # For TMDB: Get available episodes from TMDB API (like in detail pages)
                 available_episode_numbers = self._get_tmdb_available_episodes(
                     season, current_datetime
                 )
             else:
-                logger.error("DEBUG: Using local available episodes for source: %s", season.item.source)
+                logger.debug("DEBUG: Using local available episodes for source: %s", season.item.source)
                 # For MANUAL and other sources: Use local database 
                 available_episode_numbers = self._get_local_available_episodes(
                     season, current_datetime

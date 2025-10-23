@@ -632,7 +632,7 @@ def episode_save(request):
     source = request.POST["source"]
     
     # Debug logging
-    logger.error("DEBUG episode_save: media_id=%s, source=%s, Sources.YOUTUBE.value=%s", 
+    logger.debug("DEBUG episode_save: media_id=%s, source=%s, Sources.YOUTUBE.value=%s", 
                 media_id, source, Sources.YOUTUBE.value)
     
     # Handle season_number safely - it might be empty for some sources
@@ -682,14 +682,20 @@ def episode_save(request):
     except Season.DoesNotExist:
         # Skip TMDB calls for YouTube sources
         if source == Sources.YOUTUBE.value:
-            logger.error("DEBUG: YouTube source detected, skipping Season creation")
-            logger.error("Season not found for YouTube video: media_id=%s, season_number=%s", 
-                        media_id, season_number)
+            logger.debug("DEBUG: YouTube source detected, skipping Season creation")
+            logger.error(
+                "Season not found for YouTube video: media_id=%s, season_number=%s",
+                media_id,
+                season_number,
+            )
             return HttpResponseBadRequest("Season not found for YouTube video")
-        
-        logger.error("DEBUG: Not YouTube source, proceeding with TMDB call. source=%s, expected=%s", 
-                    source, Sources.YOUTUBE.value)
-        
+
+        logger.debug(
+            "DEBUG: Not YouTube source, proceeding with TMDB call. source=%s, expected=%s",
+            source,
+            Sources.YOUTUBE.value,
+        )
+
         # Original TMDB logic for other sources
         tv_with_seasons_metadata = services.get_media_metadata(
             "tv_with_seasons",
@@ -720,17 +726,17 @@ def episode_save(request):
         logger.info("%s did not exist, it was created successfully.", related_season)
     
     # Get season metadata for existing season (skip for YouTube)
-    logger.error("DEBUG: About to check season metadata. source='%s', Sources.YOUTUBE.value='%s'", 
+    logger.debug("DEBUG: About to check season metadata. source='%s', Sources.YOUTUBE.value='%s'", 
                 source, Sources.YOUTUBE.value)
-    logger.error("DEBUG: source type=%s, Sources.YOUTUBE.value type=%s", type(source), type(Sources.YOUTUBE.value))
-    logger.error("DEBUG: source == Sources.YOUTUBE.value: %s", source == Sources.YOUTUBE.value)
+    logger.debug("DEBUG: source type=%s, Sources.YOUTUBE.value type=%s", type(source), type(Sources.YOUTUBE.value))
+    logger.debug("DEBUG: source == Sources.YOUTUBE.value: %s", source == Sources.YOUTUBE.value)
     if source == Sources.YOUTUBE.value:
-        logger.error("DEBUG: YouTube source detected, skipping TMDB metadata call")
+        logger.debug("DEBUG: YouTube source detected, skipping TMDB metadata call")
         # For YouTube, we don't need TMDB metadata, just continue with the episode tracking
         season_metadata = {"episodes": []}  # Dummy metadata to avoid errors
         max_episodes = 999  # High number so YouTube videos don't trigger completion logic
     else:
-        logger.error("DEBUG: Not YouTube source, proceeding with TMDB metadata call")
+        logger.debug("DEBUG: Not YouTube source, proceeding with TMDB metadata call")
         tv_with_seasons_metadata = services.get_media_metadata(
             "tv_with_seasons",
             media_id,
