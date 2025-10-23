@@ -55,6 +55,28 @@ def home(request):
         "sort_choices": HomeSortChoices.choices,
         "items_limit": items_limit,
     }
+    # Preferred order for sections on the Home page
+    context["preferred_order"] = [
+        MediaTypes.TV.value,
+        MediaTypes.SEASON.value,
+        MediaTypes.YOUTUBE.value,
+        MediaTypes.MOVIE.value,
+    ]
+    # Build lists of (media_type, media_list) pairs so templates don't need
+    # to do dictionary lookups with bracket notation (not supported in Django
+    # template variable expressions).
+    preferred_sections = []
+    for mt in context["preferred_order"]:
+        if mt in list_by_type:
+            preferred_sections.append((mt, list_by_type[mt]))
+
+    remaining_sections = []
+    for mt, media_list in list_by_type.items():
+        if mt not in context["preferred_order"]:
+            remaining_sections.append((mt, media_list))
+
+    context["preferred_sections"] = preferred_sections
+    context["remaining_sections"] = remaining_sections
     return render(request, "app/home.html", context)
 
 
