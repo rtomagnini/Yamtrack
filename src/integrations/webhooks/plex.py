@@ -39,6 +39,20 @@ class PlexWebhookProcessor(BaseWebhookProcessor):
             )
             return
 
+        # Handle library.new event for YouTube videos
+        if event_type == "library.new":
+            logger.info("Processing library.new event")
+            try:
+                handled = self._create_youtube_video_from_plex(payload, user)
+                if handled:
+                    logger.info("Successfully created YouTube video from library.new event")
+                    return
+                logger.debug("library.new event was not a YouTube video or failed to create")
+            except Exception:
+                logger.exception("Error creating YouTube video from library.new event")
+            # If not handled as YouTube, fall through to normal processing
+            # (though library.new for TV/Movie usually won't have watch status)
+
         ids = self._extract_external_ids(payload)
         logger.info("Extracted IDs from payload: %s", ids)
 
@@ -97,6 +111,174 @@ class PlexWebhookProcessor(BaseWebhookProcessor):
                     return candidate
 
         return None
+
+    def _create_youtube_video_from_plex(self, payload, user):
+        """
+        Create a YouTube video in Yamtrack when detected from Plex library.new event.
+        
+        Returns True if successfully created, False otherwise.
+        """
+        import app
+        from datetime import datetime
+        from django.utils import timezone
+        from app.providers import youtube
+        from app.models import Season, TV, Item, Status, Sources, MediaTypes
+        
+        metadata = payload.get("Metadata", {})
+        guids = metadata.get("Guid", [])
+        
+        # Try to extract YouTube video ID from GUIDs
+        video_id = self._extract_youtube_id_from_guids(guids)
+        
+        if not video_id:
+            logger.debug("No YouTube video ID found in Plex payload GUIDs")
+            return False
+        
+        logger.info("Detected YouTube video ID from Plex: %s", video_id)
+        
+        # Check if video already exists in Yamtrack
+        existing_video = Item.objects.filter(
+            source=Sources.YOUTUBE.value,
+            media_type=MediaTypes.EPISODE.value,
+            youtube_video_id=video_id,
+        ).first()
+        
+        if existing_video:
+            logger.info("YouTube video %s already exists in Yamtrack: %s", video_id, existing_video.title)
+            return True  # Already exists, consider it handled
+        
+        # Fetch video metadata from YouTube
+        try:
+            video_metadata = youtube.fetch_video_metadata(video_id)
+            if not video_metadata:
+                logger.warning("Could not fetch YouTube metadata for video ID: %s", video_id)
+                return False
+        except Exception:
+            logger.exception("Error fetching YouTube video metadata for %s", video_id)
+            return False
+        
+        # Extract channel info
+        channel_id = video_metadata.get("channel_id")
+        if not channel_id:
+            logger.warning("No channel ID in YouTube metadata for video %s", video_id)
+            return False
+        
+        # Fetch channel metadata
+        try:
+            channel_metadata = youtube.fetch_channel_metadata(channel_id)
+            if not channel_metadata:
+                logger.warning("Could not fetch YouTube channel metadata for %s", channel_id)
+                return False
+        except Exception:
+            logger.exception("Error fetching YouTube channel metadata for %s", channel_id)
+            return False
+        
+        # Determine video year for season
+        published_date = video_metadata.get("published_date")
+        if published_date:
+            try:
+                video_year = datetime.strptime(published_date, "%Y-%m-%d").year
+            except ValueError:
+                video_year = datetime.now().year
+        else:
+            video_year = datetime.now().year
+        
+        # Find or create channel (TV instance)
+        from django.db import models as django_models
+        existing_tv = TV.objects.filter(
+            user=user,
+            item__source=Sources.YOUTUBE.value,
+            item__media_type=MediaTypes.YOUTUBE.value,
+        ).filter(
+            django_models.Q(notes__contains=f"YouTube Channel ID: {channel_id}") |
+            django_models.Q(item__media_id=channel_id)
+        ).first()
+        
+        if existing_tv:
+            channel_item = existing_tv.item
+            tv_instance = existing_tv
+            logger.info("Using existing YouTube channel: %s", channel_item.title)
+        else:
+            # Create new channel
+            channel_item = Item.objects.create(
+                media_id=Item.generate_next_id(Sources.YOUTUBE.value, MediaTypes.YOUTUBE.value),
+                source=Sources.YOUTUBE.value,
+                media_type=MediaTypes.YOUTUBE.value,
+                title=channel_metadata.get("title", "Unknown Channel"),
+                image=channel_metadata.get("thumbnail", ""),
+            )
+            
+            tv_instance = TV.objects.create(
+                user=user,
+                item=channel_item,
+                notes=f"YouTube Channel ID: {channel_id}",
+                status=Status.IN_PROGRESS.value,
+            )
+            logger.info("Created new YouTube channel: %s", channel_item.title)
+        
+        # Find or create season for video year
+        season_item, season_created = Item.objects.get_or_create(
+            media_id=channel_item.media_id,
+            source=Sources.YOUTUBE.value,
+            media_type=MediaTypes.SEASON.value,
+            season_number=video_year,
+            defaults={
+                "title": f"{channel_item.title} - {video_year}",
+                "image": channel_item.image,
+            }
+        )
+        
+        if season_created:
+            season_instance = Season.objects.create(
+                user=user,
+                item=season_item,
+                related_tv=tv_instance,
+                status=Status.IN_PROGRESS.value,
+            )
+            logger.info("Created new season: %s", season_item.title)
+        else:
+            season_instance = Season.objects.get(
+                item=season_item,
+                related_tv=tv_instance,
+            )
+        
+        # Get next episode number for this season
+        latest_episode = Item.objects.filter(
+            media_id=channel_item.media_id,
+            source=Sources.YOUTUBE.value,
+            media_type=MediaTypes.EPISODE.value,
+            season_number=video_year,
+        ).order_by('-episode_number').first()
+        
+        if latest_episode:
+            episode_number = latest_episode.episode_number + 1
+        else:
+            episode_number = 1
+        
+        # Create episode item for the video
+        episode_item = Item.objects.create(
+            media_id=channel_item.media_id,
+            source=Sources.YOUTUBE.value,
+            media_type=MediaTypes.EPISODE.value,
+            season_number=video_year,
+            episode_number=episode_number,
+            title=video_metadata.get("title", "Unknown Video"),
+            image=video_metadata.get("thumbnail", ""),
+            air_date=published_date,
+            runtime=video_metadata.get("duration_minutes", 0),
+            youtube_video_id=video_id,
+        )
+        
+        logger.info(
+            "Successfully created YouTube video in Yamtrack: %s (video_id=%s, channel=%s, year=%s, ep=%d)",
+            episode_item.title,
+            video_id,
+            channel_item.title,
+            video_year,
+            episode_number
+        )
+        
+        return True
 
     def _attempt_handle_youtube(self, payload, user):
         """Attempt to find a YouTube video in the local DB and mark it as watched.
@@ -211,7 +393,7 @@ class PlexWebhookProcessor(BaseWebhookProcessor):
         return True
 
     def _is_supported_event(self, event_type):
-        return event_type in ("media.scrobble", "media.play")
+        return event_type in ("media.scrobble", "media.play", "library.new")
 
     def _is_valid_user(self, payload_user, user):
         stored_usernames = [
