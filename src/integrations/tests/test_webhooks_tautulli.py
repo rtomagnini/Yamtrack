@@ -311,3 +311,58 @@ class TautulliWebhookTest(TestCase):
         )
         
         self.assertEqual(response.status_code, 400, "Should reject invalid JSON")
+
+    def test_tautulli_filtered_channel_blocked(self):
+        """Test that videos from filtered/blocked channels are not created."""
+        from app.models import YouTubeChannelFilter
+        
+        # Create a channel filter for this user
+        YouTubeChannelFilter.objects.create(
+            user=self.user,
+            channel_id="UCtest123",
+            channel_name="Blocked Test Channel",
+        )
+        
+        # Mock YouTube API responses
+        mock_video_metadata = {
+            "video_id": "dQw4w9WgXcQ",
+            "title": "Test YouTube Video",
+            "channel_id": "UCtest123",  # This channel is blocked
+            "thumbnail": "https://i.ytimg.com/vi/dQw4w9WgXcQ/maxresdefault.jpg",
+            "duration_minutes": 5,
+            "published_date": "2023-06-15",
+        }
+        
+        payload = {
+            "action": "created",
+            "media_type": "movie",
+            "title": "Test YouTube Video",
+            "file": "/volume1/Servidor/tubearchivist/UCtest123/dQw4w9WgXcQ.mp4",
+            "filename": "dQw4w9WgXcQ.mp4",
+        }
+        
+        with patch("app.providers.youtube.fetch_video_metadata") as mock_video:
+            mock_video.return_value = mock_video_metadata
+            
+            # Send webhook
+            response = self.client.post(
+                self.url,
+                data=json.dumps(payload),
+                content_type="application/json",
+            )
+            
+            self.assertEqual(response.status_code, 200)
+        
+        # Verify NO YouTube channel/season/video was created (blocked)
+        channel_count = Item.objects.filter(
+            source=Sources.YOUTUBE.value,
+            media_type=MediaTypes.YOUTUBE.value,
+        ).count()
+        
+        video_count = Item.objects.filter(
+            source=Sources.YOUTUBE.value,
+            media_type=MediaTypes.EPISODE.value,
+        ).count()
+        
+        self.assertEqual(channel_count, 0, "Should not create channel for filtered channel")
+        self.assertEqual(video_count, 0, "Should not create video for filtered channel")

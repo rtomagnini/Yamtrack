@@ -1826,3 +1826,42 @@ class Comic(Media):
     """Model for comics."""
 
     tracker = FieldTracker()
+
+
+class YouTubeChannelFilter(models.Model):
+    """Model for filtering/blocking YouTube channels from auto-creation via webhooks."""
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="youtube_channel_filters",
+    )
+    channel_id = models.CharField(
+        max_length=100,
+        help_text="YouTube Channel ID (e.g., UCuAXFkgsw1L7xaCfnd5JJOw)",
+    )
+    channel_name = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="Optional channel name for easier identification",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        """Meta options for the model."""
+
+        verbose_name = "YouTube Channel Filter"
+        verbose_name_plural = "YouTube Channel Filters"
+        ordering = ["channel_name", "channel_id"]
+        constraints = [
+            UniqueConstraint(
+                fields=["user", "channel_id"],
+                name="unique_user_channel_filter",
+            ),
+        ]
+
+    def __str__(self):
+        """Return string representation."""
+        if self.channel_name:
+            return f"{self.channel_name} ({self.channel_id})"
+        return self.channel_id

@@ -8,6 +8,7 @@ from app.models import (
     Episode,
     ExternalIdMapping,
     Item,
+    YouTubeChannelFilter,
 )
 
 
@@ -51,15 +52,26 @@ class MediaAdmin(admin.ModelAdmin):
     list_filter = ["status"]
 
 
+class YouTubeChannelFilterAdmin(admin.ModelAdmin):
+    """Custom admin for YouTube Channel Filter model."""
+
+    search_fields = ["channel_name", "channel_id", "user__username"]
+    list_display = ["channel_name", "channel_id", "user", "created_at"]
+    list_filter = ["user", "created_at"]
+    readonly_fields = ["created_at"]
+    autocomplete_fields = ["user"]
+
+
 # Register models with custom admin classes
 admin.site.register(Item, ItemAdmin)
 admin.site.register(Episode, EpisodeAdmin)
 admin.site.register(ExternalIdMapping, ExternalIdMappingAdmin)
+admin.site.register(YouTubeChannelFilter, YouTubeChannelFilterAdmin)
 
 
 # Auto-register remaining models
 app_models = apps.get_app_config("app").get_models()
-SpecialModels = ["Item", "Episode", "BasicMedia", "ExternalIdMapping"]
+SpecialModels = ["Item", "Episode", "BasicMedia", "ExternalIdMapping", "YouTubeChannelFilter"]
 for model in app_models:
     if (
         not model.__name__.startswith("Historical")

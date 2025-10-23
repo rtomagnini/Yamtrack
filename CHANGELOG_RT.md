@@ -1,5 +1,19 @@
 # CHANGELOG - RT Fork
 
+## [0.25.6.RT] - 2025-10-23
+
+### ✨ Nuevas funcionalidades
+- feat(youtube): Add YouTube channel filtering system for webhooks.
+  - New `YouTubeChannelFilter` model to block specific channels from auto-creation.
+  - Admins can manage filtered channels via Django admin interface.
+  - Tautulli webhook now checks if channel is filtered before creating videos.
+  - Per-user channel filters with unique constraint.
+
+### 🧪 Tests
+- test(tautulli): Add test case for filtered/blocked YouTube channels.
+
+---
+
 ## [0.25.5.RT] - 2025-10-23
 
 ### ✨ Nuevas funcionalidades

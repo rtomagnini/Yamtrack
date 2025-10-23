@@ -195,6 +195,22 @@ class TautulliWebhookProcessor(BaseWebhookProcessor):
             logger.warning("No channel ID in YouTube metadata or file path for video %s", video_id)
             return False
         
+        # Check if this channel is blocked/filtered for this user
+        from app.models import YouTubeChannelFilter
+        
+        is_filtered = YouTubeChannelFilter.objects.filter(
+            user=user,
+            channel_id=channel_id,
+        ).exists()
+        
+        if is_filtered:
+            logger.info(
+                "YouTube channel %s is filtered for user %s. Skipping video creation.",
+                channel_id,
+                user.username,
+            )
+            return False
+        
         # Fetch channel metadata
         try:
             channel_metadata = youtube.fetch_channel_metadata(channel_id)
