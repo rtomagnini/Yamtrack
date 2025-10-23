@@ -108,6 +108,13 @@ class PlexWebhookProcessor(BaseWebhookProcessor):
         import os
         from django.utils import timezone
 
+        # Only process scrobble events for YouTube (when video is finished)
+        # Ignore media.play to avoid duplicate entries
+        event_type = payload.get("event")
+        if event_type != "media.scrobble":
+            logger.debug("Ignoring YouTube event type %s (only scrobble marks as watched)", event_type)
+            return False
+
         metadata = payload.get("Metadata", {})
         
         # First, try to extract video ID from file path (like Tautulli does)
@@ -210,38 +217,17 @@ class PlexWebhookProcessor(BaseWebhookProcessor):
             logger.info("User %s does not track the season for item %s (channel=%s, year=%s)", user, episode_item.media_id, episode_item.media_id, episode_item.season_number)
             return False
 
-        # Check for recent duplicate episode records (same logic as TV handler)
+        # Create Episode directly with the specific Item we found
+        # Don't use season_instance.watch() which searches by episode_number
+        # and could match the wrong video
         now = timezone.now().replace(second=0, microsecond=0)
-        latest_episode = (
-            app.models.Episode.objects.filter(
-                item=episode_item,
-                related_season=season_instance,
-            )
-            .order_by("-end_date")
-            .first()
+        episode = app.models.Episode.objects.create(
+            related_season=season_instance,
+            item=episode_item,
+            end_date=now,
         )
-
-        should_create = True
-        if latest_episode and latest_episode.end_date:
-            time_diff = abs((now - latest_episode.end_date).total_seconds())
-            threshold = 5
-            if time_diff < threshold:
-                should_create = False
-
-        if should_create:
-            # Create Episode directly with the specific Item we found
-            # Don't use season_instance.watch() which searches by episode_number
-            # and could match the wrong video
-            episode = app.models.Episode.objects.create(
-                related_season=season_instance,
-                item=episode_item,
-                end_date=now,
-            )
-            episode.save(auto_complete=False)
-            logger.info("Marked YouTube video as played: %s (video_id=%s) for user %s", episode_item.title, video_id, user)
-            return True
-
-        logger.debug("Skipping duplicate YouTube episode record for %s (video_id=%s)", episode_item.title, video_id)
+        episode.save(auto_complete=False)
+        logger.info("Marked YouTube video as played: %s (video_id=%s) for user %s", episode_item.title, video_id, user)
         return True
 
     def _is_supported_event(self, event_type):
