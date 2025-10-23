@@ -1,5 +1,28 @@
 # CHANGELOG - RT Fork
 
+## [0.25.2.RT] - 2025-10-23
+
+### ✨ Nuevas funcionalidades y mejoras
+- feat(youtube): Added persistent `youtube_video_id` to `Item` and used it for duplicate detection; created migration to add the field and DB constraint.
+- feat(youtube): When creating a YouTube video item, redirect to `create_entry?media_type=youtube_video` to preselect the correct tab and avoid auto-creating Episodes.
+- feat(create): Allow preselecting media type on the create entry page via `?media_type=...` (improves UX).
+- feat(youtube): Default filter `unwatched` is applied on YouTube channel details to show pending videos upfront.
+
+### 🐛 Fixes
+- fix(youtube): Prevent creating duplicate YouTube videos by using `youtube_video_id` instead of parsing `notes`; store `video_id` on creation.
+- fix(youtube): New YouTube channels/seasons now default to `IN_PROGRESS` instead of `COMPLETED` to match expected UX.
+- fix(home): Render preferred/remaining sections without unsupported template indexing and pass `media_list` properly to includes (resolves TemplateSyntaxError and empty-state rendering issues).
+- fix(models): Persist TMDB episode `air_date` and `runtime` on `Item` creation/update; added tests to cover this behavior.
+
+### 🎨 UI
+- style(ui): Reorder sidebar and Home to place YouTube after TV Seasons and move the Youtubes section between Seasons and Movies on Home.
+- feat(ui): Show full episode title in a tooltip/popover on hover (desktop) and tap (mobile) in the media details page to handle long titles gracefully.
+
+### 🧪 Chores
+- chore: ignore and remove supervisord runtime files from repo.
+
+---
+
 ## [0.25.1.RT] - 2025-10-22
 
 ### 🛠️ Release notes
