@@ -709,7 +709,15 @@
                   <div class="flex-1">
                     <div class="flex justify-between items-start mb-2 space-x-2 px-4">
                       <div>
-                        <h2 class="text-xl font-semibold mb-1 line-clamp-1">{{ episode.title }}</h2>
+                        {# Title with tooltip: show full title on hover (desktop) and on tap/select (mobile) #}
+                        <div x-data="{ open: false }" class="relative">
+                          <h2 @mouseenter="open = true" @mouseleave="open = false" @click="open = !open" class="text-xl font-semibold mb-1 line-clamp-1 cursor-pointer">
+                            {{ episode.title }}
+                          </h2>
+                          <div x-show="open" x-cloak x-transition class="absolute z-50 left-0 mt-1 w-max max-w-xs bg-[#111214] border border-gray-700 text-sm text-white p-2 rounded shadow-lg" style="display:none;">
+                            <div class="select-text">{{ episode.title }}</div>
+                          </div>
+                        </div>
                         <p class="text-sm text-gray-400">
                           Episode {{ episode.episode_number }} • {{ episode.air_date|default_if_none:"Unknown air date" }}{% if episode.runtime %} • {{ episode.runtime }} min{% endif %}
                         </p>
