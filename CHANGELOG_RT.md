@@ -1,5 +1,19 @@
 # CHANGELOG - RT Fork
 
+## [0.25.4.RT] - 2025-10-23
+
+### ✨ Nuevas funcionalidades
+- feat(plex): Auto-create YouTube videos in Yamtrack when added to Plex library (`library.new` webhook).
+  - Detect YouTube video IDs from Plex GUIDs and from file paths produced by TubeArchivist (e.g. `/CHANNEL_ID/VIDEO_ID.mp4`).
+  - Create/reuse channel (TV), season (by year) and episode Items in Yamtrack.
+  - Prevent duplicates via `youtube_video_id` and pre-check payloads to avoid false positives.
+
+### 🐛 Fixes y mejoras
+- feat(plex): Add robust TubeArchivist file-path detection to support Plex libraries that store downloaded YouTube clips without YouTube GUIDs.
+- test(plex): Add unit tests for YouTube creation and TubeArchivist case; mocks YouTube API for fast CI.
+
+---
+
 ## [0.25.2.RT] - 2025-10-23
 
 ### ✨ Nuevas funcionalidades y mejoras
