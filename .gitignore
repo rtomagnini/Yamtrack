@@ -20,3 +20,7 @@ db/
 .env.dev
 .env.local
 .env.production
+
+# Supervisord runtime artifacts
+src/supervisord.log
+src/supervisord.pid
