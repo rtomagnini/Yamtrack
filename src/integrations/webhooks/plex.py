@@ -42,11 +42,173 @@ class PlexWebhookProcessor(BaseWebhookProcessor):
         ids = self._extract_external_ids(payload)
         logger.info("Extracted IDs from payload: %s", ids)
 
+        # If payload doesn't clearly map to TV/Movie, try a YouTube fallback
+        media_type = self._get_media_type(payload)
+        if media_type not in (MediaTypes.TV.value, MediaTypes.MOVIE.value):
+            logger.info("Payload not TV/Movie (media_type=%s), attempting YouTube fallback", media_type)
+            try:
+                handled = self._attempt_handle_youtube(payload, user)
+                if handled:
+                    return
+            except Exception:
+                logger.exception("Error while attempting YouTube fallback")
+
         if not any(ids.values()):
+            logger.warning("No TMDB/IMDB/TVDB ID found in payload, trying YouTube fallback")
+            try:
+                handled = self._attempt_handle_youtube(payload, user)
+                if handled:
+                    return
+            except Exception:
+                logger.exception("Error while attempting YouTube fallback")
+
             logger.warning("Ignoring Plex webhook call because no ID was found.")
             return
 
         self._process_media(payload, user, ids)
+
+    def _extract_youtube_id_from_guids(self, guids):
+        """Try to extract a YouTube video id from Plex GUID entries.
+
+        Plex GUIDs are free-form; attempt a few heuristics to find a YouTube id.
+        """
+        if not guids:
+            return None
+
+        for guid in guids:
+            gid = guid.get("id", "") or ""
+            lower = gid.lower()
+            # Common patterns
+            if "youtube" in lower or "youtu.be" in lower or "youtu" in lower:
+                # Try to extract a video id after last slash or 'v=' param
+                if "v=" in gid:
+                    # e.g. https://www.youtube.com/watch?v=VIDEOID
+                    parts = gid.split("v=")
+                    vid = parts[-1].split("&")[0]
+                    if vid:
+                        return vid
+                if "/" in gid:
+                    vid = gid.rstrip("/").split("/")[-1]
+                    if vid:
+                        return vid
+                # fallback: the whole guid may be an id-like string
+                candidate = gid.replace("youtube://", "").replace("yt://", "")
+                if candidate:
+                    return candidate
+
+        return None
+
+    def _attempt_handle_youtube(self, payload, user):
+        """Attempt to find a YouTube video in the local DB and mark it as watched.
+
+        Returns True if handled (marked as watched), False otherwise.
+        """
+        import app
+        from django.utils import timezone
+
+        metadata = payload.get("Metadata", {})
+        guids = metadata.get("Guid", [])
+
+        # Try to get a video id from GUIDs
+        video_id = self._extract_youtube_id_from_guids(guids)
+
+        # If not found, try to use ratingKey to query Plex for more metadata
+        if not video_id and metadata.get("ratingKey"):
+            try:
+                rating_key = metadata.get("ratingKey")
+                plex_url = getattr(settings, "PLEX_SERVER_URL", None)
+                plex_token = getattr(settings, "PLEX_TOKEN", None)
+                if plex_url and plex_token:
+                    api_url = f"{plex_url}/library/metadata/{rating_key}"
+                    params = {"X-Plex-Token": plex_token}
+                    r = requests.get(api_url, params=params, timeout=10)
+                    if r.ok:
+                        import xml.etree.ElementTree as ET
+                        root = ET.fromstring(r.content)
+                        # Search guids in returned XML
+                        for guid_elem in root.findall('.//Guid'):
+                            gid = guid_elem.get("id", "")
+                            candidate = self._extract_youtube_id_from_guids([{"id": gid}])
+                            if candidate:
+                                video_id = candidate
+                                break
+            except Exception:
+                logger.exception("Error querying Plex API for item metadata")
+
+        # If still no video_id, try to match by title
+        title = metadata.get("title")
+        if not video_id and title:
+            # Best-effort: exact title match among YouTube episode Items
+            try:
+                candidate = app.models.Item.objects.filter(
+                    source=app.models.Sources.YOUTUBE.value,
+                    media_type=app.models.MediaTypes.EPISODE.value,
+                    title__iexact=title,
+                ).first()
+                if candidate:
+                    video_id = candidate.youtube_video_id
+            except Exception:
+                logger.exception("Error searching for YouTube item by title")
+
+        if not video_id:
+            logger.info("No YouTube id or title match found in payload")
+            return False
+
+        # Find the matching Item by youtube_video_id
+        try:
+            episode_item = app.models.Item.objects.filter(
+                source=app.models.Sources.YOUTUBE.value,
+                media_type=app.models.MediaTypes.EPISODE.value,
+                youtube_video_id=video_id,
+            ).first()
+        except Exception:
+            logger.exception("DB error while looking up YouTube item")
+            return False
+
+        if not episode_item:
+            logger.info("No local Item found with youtube_video_id=%s", video_id)
+            return False
+
+        # Find season instance for this user
+        try:
+            season_instance = app.models.Season.objects.filter(
+                item__media_id=episode_item.media_id,
+                item__season_number=episode_item.season_number,
+                user=user,
+            ).first()
+        except Exception:
+            logger.exception("DB error while looking up Season instance")
+            return False
+
+        if not season_instance:
+            logger.info("User %s does not track the season for item %s (channel=%s, year=%s)", user, episode_item.media_id, episode_item.media_id, episode_item.season_number)
+            return False
+
+        # Check for recent duplicate episode records (same logic as TV handler)
+        now = timezone.now().replace(second=0, microsecond=0)
+        latest_episode = (
+            app.models.Episode.objects.filter(
+                item=episode_item,
+                related_season=season_instance,
+            )
+            .order_by("-end_date")
+            .first()
+        )
+
+        should_create = True
+        if latest_episode and latest_episode.end_date:
+            time_diff = abs((now - latest_episode.end_date).total_seconds())
+            threshold = 5
+            if time_diff < threshold:
+                should_create = False
+
+        if should_create:
+            season_instance.watch(episode_item.episode_number, now, auto_complete=False)
+            logger.info("Marked YouTube video as played: %s (video_id=%s) for user %s", episode_item.title, video_id, user)
+            return True
+
+        logger.debug("Skipping duplicate YouTube episode record for %s (video_id=%s)", episode_item.title, video_id)
+        return True
 
     def _is_supported_event(self, event_type):
         return event_type in ("media.scrobble", "media.play")
