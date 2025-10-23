@@ -134,31 +134,58 @@ class BaseWebhookProcessor:
             episode_number = payload["Metadata"].get("index")
             
             if season_number is not None and episode_number is not None:
+                # Prefer resolving the series via external episode-level IDs (imdb/tvdb)
+                # because Plex sometimes returns an episode-level TMDB id. If imdb/tvdb
+                # are present, use tmdb.find to retrieve the correct show id.
+                for ext_id, ext_type in [
+                    (ids.get("imdb_id"), "imdb_id"),
+                    (ids.get("tvdb_id"), "tvdb_id"),
+                ]:
+                    if ext_id:
+                        try:
+                            response = app.providers.tmdb.find(ext_id, ext_type)
+                            if response.get("tv_episode_results"):
+                                result = response["tv_episode_results"][0]
+                                return (
+                                    result.get("show_id"),
+                                    result.get("season_number"),
+                                    result.get("episode_number"),
+                                )
+                        except Exception:
+                            logger.debug("tmdb.find failed for %s=%s, falling back", ext_type, ext_id)
+
                 try:
-                    # Verify if TMDB ID actually exists
+                    # Verify if TMDB ID actually exists as a show
                     logger.info(
-                        "Attempting to use TMDB ID directly: %s, Season: %d, Episode: %d", 
-                        ids["tmdb_id"], season_number, episode_number
+                        "Attempting to use TMDB ID directly: %s, Season: %d, Episode: %d",
+                        ids["tmdb_id"],
+                        season_number,
+                        episode_number,
                     )
                     app.providers.tmdb.tv(int(ids["tmdb_id"]))
                     logger.info("TMDB ID %s is valid", ids["tmdb_id"])
                     return int(ids["tmdb_id"]), season_number, episode_number
-                    
                 except Exception as e:
-                    logger.warning("TMDB ID %s is invalid (%s), checking for mapping...", ids["tmdb_id"], e)
-                    
+                    logger.warning(
+                        "TMDB ID %s is invalid (%s), checking for mapping...",
+                        ids["tmdb_id"],
+                        e,
+                    )
+
                     # Look for external ID mapping
                     try:
                         mapping = app.models.ExternalIdMapping.objects.filter(
                             tmdb_id_plex=ids["tmdb_id"],
                             external_source="plex",
-                            media_type=app.models.MediaTypes.TV.value
+                            media_type=app.models.MediaTypes.TV.value,
                         ).first()
-                        
+
                         if mapping:
                             logger.info(
-                                "Found mapping: Plex fake TMDB ID %s → Real TMDB ID %s (%s)", 
-                                ids["tmdb_id"], mapping.real_tmdb_id, mapping.title
+                                "Found mapping: Plex fake TMDB ID %s → Real TMDB ID %s (%s)",
+                                ids["tmdb_id"],
+                                mapping.real_tmdb_id,
+                                mapping.title,
                             )
                             return int(mapping.real_tmdb_id), season_number, episode_number
                         else:
@@ -226,9 +253,29 @@ class BaseWebhookProcessor:
 
     def _get_mal_id_from_tmdb_movie(self, mapping_data, tmdb_movie_id):
         """Find MAL ID from TMDB movie mapping."""
-        for entry in mapping_data.values():
-            if entry.get("tmdb_movie_id") == tmdb_movie_id and "mal_id" in entry:
-                return self._parse_mal_id(entry["mal_id"])
+        for key, entry in mapping_data.items():
+            try:
+                # Direct singular key
+                if "tmdb_movie_id" in entry and str(entry.get("tmdb_movie_id")) == str(tmdb_movie_id) and "mal_id" in entry:
+                    logger.debug("Found mapping entry %s -> mal_id=%s", key, entry.get("mal_id"))
+                    return self._parse_mal_id(entry["mal_id"])
+
+                # Plural key as list of tmdb ids
+                if "tmdb_movie_ids" in entry and isinstance(entry.get("tmdb_movie_ids"), (list, tuple)):
+                    if str(tmdb_movie_id) in [str(x) for x in entry.get("tmdb_movie_ids")]:
+                        if "mal_id" in entry:
+                            logger.debug("Found mapping entry %s -> mal_id=%s (via tmdb_movie_ids)", key, entry.get("mal_id"))
+                            return self._parse_mal_id(entry["mal_id"])
+
+                # Alternate key name
+                if "tmdb_id" in entry and str(entry.get("tmdb_id")) == str(tmdb_movie_id) and "mal_id" in entry:
+                    logger.debug("Found mapping entry %s -> mal_id=%s (via tmdb_id)", key, entry.get("mal_id"))
+                    return self._parse_mal_id(entry["mal_id"])
+            except Exception:
+                # Protect mapping parsing from malformed entries
+                logger.debug("Skipping malformed mapping entry %s", key)
+
+        logger.debug("No MAL mapping found for TMDB movie id: %s", tmdb_movie_id)
         return None
 
     def _parse_mal_id(self, mal_id):
