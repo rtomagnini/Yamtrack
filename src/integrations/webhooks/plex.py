@@ -104,15 +104,42 @@ class PlexWebhookProcessor(BaseWebhookProcessor):
         Returns True if handled (marked as watched), False otherwise.
         """
         import app
+        import re
+        import os
         from django.utils import timezone
 
         metadata = payload.get("Metadata", {})
-        guids = metadata.get("Guid", [])
+        
+        # First, try to extract video ID from file path (like Tautulli does)
+        # This is more reliable than GUIDs for TubeArchivist files
+        video_id = None
+        
+        # Try to get file path from Media/Part structure
+        media_list = metadata.get("Media", [])
+        if media_list and isinstance(media_list, list):
+            for media in media_list:
+                parts = media.get("Part", [])
+                if parts and isinstance(parts, list):
+                    for part in parts:
+                        file_path = part.get("file")
+                        if file_path:
+                            # Extract YouTube video ID from filename (11 characters)
+                            filename = os.path.basename(file_path)
+                            # YouTube video IDs are 11 characters: letters, numbers, -, _
+                            match = re.search(r'([A-Za-z0-9_-]{11})\.(mp4|mkv|webm)', filename)
+                            if match:
+                                video_id = match.group(1)
+                                logger.debug("Extracted YouTube video ID from file path: %s", video_id)
+                                break
+                if video_id:
+                    break
 
-        # Try to get a video id from GUIDs
-        video_id = self._extract_youtube_id_from_guids(guids)
+        # If not found in file path, try GUIDs
+        if not video_id:
+            guids = metadata.get("Guid", [])
+            video_id = self._extract_youtube_id_from_guids(guids)
 
-        # If not found, try to use ratingKey to query Plex for more metadata
+        # If still not found, try querying Plex API for more metadata
         if not video_id and metadata.get("ratingKey"):
             try:
                 rating_key = metadata.get("ratingKey")
@@ -135,23 +162,8 @@ class PlexWebhookProcessor(BaseWebhookProcessor):
             except Exception:
                 logger.exception("Error querying Plex API for item metadata")
 
-        # If still no video_id, try to match by title
-        title = metadata.get("title")
-        if not video_id and title:
-            # Best-effort: exact title match among YouTube episode Items
-            try:
-                candidate = app.models.Item.objects.filter(
-                    source=app.models.Sources.YOUTUBE.value,
-                    media_type=app.models.MediaTypes.EPISODE.value,
-                    title__iexact=title,
-                ).first()
-                if candidate:
-                    video_id = candidate.youtube_video_id
-            except Exception:
-                logger.exception("Error searching for YouTube item by title")
-
         if not video_id:
-            logger.info("No YouTube id or title match found in payload")
+            logger.info("No YouTube video ID found in payload (file path, GUIDs, or Plex API)")
             return False
 
         # Find the matching Item by youtube_video_id
@@ -203,7 +215,15 @@ class PlexWebhookProcessor(BaseWebhookProcessor):
                 should_create = False
 
         if should_create:
-            season_instance.watch(episode_item.episode_number, now, auto_complete=False)
+            # Create Episode directly with the specific Item we found
+            # Don't use season_instance.watch() which searches by episode_number
+            # and could match the wrong video
+            episode = app.models.Episode.objects.create(
+                related_season=season_instance,
+                item=episode_item,
+                end_date=now,
+            )
+            episode.save(auto_complete=False)
             logger.info("Marked YouTube video as played: %s (video_id=%s) for user %s", episode_item.title, video_id, user)
             return True
 

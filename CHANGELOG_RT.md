@@ -1,5 +1,16 @@
 # CHANGELOG - RT Fork
 
+## [0.25.7.RT] - 2025-10-23
+
+### 🐛 Fixes
+- fix(plex): Fix YouTube video marking wrong episode as watched.
+  - Extract video ID from file path first (more reliable for TubeArchivist).
+  - Create Episode directly with specific Item instead of using season.watch().
+  - Prevents marking random YouTube videos when multiple videos share same episode number.
+  - Remove unreliable title-based matching that could match wrong videos.
+
+---
+
 ## [0.25.6.RT] - 2025-10-23
 
 ### ✨ Nuevas funcionalidades
