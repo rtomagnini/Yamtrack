@@ -42,14 +42,19 @@ class PlexWebhookProcessor(BaseWebhookProcessor):
         # Handle library.new event for YouTube videos
         if event_type == "library.new":
             logger.info("Processing library.new event")
-            try:
-                handled = self._create_youtube_video_from_plex(payload, user)
-                if handled:
-                    logger.info("Successfully created YouTube video from library.new event")
-                    return
-                logger.debug("library.new event was not a YouTube video or failed to create")
-            except Exception:
-                logger.exception("Error creating YouTube video from library.new event")
+            # Quick check: does this look like a YouTube video?
+            if self._looks_like_youtube_video(payload):
+                logger.info("Payload appears to be a YouTube video, attempting creation")
+                try:
+                    handled = self._create_youtube_video_from_plex(payload, user)
+                    if handled:
+                        logger.info("Successfully created YouTube video from library.new event")
+                        return
+                    logger.debug("library.new event was detected as YouTube but creation failed")
+                except Exception:
+                    logger.exception("Error creating YouTube video from library.new event")
+            else:
+                logger.debug("library.new event does not appear to be a YouTube video (no YouTube indicators in GUIDs or file path)")
             # If not handled as YouTube, fall through to normal processing
             # (though library.new for TV/Movie usually won't have watch status)
 
@@ -112,6 +117,108 @@ class PlexWebhookProcessor(BaseWebhookProcessor):
 
         return None
 
+    def _extract_youtube_id_from_file_path(self, file_path):
+        """
+        Extract YouTube video ID from file path.
+        
+        Common patterns for TubeArchivist and similar tools:
+        - /path/to/CHANNEL_ID/VIDEO_ID.mp4
+        - /path/to/VIDEO_ID.mp4
+        
+        YouTube video IDs are typically 11 characters: [A-Za-z0-9_-]{11}
+        """
+        if not file_path:
+            return None
+        
+        import re
+        import os
+        
+        # Get the filename without extension
+        filename = os.path.splitext(os.path.basename(file_path))[0]
+        
+        # YouTube video ID pattern: 11 characters, alphanumeric plus _ and -
+        video_id_pattern = r'^[A-Za-z0-9_-]{11}$'
+        
+        if re.match(video_id_pattern, filename):
+            logger.debug("Extracted YouTube video ID from filename: %s", filename)
+            return filename
+        
+        # Also try to extract from parent directory (some tools use CHANNEL_ID/VIDEO_ID.ext)
+        parent_dir = os.path.basename(os.path.dirname(file_path))
+        if re.match(video_id_pattern, parent_dir):
+            # This might be a channel ID (starts with UC typically), skip it
+            # and use the filename if it matches
+            if re.match(video_id_pattern, filename):
+                logger.debug("Extracted YouTube video ID from filename in channel dir: %s", filename)
+                return filename
+        
+        return None
+
+    def _extract_youtube_channel_id_from_file_path(self, file_path):
+        """
+        Extract YouTube channel ID from file path.
+        
+        YouTube channel IDs typically start with UC and are 24 characters.
+        Common in TubeArchivist: /path/CHANNEL_ID/VIDEO_ID.mp4
+        """
+        if not file_path:
+            return None
+        
+        import re
+        import os
+        
+        # Get parent directory name
+        parent_dir = os.path.basename(os.path.dirname(file_path))
+        
+        # YouTube channel ID pattern: starts with UC, typically 24 chars
+        channel_id_pattern = r'^UC[A-Za-z0-9_-]{22}$'
+        
+        if re.match(channel_id_pattern, parent_dir):
+            logger.debug("Extracted YouTube channel ID from path: %s", parent_dir)
+            return parent_dir
+        
+        return None
+
+    def _looks_like_youtube_video(self, payload):
+        """
+        Quick check to see if a Plex payload looks like a YouTube video.
+        
+        Checks:
+        - GUIDs contain youtube/youtu keywords
+        - File path contains YouTube video ID pattern (11 chars)
+        - File path contains YouTube channel ID pattern (UC...)
+        
+        Returns True if any indicator found, False otherwise.
+        """
+        metadata = payload.get("Metadata", {})
+        guids = metadata.get("Guid", [])
+        
+        # Check GUIDs for YouTube indicators
+        for guid in guids:
+            gid = (guid.get("id", "") or "").lower()
+            if "youtube" in gid or "youtu.be" in gid or "youtu" in gid:
+                return True
+        
+        # Check file path for YouTube patterns
+        media_list = metadata.get("Media", [])
+        if media_list and len(media_list) > 0:
+            parts = media_list[0].get("Part", [])
+            if parts and len(parts) > 0:
+                file_path = parts[0].get("file", "")
+                if file_path:
+                    # Quick pattern check without full extraction
+                    import re
+                    import os
+                    filename = os.path.splitext(os.path.basename(file_path))[0]
+                    # YouTube video ID: 11 chars
+                    if re.match(r'^[A-Za-z0-9_-]{11}$', filename):
+                        return True
+                    # YouTube channel ID in path: UC...
+                    if re.search(r'/UC[A-Za-z0-9_-]{22}/', file_path):
+                        return True
+        
+        return False
+
     def _create_youtube_video_from_plex(self, payload, user):
         """
         Create a YouTube video in Yamtrack when detected from Plex library.new event.
@@ -127,11 +234,26 @@ class PlexWebhookProcessor(BaseWebhookProcessor):
         metadata = payload.get("Metadata", {})
         guids = metadata.get("Guid", [])
         
-        # Try to extract YouTube video ID from GUIDs
+        # Try to extract YouTube video ID from GUIDs first
         video_id = self._extract_youtube_id_from_guids(guids)
+        channel_id_from_path = None
+        
+        # If GUIDs didn't work, try to extract from file path
+        # (for TubeArchivist and similar tools that download YouTube videos)
+        if not video_id:
+            # Try to get file path from Media/Part elements
+            media_list = metadata.get("Media", [])
+            if media_list and len(media_list) > 0:
+                parts = media_list[0].get("Part", [])
+                if parts and len(parts) > 0:
+                    file_path = parts[0].get("file")
+                    if file_path:
+                        logger.debug("Attempting to extract YouTube ID from file path: %s", file_path)
+                        video_id = self._extract_youtube_id_from_file_path(file_path)
+                        channel_id_from_path = self._extract_youtube_channel_id_from_file_path(file_path)
         
         if not video_id:
-            logger.debug("No YouTube video ID found in Plex payload GUIDs")
+            logger.debug("No YouTube video ID found in Plex payload (GUIDs or file path)")
             return False
         
         logger.info("Detected YouTube video ID from Plex: %s", video_id)
@@ -159,8 +281,14 @@ class PlexWebhookProcessor(BaseWebhookProcessor):
         
         # Extract channel info
         channel_id = video_metadata.get("channel_id")
+        
+        # Fallback: use channel ID from file path if YouTube API didn't provide one
+        if not channel_id and channel_id_from_path:
+            logger.info("Using channel ID from file path as fallback: %s", channel_id_from_path)
+            channel_id = channel_id_from_path
+        
         if not channel_id:
-            logger.warning("No channel ID in YouTube metadata for video %s", video_id)
+            logger.warning("No channel ID in YouTube metadata or file path for video %s", video_id)
             return False
         
         # Fetch channel metadata
