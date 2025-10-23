@@ -844,6 +844,18 @@ def handle_youtube_video_creation(request, form):
         )
     
     # Create episode item for the video
+    # Avoid creating duplicates: check if an Item for this YouTube video already exists
+    video_id = video_metadata.get("video_id")
+    if video_id:
+        existing_video = Item.objects.filter(
+            source=Sources.YOUTUBE.value,
+            media_type=MediaTypes.EPISODE.value,
+            notes__contains=f"YouTube Video ID: {video_id}",
+        ).first()
+        if existing_video:
+            messages.info(request, f"El video '{existing_video.title}' ya existe en {channel_item.title}.")
+            return redirect("youtube_channel_details", source=channel_item.source, media_id=channel_item.media_id, title=channel_item.title)
+
     episode_item = Item.objects.create(
         media_id=channel_item.media_id,
         source=Sources.YOUTUBE.value,
@@ -854,6 +866,7 @@ def handle_youtube_video_creation(request, form):
         image=video_metadata.get("thumbnail", ""),
         air_date=published_date,
         runtime=video_metadata.get("duration_minutes", 0),
+        notes=(f"YouTube Video ID: {video_id}" if video_id else ""),
     )
     
     # Get next episode number for this season
