@@ -750,7 +750,7 @@ def handle_youtube_video_creation(request, form):
     """Handle creation of YouTube video with automatic channel/season detection and creation."""
     from datetime import datetime
     from app.providers import youtube
-    from app.models import Season, TV, Episode
+    from app.models import Season, TV, Episode, Status
     
     youtube_url = form.cleaned_data.get("youtube_url")
     if not youtube_url:
@@ -812,6 +812,7 @@ def handle_youtube_video_creation(request, form):
             user=request.user,
             item=channel_item,
             notes=f"YouTube Channel ID: {channel_id}",
+            status=Status.IN_PROGRESS.value,
         )
         channel_created = True
     
@@ -833,6 +834,7 @@ def handle_youtube_video_creation(request, form):
             user=request.user,
             item=season_item,
             related_tv=tv_instance,
+            status=Status.IN_PROGRESS.value,
         )
     else:
         # Get existing season instance
