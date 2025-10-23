@@ -1362,7 +1362,11 @@ def youtube_channel_details(request, source, media_id, title):  # noqa: ARG001 t
             pass  # Invalid year, show all episodes
     
     # Filter by watched status
-    status_filter = request.GET.get("filter", "all")
+    # For YouTube channels default to 'unwatched' when not provided
+    if source == Sources.YOUTUBE.value and "filter" not in request.GET:
+        status_filter = "unwatched"
+    else:
+        status_filter = request.GET.get("filter", "all")
     if status_filter == "unwatched":
         episodes = [
             episode for episode in episodes
