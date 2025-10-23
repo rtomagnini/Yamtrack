@@ -21,6 +21,9 @@
 ### 🧪 Chores
 - chore: ignore and remove supervisord runtime files from repo.
 
+### ⚙️ Integraciones
+- feat(plex): Webhook fallback to detect YouTube videos when Plex payload lacks TMDB/IMDB/TVDB IDs and mark matching YouTube Items as watched automatically.
+
 ---
 
 ## [0.25.1.RT] - 2025-10-22
