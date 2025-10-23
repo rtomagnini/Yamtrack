@@ -1623,6 +1623,8 @@ class Season(Media):
                 )
 
         image = settings.IMG_NONE
+        air_date = None
+        runtime = None
         for episode in season_metadata["episodes"]:
             if episode["episode_number"] == int(episode_number):
                 if episode.get("still_path"):
@@ -1634,6 +1636,12 @@ class Season(Media):
                     image = episode["image"]
                 else:
                     image = settings.IMG_NONE
+                # If TMDB provides air_date/runtime, use them when creating the Item
+                if episode.get("air_date"):
+                    air_date = episode.get("air_date")
+                # Store runtime as integer minutes when available
+                if episode.get("runtime") is not None:
+                    runtime = episode.get("runtime")
                 break
 
         item, _ = Item.objects.get_or_create(
@@ -1645,8 +1653,22 @@ class Season(Media):
             defaults={
                 "title": self.item.title,
                 "image": image,
+                "air_date": air_date,
+                "runtime": runtime,
             },
         )
+
+        # If the Item already existed but missing air_date/runtime, update it
+        updated_fields = []
+        if item.air_date is None and air_date is not None:
+            item.air_date = air_date
+            updated_fields.append("air_date")
+        if item.runtime is None and runtime is not None:
+            item.runtime = runtime
+            updated_fields.append("runtime")
+
+        if updated_fields:
+            item.save(update_fields=updated_fields)
 
         return item
 
