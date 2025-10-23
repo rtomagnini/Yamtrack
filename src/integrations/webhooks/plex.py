@@ -152,13 +152,27 @@ class PlexWebhookProcessor(BaseWebhookProcessor):
                     if r.ok:
                         import xml.etree.ElementTree as ET
                         root = ET.fromstring(r.content)
-                        # Search guids in returned XML
-                        for guid_elem in root.findall('.//Guid'):
-                            gid = guid_elem.get("id", "")
-                            candidate = self._extract_youtube_id_from_guids([{"id": gid}])
-                            if candidate:
-                                video_id = candidate
-                                break
+                        
+                        # First, try to extract video ID from file path in XML
+                        for part_elem in root.findall('.//Part'):
+                            file_path = part_elem.get("file")
+                            if file_path:
+                                filename = os.path.basename(file_path)
+                                # YouTube video IDs are 11 characters: letters, numbers, -, _
+                                match = re.search(r'([A-Za-z0-9_-]{11})\.(mp4|mkv|webm)', filename)
+                                if match:
+                                    video_id = match.group(1)
+                                    logger.debug("Extracted YouTube video ID from Plex API file path: %s", video_id)
+                                    break
+                        
+                        # If not found in file path, search guids in returned XML
+                        if not video_id:
+                            for guid_elem in root.findall('.//Guid'):
+                                gid = guid_elem.get("id", "")
+                                candidate = self._extract_youtube_id_from_guids([{"id": gid}])
+                                if candidate:
+                                    video_id = candidate
+                                    break
             except Exception:
                 logger.exception("Error querying Plex API for item metadata")
 
