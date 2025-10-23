@@ -164,14 +164,30 @@ def get_search_media_types(user):
 def get_sidebar_media_types(user):
     """Return available media types for sidebar navigation based on user preferences."""
     enabled_types = user.get_enabled_media_types()
+    # Desired default order for sidebar navigation
+    preferred_order = [
+        MediaTypes.TV.value,
+        MediaTypes.SEASON.value,
+        MediaTypes.YOUTUBE.value,
+        MediaTypes.MOVIE.value,
+    ]
 
-    # Format the types for sidebar
+    # Keep other enabled types in their original order after the preferred ones
+    ordered = []
+    for mt in preferred_order:
+        if mt in enabled_types:
+            ordered.append(mt)
+
+    for mt in enabled_types:
+        if mt not in ordered:
+            ordered.append(mt)
+
     return [
         {
             "media_type": media_type,
             "display_name": media_type_readable_plural(media_type),
         }
-        for media_type in enabled_types
+        for media_type in ordered
     ]
 
 

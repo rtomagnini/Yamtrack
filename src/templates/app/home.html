@@ -1,6 +1,10 @@
 {% extends "base.html" %}
 {% load app_tags %}
-
+    {# Render sections in a preferred order: TV, Seasons, Youtube, Movies, then the rest #}
+    {% with preferred_order="tv,season,youtube,movie" %}
+      {% for media_type in preferred_order.split(',') %}
+        {% if media_type in list_by_type %}
+          {% with media_list=list_by_type[media_type] %}
 {% block title %}
   Home - Yamtrack
 {% endblock title %}
@@ -57,7 +61,7 @@
         {% endfor %}
       </div>
     </div>
-  </div>
+    {% endfor %}
   <div class="space-y-8">
     {% for media_type, media_list in list_by_type.items %}
       <div>
