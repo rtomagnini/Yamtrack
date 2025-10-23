@@ -419,3 +419,176 @@ class PlexWebhookTests(TestCase):
         if result != expected:
             msg = f"Expected {expected}, got {result}"
             raise AssertionError(msg)
+
+    def test_library_new_youtube_video_creation(self):
+        """Test webhook creates YouTube video when library.new event received."""
+        from unittest.mock import patch, MagicMock
+        
+        # Mock YouTube API responses
+        mock_video_metadata = {
+            "video_id": "dQw4w9WgXcQ",
+            "title": "Test YouTube Video",
+            "channel_id": "UCtest123",
+            "thumbnail": "https://i.ytimg.com/vi/dQw4w9WgXcQ/maxresdefault.jpg",
+            "duration_minutes": 5,
+            "published_date": "2023-06-15",
+        }
+        
+        mock_channel_metadata = {
+            "title": "Test Channel",
+            "thumbnail": "https://yt3.ggpht.com/channel_thumb.jpg",
+        }
+        
+        payload = {
+            "event": "library.new",
+            "Account": {
+                "title": "testuser",
+            },
+            "Metadata": {
+                "type": "clip",  # Plex uses "clip" for YouTube videos sometimes
+                "title": "Test YouTube Video",
+                "Guid": [
+                    {
+                        "id": "youtube://dQw4w9WgXcQ",
+                    },
+                ],
+            },
+        }
+        
+        data = {
+            "payload": json.dumps(payload),
+        }
+        
+        # Mock YouTube provider functions
+        with patch('app.providers.youtube.fetch_video_metadata') as mock_fetch_video, \
+             patch('app.providers.youtube.fetch_channel_metadata') as mock_fetch_channel:
+            
+            mock_fetch_video.return_value = mock_video_metadata
+            mock_fetch_channel.return_value = mock_channel_metadata
+            
+            # Send webhook
+            response = self.client.post(
+                self.url,
+                data=data,
+                format="multipart",
+            )
+            
+            self.assertEqual(response.status_code, 200)
+            
+            # Verify YouTube video Item was created
+            from app.models import Sources
+            episode_item = Item.objects.filter(
+                source=Sources.YOUTUBE.value,
+                media_type=MediaTypes.EPISODE.value,
+                youtube_video_id="dQw4w9WgXcQ",
+            ).first()
+            
+            self.assertIsNotNone(episode_item, "YouTube video Item should be created")
+            self.assertEqual(episode_item.title, "Test YouTube Video")
+            self.assertEqual(episode_item.runtime, 5)
+            self.assertEqual(episode_item.air_date, "2023-06-15")
+            
+            # Verify channel (TV) was created
+            channel_item = Item.objects.filter(
+                source=Sources.YOUTUBE.value,
+                media_type=MediaTypes.YOUTUBE.value,
+            ).first()
+            
+            self.assertIsNotNone(channel_item, "YouTube channel Item should be created")
+            self.assertEqual(channel_item.title, "Test Channel")
+            
+            # Verify TV instance exists for user
+            tv = TV.objects.filter(
+                item=channel_item,
+                user=self.user,
+            ).first()
+            
+            self.assertIsNotNone(tv, "TV instance should be created for user")
+            self.assertIn("YouTube Channel ID: UCtest123", tv.notes)
+            
+            # Verify season was created (year 2023)
+            season_item = Item.objects.filter(
+                source=Sources.YOUTUBE.value,
+                media_type=MediaTypes.SEASON.value,
+                season_number=2023,
+            ).first()
+            
+            self.assertIsNotNone(season_item, "Season Item should be created")
+            
+            # Verify Season instance exists
+            season = Season.objects.filter(
+                item=season_item,
+                user=self.user,
+            ).first()
+            
+            self.assertIsNotNone(season, "Season instance should be created")
+    
+    def test_library_new_youtube_video_duplicate_prevention(self):
+        """Test that duplicate YouTube videos are not created."""
+        from unittest.mock import patch
+        from app.models import Sources
+        
+        # Create existing video
+        existing_channel = Item.objects.create(
+            media_id="yt_001",
+            source=Sources.YOUTUBE.value,
+            media_type=MediaTypes.YOUTUBE.value,
+            title="Existing Channel",
+        )
+        
+        existing_season = Item.objects.create(
+            media_id="yt_001",
+            source=Sources.YOUTUBE.value,
+            media_type=MediaTypes.SEASON.value,
+            season_number=2023,
+            title="Existing Channel - 2023",
+        )
+        
+        existing_video = Item.objects.create(
+            media_id="yt_001",
+            source=Sources.YOUTUBE.value,
+            media_type=MediaTypes.EPISODE.value,
+            season_number=2023,
+            episode_number=1,
+            title="Existing Video",
+            youtube_video_id="existing123",
+        )
+        
+        payload = {
+            "event": "library.new",
+            "Account": {
+                "title": "testuser",
+            },
+            "Metadata": {
+                "type": "clip",
+                "title": "Existing Video",
+                "Guid": [
+                    {
+                        "id": "youtube://existing123",
+                    },
+                ],
+            },
+        }
+        
+        data = {
+            "payload": json.dumps(payload),
+        }
+        
+        # Send webhook
+        response = self.client.post(
+            self.url,
+            data=data,
+            format="multipart",
+        )
+        
+        self.assertEqual(response.status_code, 200)
+        
+        # Verify no duplicate was created
+        video_count = Item.objects.filter(
+            source=Sources.YOUTUBE.value,
+            media_type=MediaTypes.EPISODE.value,
+            youtube_video_id="existing123",
+        ).count()
+        
+        self.assertEqual(video_count, 1, "Should not create duplicate video")
+
