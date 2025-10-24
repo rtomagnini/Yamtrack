@@ -50,57 +50,41 @@ def get_user_media(user, start_date, end_date):
                 end_date__range=(start_date, end_date),
             )
 
-    for model in media_models:
-        media_type = model.__name__.lower()
-        queryset = None
 
-        if model == TV:
-            tv_ids = base_episodes.values_list(
-                "related_season__related_tv",
-                flat=True,
-            ).distinct()
-            queryset = TV.objects.filter(id__in=tv_ids).prefetch_related(
-                Prefetch(
-                    "seasons",
-                    queryset=Season.objects.select_related(
-                        "item",
-                    ).prefetch_related(
-                        Prefetch(
-                            "episodes",
-                            queryset=base_episodes.filter(
-                                related_season__related_tv__in=tv_ids,
-                            ),
-                        ),
-                    ),
-                ),
-            )
-        elif model == Season:
-            season_ids = base_episodes.values_list(
-                "related_season",
-                flat=True,
-            ).distinct()
-            queryset = Season.objects.filter(
-                id__in=season_ids,
-            ).prefetch_related(
-                Prefetch("episodes", queryset=base_episodes),
-            )
-        # For other models, apply date filtering conditionally
-        elif start_date is None and end_date is None:
-            # No date filtering for "All Time"
+
+    # --- Nueva lógica para separar TV Show y YouTube correctamente ---
+    # 1. TV Show: Episodios con source TMDB o MANUAL
+    tv_episodes = Episode.objects.filter(
+        related_season__user=user,
+        item__media_type=MediaTypes.EPISODE.value,
+        item__source__in=["tmdb", "manual"],
+    )
+    # 2. YouTube: Episodios con source YOUTUBE
+    youtube_episodes = Episode.objects.filter(
+        related_season__user=user,
+        item__media_type=MediaTypes.EPISODE.value,
+        item__source="youtube",
+    )
+    # 3. Otros tipos (movie, comic, anime, book...)
+    other_types = [
+        MediaTypes.MOVIE.value,
+        MediaTypes.ANIME.value,
+        MediaTypes.COMIC.value,
+        MediaTypes.BOOK.value,
+    ]
+    other_media = {}
+    for media_type in other_types:
+        model = apps.get_model(app_label="app", model_name=media_type)
+        if start_date is None and end_date is None:
             queryset = model.objects.filter(user=user)
         else:
             queryset = model.objects.filter(user=user).filter(
-                # Case 1: Media has both start_date and end_date
-                # Include if ranges overlap
-                # (exclude if media ends before filter start or starts after filter end)
                 (
                     Q(start_date__isnull=False)
                     & Q(end_date__isnull=False)
                     & ~(Q(end_date__lt=start_date) | Q(start_date__gt=end_date))
                 )
                 |
-                # Case 2: Media only has start_date (end_date is null)
-                # Include if start_date is within filter range
                 (
                     Q(start_date__isnull=False)
                     & Q(end_date__isnull=True)
@@ -108,8 +92,6 @@ def get_user_media(user, start_date, end_date):
                     & Q(start_date__lte=end_date)
                 )
                 |
-                # Case 3: Media only has end_date (start_date is null)
-                # Include if end_date is within filter range
                 (
                     Q(start_date__isnull=True)
                     & Q(end_date__isnull=False)
@@ -117,19 +99,58 @@ def get_user_media(user, start_date, end_date):
                     & Q(end_date__lte=end_date)
                 ),
             )
-
         queryset = queryset.select_related("item")
+        other_media[media_type] = queryset
+
+    # Construir user_media y media_count
+    user_media = {}
+    media_count = {"total": 0}
+    # Solo episodios de TV vistos (end_date no nulo y en rango)
+    if start_date is None and end_date is None:
+        tv_episodes_watched = tv_episodes.filter(end_date__isnull=False)
+        youtube_episodes_watched = youtube_episodes.filter(end_date__isnull=False)
+    else:
+        tv_episodes_watched = tv_episodes.filter(end_date__isnull=False, end_date__range=(start_date, end_date))
+        youtube_episodes_watched = youtube_episodes.filter(end_date__isnull=False, end_date__range=(start_date, end_date))
+    user_media[MediaTypes.TV.value] = tv_episodes_watched
+    media_count[MediaTypes.TV.value] = tv_episodes_watched.count()
+    user_media[MediaTypes.YOUTUBE.value] = youtube_episodes_watched
+    media_count[MediaTypes.YOUTUBE.value] = youtube_episodes_watched.count()
+    for media_type, queryset in other_media.items():
         user_media[media_type] = queryset
-        count = queryset.count()
-        media_count[media_type] = count
-        media_count["total"] += count
+        media_count[media_type] = queryset.count()
+    media_count["total"] = sum(media_count[mt] for mt in media_count if mt != "total")
 
     logger.info(
         "%s - Retrieved media %s",
         user,
         "for all time" if start_date is None else f"from {start_date} to {end_date}",
     )
-    return user_media, media_count
+    # Calculate total episodes watched (end_date not null)
+    if start_date is None and end_date is None:
+        watched_episodes = Episode.objects.filter(related_season__user=user, end_date__isnull=False)
+        watched_movies = TV.objects.none()  # placeholder
+        watched_movies_qs = apps.get_model("app", "movie").objects.filter(user=user, end_date__isnull=False)
+    else:
+        watched_episodes = Episode.objects.filter(related_season__user=user, end_date__isnull=False, end_date__range=(start_date, end_date))
+        watched_movies = TV.objects.none()  # placeholder
+        watched_movies_qs = apps.get_model("app", "movie").objects.filter(user=user, end_date__isnull=False, end_date__range=(start_date, end_date))
+
+    episodes_watched = watched_episodes.count()
+
+    # Sum runtime for watched episodes (from related Item)
+    episode_minutes = watched_episodes.select_related("item").aggregate(
+        total=models.Sum("item__runtime")
+    )["total"] or 0
+
+    # Sum runtime for watched movies
+    movie_minutes = watched_movies_qs.select_related("item").aggregate(
+        total=models.Sum("item__runtime")
+    )["total"] or 0
+
+    total_watch_minutes = episode_minutes + movie_minutes
+
+    return user_media, media_count, episodes_watched, total_watch_minutes
 
 
 def get_media_type_distribution(media_count):
@@ -146,12 +167,22 @@ def get_media_type_distribution(media_count):
         ],
     }
 
-    # Only include media types with counts > 0
-    for media_type, count in media_count.items():
-        if media_type != "total" and count > 0:
-            # Format label with first letter capitalized
+    # Incluir TV, YouTube, Movie, Anime, Comic, Book
+    allowed_types = [
+        MediaTypes.TV.value,
+        MediaTypes.YOUTUBE.value,
+        MediaTypes.MOVIE.value,
+        MediaTypes.ANIME.value,
+        MediaTypes.COMIC.value,
+        MediaTypes.BOOK.value,
+    ]
+    total = sum(media_count.get(mt, 0) for mt in allowed_types)
+    for media_type in allowed_types:
+        count = media_count.get(media_type, 0)
+        if count > 0:
             label = app_tags.media_type_readable(media_type)
-            chart_data["labels"].append(label)
+            percent = (count / total * 100) if total else 0
+            chart_data["labels"].append(f"{label} ({percent:.1f}%)")
             chart_data["datasets"][0]["data"].append(count)
             chart_data["datasets"][0]["backgroundColor"].append(
                 media_type_config.get_stats_color(media_type),
@@ -165,14 +196,16 @@ def get_status_distribution(user_media):
     total_completed = 0
     # Define status order to ensure consistent stacking
     status_order = list(Status.values)
+
     for media_type, media_list in user_media.items():
         status_counts = dict.fromkeys(status_order, 0)
-        counts = media_list.values("status").annotate(count=models.Count("id"))
-        for count_data in counts:
-            status_counts[count_data["status"]] = count_data["count"]
-            if count_data["status"] == Status.COMPLETED.value:
-                total_completed += count_data["count"]
-
+        model = getattr(media_list, 'model', None)
+        if model and 'status' in [f.name for f in model._meta.get_fields()]:
+            counts = media_list.values("status").annotate(count=models.Count("id"))
+            for count_data in counts:
+                status_counts[count_data["status"]] = count_data["count"]
+                if count_data["status"] == Status.COMPLETED.value:
+                    total_completed += count_data["count"]
         distribution[media_type] = status_counts
 
     # Format the response for charting
@@ -236,7 +269,12 @@ def get_score_distribution(user_media):
 
     for media_type, media_list in user_media.items():
         score_counts = dict.fromkeys(score_range, 0)
-        scored_media = media_list.exclude(score__isnull=True).select_related("item")
+        # Solo filtrar por score si el modelo tiene ese campo
+        model = getattr(media_list, 'model', None)
+        if model and 'score' in [f.name for f in model._meta.get_fields()]:
+            scored_media = media_list.exclude(score__isnull=True).select_related("item")
+        else:
+            scored_media = []
 
         for media in scored_media:
             if len(top_rated) < top_rated_count:
@@ -347,10 +385,18 @@ def get_timeline(user_media):
         if media_type == MediaTypes.TV.value:
             continue
         for media in queryset:
-            local_start_date = timezone.localdate(media.start_date)
-            local_end_date = timezone.localdate(media.end_date)
+            # Usar start_date/end_date del objeto o de su item
+            start_date = getattr(media, 'start_date', None)
+            end_date = getattr(media, 'end_date', None)
+            if start_date is None and hasattr(media, 'item'):
+                start_date = getattr(media.item, 'start_date', None)
+            if end_date is None and hasattr(media, 'item'):
+                end_date = getattr(media.item, 'end_date', None)
 
-            if media.start_date and media.end_date:
+            local_start_date = timezone.localdate(start_date) if start_date else None
+            local_end_date = timezone.localdate(end_date) if end_date else None
+
+            if start_date and end_date:
                 # add media to all months between start and end
                 current_date = local_start_date
                 while current_date <= local_end_date:
@@ -364,7 +410,7 @@ def get_timeline(user_media):
                     # Move to next month
                     current_date += relativedelta(months=1)
                     current_date = current_date.replace(day=1)
-            elif media.start_date:
+            elif start_date:
                 # If only start date, add to the start month
                 year = local_start_date.year
                 month = local_start_date.month
@@ -372,7 +418,7 @@ def get_timeline(user_media):
                 month_year = f"{month_name} {year}"
 
                 timeline[month_year].append(media)
-            elif media.end_date:
+            elif end_date:
                 # If only end date, add to the end month
                 year = local_end_date.year
                 month = local_end_date.month
