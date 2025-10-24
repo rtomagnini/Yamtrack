@@ -697,7 +697,7 @@
         {% if media.episodes %}
         <div class="space-y-6">
           {% for episode in media.episodes %}
-            <div class="bg-[#2a2f35] rounded-lg overflow-hidden shadow-lg">
+            <div class="bg-[#2a2f35] rounded-lg overflow-hidden shadow-lg" data-episode-card>
               <div class="flex flex-col md:flex-row">
                 <div class="md:w-64 flex-shrink-0">
                   <img src="{{ IMG_NONE }}"
@@ -763,50 +763,53 @@
 
                         </div>
 
-                        {# Lists #}
-                        <div x-data="{ listsOpen: false }">
-                          <button class="p-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-full transition duration-300 cursor-pointer"
-                                  title="Add to custom lists"
-                                  hx-get="{% media_view_url 'lists_modal' episode %}"
-                                  hx-vals='{"return_url": "{{ request.get_full_path|urlencode }}"}'
-                                  hx-target="#{% component_id 'lists' episode %}"
-                                  hx-trigger="click once"
-                                  @click="listsOpen = true">
-                            <svg xmlns="http://www.w3.org/2000/svg"
-                                 width="16"
-                                 height="16"
-                                 viewBox="0 0 24 24"
-                                 fill="none"
-                                 stroke="currentColor"
-                                 stroke-width="2"
-                                 stroke-linecap="round"
-                                 stroke-linejoin="round">
-                              <path d="M11 12H3"></path>
-                              <path d="M16 6H3"></path>
-                              <path d="M16 18H3"></path>
-                              <path d="M18 9v6"></path>
-                              <path d="M21 12h-6"></path>
-                            </svg>
-                          </button>
+                        {# Lists (not for YouTube) #}
+                        {% if not is_youtube_channel %}
+                          <div x-data="{ listsOpen: false }">
+                            <button class="p-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-full transition duration-300 cursor-pointer"
+                                    title="Add to custom lists"
+                                    hx-get="{% media_view_url 'lists_modal' episode %}"
+                                    hx-vals='{"return_url": "{{ request.get_full_path|urlencode }}"}'
+                                    hx-target="#{% component_id 'lists' episode %}"
+                                    hx-trigger="click once"
+                                    @click="listsOpen = true">
+                              <svg xmlns="http://www.w3.org/2000/svg"
+                                   width="16"
+                                   height="16"
+                                   viewBox="0 0 24 24"
+                                   fill="none"
+                                   stroke="currentColor"
+                                   stroke-width="2"
+                                   stroke-linecap="round"
+                                   stroke-linejoin="round">
+                                <path d="M11 12H3"></path>
+                                <path d="M16 6H3"></path>
+                                <path d="M16 18H3"></path>
+                                <path d="M18 9v6"></path>
+                                <path d="M21 12h-6"></path>
+                              </svg>
+                            </button>
 
-                          <div x-show="listsOpen"
-                               @keydown.escape.window="listsOpen = false"
-                               class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-                            <div class="w-96 max-h-[90vh] px-4 md:px-0 relative z-60"
-                                 @click.outside="listsOpen = false">
-                              <div id="{% component_id 'lists' episode %}"></div>
+                            <div x-show="listsOpen"
+                                 @keydown.escape.window="listsOpen = false"
+                                 class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+                              <div class="w-96 max-h-[90vh] px-4 md:px-0 relative z-60"
+                                   @click.outside="listsOpen = false">
+                                <div id="{% component_id 'lists' episode %}"></div>
+                              </div>
                             </div>
                           </div>
+                        {% endif %}
 
                         {# Delete (YouTube only) #}
                         {% if is_youtube_channel %}
                           <div>
                             <button class="p-2 bg-red-600 hover:bg-red-500 text-white rounded-full transition duration-200 cursor-pointer"
                                     title="Delete video"
-                    hx-delete="{% url 'delete_youtube_video' episode.id %}"
-                    hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
-                    hx-confirm="Are you sure you want to delete '{{ episode.title }}'?"
-                                    hx-target="closest .bg-\[#2a2f35\]"
+                                    hx-delete="{% url 'delete_youtube_video' episode.id %}"
+                                    hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
+                                    hx-confirm="Are you sure you want to delete '{{ episode.title }}'?"
+                                    hx-target="closest [data-episode-card]"
                                     hx-swap="outerHTML swap:0.5s">
                               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                 <path d="M3 6h18"></path>
@@ -818,7 +821,6 @@
                             </button>
                           </div>
                         {% endif %}
-                        </div>
 
                         {# History #}
                         <div x-data="{ historyOpen: false }">

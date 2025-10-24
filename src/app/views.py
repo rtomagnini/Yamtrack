@@ -20,7 +20,7 @@ from django.contrib.auth.decorators import login_required
 from app import helpers, history_processor
 from app import statistics as stats
 from app.forms import EpisodeTrackingForm, ManualItemForm, get_form_class
-from app.models import TV, BasicMedia, Item, MediaTypes, Season, Sources, Status
+from app.models import TV, BasicMedia, Episode, Item, MediaTypes, Season, Sources, Status
 from app.providers import manual, services, tmdb, youtube
 from app.templatetags import app_tags
 from users.models import HomeSortChoices, MediaSortChoices, MediaStatusChoices
@@ -1453,24 +1453,35 @@ def youtube_channel_details(request, source, media_id, title):  # noqa: ARG001 t
 @login_required
 def delete_youtube_video(request, video_id):
     """Delete a YouTube video (Item) from the database."""
+    logger.info(f"DELETE request received for video_id={video_id} by user={request.user.username}")
+    
     try:
-        # Get the video item
-        video = Item.objects.select_related('user').get(
+        # Get the video item (YouTube episode only)
+        video_item = Item.objects.get(
             id=video_id,
-            user=request.user,
-            media_type=MediaTypes.YOUTUBE.value
+            media_type=MediaTypes.EPISODE.value,
+            source=Sources.YOUTUBE.value
         )
-        
-        video_title = video.title
-        video.delete()
-        logger.info(f"YouTube video '{video_title}' (ID: {video_id}) deleted by user {request.user.username}")
-        
+
+        # Delete Episode(s) for this user and item, if any
+        deleted_episodes = Episode.objects.filter(
+            item=video_item,
+            related_season__related_tv__user=request.user
+        ).delete()
+        if deleted_episodes[0] > 0:
+            logger.info(f"Deleted {deleted_episodes[0]} Episode(s) for user {request.user.username} and video ID {video_id}")
+
+        video_title = video_item.title
+        logger.info(f"Found video: '{video_title}' (ID: {video_id}), proceeding with deletion of Item")
+        video_item.delete()
+        logger.info(f"YouTube video '{video_title}' (ID: {video_id}) successfully deleted by user {request.user.username}")
+
         # Return empty response with 200 status to remove the element
         return HttpResponse(status=200)
-        
+
     except Item.DoesNotExist:
-        logger.warning(f"Attempted to delete non-existent or unauthorized video ID: {video_id} by user {request.user.username}")
-        return HttpResponseBadRequest("Video not found or you don't have permission to delete it")
+        logger.warning(f"Attempted to delete non-existent video ID: {video_id} by user {request.user.username}")
+        return HttpResponseBadRequest("Video not found")
     except Exception as e:
         logger.error(f"Error deleting video ID {video_id}: {str(e)}")
         return HttpResponseBadRequest(f"Error deleting video: {str(e)}")

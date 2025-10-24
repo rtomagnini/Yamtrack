@@ -1,5 +1,17 @@
 # CHANGELOG - RT Fork
 
+## [0.25.9.RT] - 2025-01-24
+
+### 🐛 Fixes
+- fix(youtube): Fix delete button not working and remove custom lists button for YouTube videos.
+  - Fixed HTML structure in media_details.html (incorrect div closing).
+  - Removed "Add to custom lists" button for YouTube videos (only show for other media types).
+  - Removed conflicting `hx-confirm="false"` attribute in youtube_channel_details.html.
+  - Added detailed logging to delete endpoint for debugging.
+  - Delete button now properly appears only for YouTube videos with correct HTMX attributes.
+
+---
+
 ## [0.25.8.RT] - 2025-01-24
 
 ### ✨ Nuevas funcionalidades
