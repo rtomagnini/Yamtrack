@@ -1,5 +1,17 @@
 # CHANGELOG - RT Fork
 
+## [0.25.8.RT] - 2025-01-24
+
+### ✨ Nuevas funcionalidades
+- feat(youtube): Add delete button for YouTube videos in channel details view.
+  - Red circular button with trash icon on each video in channel details page.
+  - Confirmation dialog using Alpine.js before deletion.
+  - New DELETE endpoint /api/youtube/video/<video_id>/delete/ to delete videos.
+  - Only allows users to delete their own videos for security.
+  - Videos are removed from UI with smooth transition after deletion.
+
+---
+
 ## [0.25.7.RT] - 2025-10-23
 
 ### 🐛 Fixes

@@ -271,7 +271,8 @@
               </div>
 
               {# Watch Status #}
-              <div class="flex-shrink-0 flex items-center">
+              {# Watch Status and Delete #}
+              <div class="flex-shrink-0 flex items-center gap-2">
                 {% if video.history %}
                   <div class="bg-green-600 text-white px-3 py-1 rounded-full text-sm">
                     <i class="fas fa-check mr-1"></i>Watched
@@ -283,6 +284,56 @@
                     Mark Watched
                   </button>
                 {% endif %}
+                
+                {# Delete Video Button #}
+                <div x-data="{ confirmDelete: false }">
+                  <button @click="confirmDelete = true"
+                          class="p-2.5 bg-red-600 text-white rounded-full hover:bg-red-500 hover:scale-110 hover:shadow-[0_0_15px_rgba(220,38,38,0.5)] transition-all duration-200 cursor-pointer"
+                          title="Delete video">
+                    <svg xmlns="http://www.w3.org/2000/svg"
+                         width="16"
+                         height="16"
+                         viewBox="0 0 24 24"
+                         fill="none"
+                         stroke="currentColor"
+                         stroke-width="2"
+                         stroke-linecap="round"
+                         stroke-linejoin="round">
+                      <path d="M3 6h18"></path>
+                      <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
+                      <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
+                      <line x1="10" x2="10" y1="11" y2="17"></line>
+                      <line x1="14" x2="14" y1="11" y2="17"></line>
+                    </svg>
+                  </button>
+
+                  {# Confirmation Dialog #}
+                  <div x-show="confirmDelete"
+                       x-cloak
+                       @click.away="confirmDelete = false"
+                       class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+                       style="display: none;">
+                    <div class="bg-[#1e2328] rounded-lg p-6 max-w-md w-full mx-4 shadow-xl"
+                         @click.stop>
+                      <h3 class="text-lg font-semibold mb-4">Delete Video?</h3>
+                      <p class="text-gray-300 mb-6">Are you sure you want to delete "{{ video.title }}"? This action cannot be undone.</p>
+                      <div class="flex gap-3 justify-end">
+                        <button @click="confirmDelete = false"
+                                class="px-4 py-2 bg-gray-600 hover:bg-gray-500 text-white rounded-md transition-colors cursor-pointer">
+                          Cancel
+                        </button>
+                        <button hx-delete="{% url 'delete_youtube_video' video.id %}"
+                                hx-confirm="false"
+                                hx-target="closest .bg-\[#2a2f35\]"
+                                hx-swap="outerHTML swap:0.5s"
+                                @click="confirmDelete = false"
+                                class="px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-md transition-colors cursor-pointer">
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>

@@ -1447,3 +1447,30 @@ def youtube_channel_details(request, source, media_id, title):  # noqa: ARG001 t
         "is_youtube_channel": True,  # Flag to customize template behavior
     }
     return render(request, "app/media_details.html", context)
+
+
+@require_http_methods(["DELETE"])
+@login_required
+def delete_youtube_video(request, video_id):
+    """Delete a YouTube video (Item) from the database."""
+    try:
+        # Get the video item
+        video = Item.objects.select_related('user').get(
+            id=video_id,
+            user=request.user,
+            media_type=MediaTypes.YOUTUBE.value
+        )
+        
+        video_title = video.title
+        video.delete()
+        logger.info(f"YouTube video '{video_title}' (ID: {video_id}) deleted by user {request.user.username}")
+        
+        # Return empty response with 200 status to remove the element
+        return HttpResponse(status=200)
+        
+    except Item.DoesNotExist:
+        logger.warning(f"Attempted to delete non-existent or unauthorized video ID: {video_id} by user {request.user.username}")
+        return HttpResponseBadRequest("Video not found or you don't have permission to delete it")
+    except Exception as e:
+        logger.error(f"Error deleting video ID {video_id}: {str(e)}")
+        return HttpResponseBadRequest(f"Error deleting video: {str(e)}")
