@@ -1432,18 +1432,18 @@ def youtube_channel_details(request, source, media_id, title):  # noqa: ARG001 t
             if episode.get("history")
         ]
     
-    # Sort episodes by publication date
-    sort_order = request.GET.get("sort", "desc")  # Default to newest first for YouTube
-    if sort_order == "asc":
+    # Ordenar episodios por número de episodio
+    sort_order = request.GET.get("sort", "asc")  # Por defecto ascendente por número de episodio
+    if sort_order == "desc":
         episodes = sorted(
-            episodes, 
-            key=lambda x: x.get("air_date", ""), 
-        )
-    else:  # Default to descending (newest first)
-        episodes = sorted(
-            episodes, 
-            key=lambda x: x.get("air_date", ""), 
+            episodes,
+            key=lambda x: (x.get("episode_number") or 0),
             reverse=True
+        )
+    else:
+        episodes = sorted(
+            episodes,
+            key=lambda x: (x.get("episode_number") or 0)
         )
     
     # Get available years for filtering

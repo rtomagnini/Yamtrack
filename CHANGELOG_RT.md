@@ -1,5 +1,14 @@
 # CHANGELOG - RT Fork
 
+## [0.25.12.RT] - 2025-10-24
+
+### ✨ Mejoras
+- Los episodios en la vista de detalles de canal de YouTube ahora se ordenan por número de episodio (ascendente o descendente según filtro).
+
+---
+
+# CHANGELOG - RT Fork
+
 ## [0.25.11.RT] - 2025-10-24
 
 ### ✨ Mejoras
