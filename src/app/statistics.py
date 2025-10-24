@@ -1,3 +1,81 @@
+def get_watch_time_timeseries(user, start_date, end_date):
+    """
+    Devuelve el tiempo de visionado (runtime de episodios vistos) agrupado por día, semana o mes.
+    - Hasta 30 días: por día
+    - Entre 31 y 180 días: por semana
+    - Más de 180 días: por mes
+    """
+    from app.models import Episode
+    from django.db.models import Sum, F
+    from django.utils import timezone
+    import datetime
+
+    # Determinar agrupamiento
+    if not start_date or not end_date:
+        # Si no hay fechas, usar por mes
+        group = 'month'
+    else:
+        days = (end_date - start_date).days
+        if days <= 30:
+            group = 'day'
+        elif days <= 180:
+            group = 'week'
+        else:
+            group = 'month'
+
+    # Query de episodios vistos por el usuario en el rango
+    episode_filters = {
+        'end_date__isnull': False,
+        'item__runtime__isnull': False,
+        'item__isnull': False,
+        'item__media_type': 'episode',
+        'related_season__user': user,
+    }
+    if start_date:
+        episode_filters['end_date__gte'] = start_date
+    if end_date:
+        episode_filters['end_date__lte'] = end_date
+    episodes = Episode.objects.filter(**episode_filters)
+
+    # Agrupar y sumar runtime
+    data = {}
+    for ep in episodes.select_related('item'):
+        dt = ep.end_date
+        if group == 'day':
+            key = dt.date()
+        elif group == 'week':
+            key = dt.date() - datetime.timedelta(days=dt.weekday())  # lunes de la semana
+        else:
+            key = dt.date().replace(day=1)  # primer día del mes
+        data.setdefault(key, 0)
+        data[key] += ep.item.runtime or 0
+
+    # Ordenar por fecha
+    sorted_keys = sorted(data.keys())
+    labels = []
+    values = []
+    for k in sorted_keys:
+        if group == 'day':
+            labels.append(k.strftime('%Y-%m-%d'))
+        elif group == 'week':
+            labels.append(f"Semana {k.strftime('%Y-%m-%d')}")
+        else:
+            labels.append(k.strftime('%Y-%m'))
+        values.append(data[k])
+
+    # Formato para Chart.js
+    return {
+        'labels': labels,
+        'datasets': [{
+            'label': 'Watch Time (min)',
+            'data': values,
+            'fill': False,
+            'borderColor': '#6366f1',
+            'backgroundColor': '#6366f1',
+            'tension': 0.3,
+        }],
+        'group': group,
+    }
 import calendar
 import datetime
 import heapq

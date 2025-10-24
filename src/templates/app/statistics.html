@@ -450,38 +450,18 @@
       </div>
     </div>
 
-    <!-- Top Rated Media Section -->
-    <div class="bg-[#2a2f35] rounded-lg p-6">
-      <h2 class="text-xl font-semibold mb-4">Top Rated Media</h2>
 
-      {% if top_rated %}
-        <div class="media-grid">
-          {% for media in top_rated %}
-            {% include "app/components/media_card.html" with media=media item=media.item title=media.item from_grid=True secondary_color=True %}
-          {% endfor %}
-        </div>
-      {% else %}
-        <div class="flex flex-col items-center justify-center py-16">
-          <div class="bg-[#39404b] rounded-full p-4 w-16 h-16 mx-auto mb-4 flex items-center justify-center">
-            <svg xmlns="http://www.w3.org/2000/svg"
-                 width="24"
-                 height="24"
-                 viewBox="0 0 24 24"
-                 fill="none"
-                 stroke="currentColor"
-                 stroke-width="2"
-                 stroke-linecap="round"
-                 stroke-linejoin="round"
-                 class="w-8 h-8 text-gray-400">
-              <path d="m15.477 12.89 1.515 8.526a.5.5 0 0 1-.81.47l-3.58-2.687a1 1 0 0 0-1.197 0l-3.586 2.686a.5.5 0 0 1-.81-.469l1.514-8.526">
-              </path>
-              <circle cx="12" cy="8" r="6"></circle>
-            </svg>
-          </div>
-          <h3 class="text-lg font-medium mb-2">No ratings yet</h3>
-          <p class="text-gray-400 text-center max-w-md">Rate your media items to see score distribution statistics.</p>
-        </div>
-      {% endif %}
+    <!-- Watch Time Line Chart Section -->
+    <div class="bg-[#2a2f35] rounded-lg p-6">
+      <h2 class="text-xl font-semibold mb-4">Watch Time Over Time</h2>
+      <div class="h-80 flex items-center justify-center">
+        <canvas id="watchTimeLineChart" style="width:100% !important; max-width:100% !important; height:100% !important; display:block;"></canvas>
+      </div>
+      <div class="text-gray-400 text-xs mt-2">
+        <span>
+          {% if watch_time_timeseries.group == 'day' %}Agrupado por día{% elif watch_time_timeseries.group == 'week' %}Agrupado por semana{% else %}Agrupado por mes{% endif %}
+        </span>
+      </div>
     </div>
 
     <!-- Media Timeline Section -->
@@ -604,6 +584,30 @@
   {{ status_pie_chart_data|json_script:"status_pie_chart_data" }}
   {{ status_distribution|json_script:"status_distribution" }}
   {{ score_distribution|json_script:"score_distribution" }}
+  {{ watch_time_timeseries|json_script:"watch_time_timeseries" }}
 
   <script src="{% static 'js/statistics-charts.js' %}{% get_static_file_mtime 'js/statistics-charts.js' %}"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      const data = JSON.parse(document.getElementById('watch_time_timeseries').textContent);
+      const ctx = document.getElementById('watchTimeLineChart').getContext('2d');
+      new Chart(ctx, {
+        type: 'line',
+        data: data,
+        options: {
+          responsive: true,
+          plugins: {
+            legend: { display: false },
+            title: { display: false },
+            tooltip: { mode: 'index', intersect: false }
+          },
+          interaction: { mode: 'nearest', axis: 'x', intersect: false },
+          scales: {
+            x: { display: true, title: { display: false } },
+            y: { display: true, title: { display: true, text: 'Minutos' } }
+          }
+        }
+      });
+    });
+  </script>
 {% endblock js %}

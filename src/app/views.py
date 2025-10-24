@@ -1300,7 +1300,8 @@ def statistics(request):
     media_type_distribution = stats.get_media_type_distribution(
         media_count,
     )
-    score_distribution, top_rated = stats.get_score_distribution(user_media)
+    score_distribution, _ = stats.get_score_distribution(user_media)
+    watch_time_timeseries = stats.get_watch_time_timeseries(request.user, start_date, end_date)
     status_distribution = stats.get_status_distribution(user_media)
     status_pie_chart_data = stats.get_status_pie_chart_data(
         status_distribution,
@@ -1321,7 +1322,7 @@ def statistics(request):
         "activity_data": activity_data,
         "media_type_distribution": media_type_distribution,
         "score_distribution": score_distribution,
-        "top_rated": top_rated,
+        "watch_time_timeseries": watch_time_timeseries,
         "status_distribution": status_distribution,
         "status_pie_chart_data": status_pie_chart_data,
         "timeline": timeline,
