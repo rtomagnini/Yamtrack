@@ -262,7 +262,7 @@ document.addEventListener("DOMContentLoaded", function () {
         .map((dataset) => ({
           label: dataset.label,
           data: dataset.data,
-          backgroundColor: dataset.background_color,
+          backgroundColor: dataset.backgroundColor, // <- usar la clave correcta
           borderColor: "rgba(255, 255, 255, 0.1)",
           borderRadius: 6,
           borderWidth: 1,

@@ -192,39 +192,44 @@ def get_media_type_distribution(media_count):
 
 def get_status_distribution(user_media):
     """Get status distribution for each media type within date range."""
-    distribution = {}
-    total_completed = 0
-    # Define status order to ensure consistent stacking
-    status_order = list(Status.values)
-
-    for media_type, media_list in user_media.items():
-        status_counts = dict.fromkeys(status_order, 0)
-        model = getattr(media_list, 'model', None)
-        if model and 'status' in [f.name for f in model._meta.get_fields()]:
-            counts = media_list.values("status").annotate(count=models.Count("id"))
-            for count_data in counts:
-                status_counts[count_data["status"]] = count_data["count"]
-                if count_data["status"] == Status.COMPLETED.value:
-                    total_completed += count_data["count"]
-        distribution[media_type] = status_counts
-
-    # Format the response for charting
+    # Nuevo: mostrar total de vistos por tipo
+    media_types = [
+        MediaTypes.TV.value,
+        MediaTypes.YOUTUBE.value,
+        MediaTypes.MOVIE.value,
+        MediaTypes.ANIME.value,
+        MediaTypes.COMIC.value,
+        MediaTypes.BOOK.value,
+    ]
+    data = []
+    labels = []
+    colors = []
+    default_color = "#1976d2"  # Azul sólido (Material Design)
+    for media_type in media_types:
+        queryset = user_media.get(media_type)
+        if queryset is None:
+            count = 0
+        elif media_type in [MediaTypes.TV.value, MediaTypes.YOUTUBE.value]:
+            count = queryset.count()
+        else:
+            model = getattr(queryset, 'model', None)
+            if model and 'status' in [f.name for f in model._meta.get_fields()]:
+                count = queryset.filter(status=Status.COMPLETED.value).count()
+            else:
+                count = queryset.count()
+        labels.append(app_tags.media_type_readable(media_type))
+        data.append(count)
+        colors.append(default_color)
     return {
-        "labels": [app_tags.media_type_readable(x) for x in distribution],
+        "labels": labels,
         "datasets": [
             {
-                "label": status,
-                "data": [
-                    distribution[media_type][status] for media_type in distribution
-                ],
-                "background_color": get_status_color(status),
-                "total": sum(
-                    distribution[media_type][status] for media_type in distribution
-                ),
+                "label": "Vistos",
+                "data": data,
+                "backgroundColor": colors,
             }
-            for status in status_order
         ],
-        "total_completed": total_completed,
+        "total_completed": sum(data),
     }
 
 
@@ -241,14 +246,18 @@ def get_status_pie_chart_data(status_distribution):
         ],
     }
 
-    # Process each status dataset
-    for dataset in status_distribution["datasets"]:
-        status_label = dataset["label"]
-        status_count = dataset["total"]
-        status_color = dataset["background_color"]
-
+    # Adapted: Use the correct structure from get_status_distribution
+    for idx, dataset in enumerate(status_distribution["datasets"]):
+        status_label = dataset.get("label", "")
+        status_count = None
+        status_color = None
+        # dataset["data"] is a list, usually with one value per label
+        if isinstance(dataset.get("data"), list) and len(dataset["data"]) > 0:
+            status_count = dataset["data"][0]
+        if isinstance(dataset.get("backgroundColor"), list) and len(dataset["backgroundColor"]) > 0:
+            status_color = dataset["backgroundColor"][0]
         # Only include statuses with counts > 0
-        if status_count > 0:
+        if status_count and status_count > 0:
             chart_data["labels"].append(status_label)
             chart_data["datasets"][0]["data"].append(status_count)
             chart_data["datasets"][0]["backgroundColor"].append(status_color)

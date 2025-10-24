@@ -1290,7 +1290,7 @@ def statistics(request):
             )
 
     # Get all user media data in a single operation
-    user_media, media_count = stats.get_user_media(
+    user_media, media_count, episodes_watched, total_watch_minutes = stats.get_user_media(
         request.user,
         start_date,
         end_date,
@@ -1309,6 +1309,11 @@ def statistics(request):
 
     activity_data = stats.get_activity_data(request.user, start_date, end_date)
 
+    def format_minutes(minutes):
+        hours = minutes // 60
+        mins = minutes % 60
+        return f"{hours}h {mins:02d}m" if hours else f"{mins}m"
+
     context = {
         "start_date": start_date,
         "end_date": end_date,
@@ -1320,6 +1325,8 @@ def statistics(request):
         "status_distribution": status_distribution,
         "status_pie_chart_data": status_pie_chart_data,
         "timeline": timeline,
+        "episodes_watched": episodes_watched,
+        "total_watch_time": format_minutes(total_watch_minutes),
     }
 
     return render(request, "app/statistics.html", context)

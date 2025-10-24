@@ -175,14 +175,10 @@
           </svg>
         </div>
         <div>
-          <h3 class="text-sm font-medium text-gray-400">Completed Items</h3>
-          {% if media_count.total %}
-            <p class="text-2xl font-bold">
-              {{ status_distribution.total_completed }} <span class="text-gray-500 text-lg">/ {{ media_count.total }}</span>
-            </p>
-          {% else %}
-            <p class="text-2xl font-bold text-gray-500">--</p>
-          {% endif %}
+          <h3 class="text-sm font-medium text-gray-400">Episodes Watched</h3>
+          <p class="text-2xl font-bold">
+            {{ episodes_watched }}
+          </p>
         </div>
       </div>
       <div class="bg-[#2a2f35] rounded-lg p-6 flex items-center">
@@ -203,14 +199,10 @@
           </svg>
         </div>
         <div>
-          <h3 class="text-sm font-medium text-gray-400">Average Rating</h3>
-          {% if score_distribution.total_scored %}
-            <p class="text-2xl font-bold">
-              {{ score_distribution.average_score }} <span class="text-gray-500 text-lg">/ 10</span>
-            </p>
-          {% else %}
-            <p class="text-2xl font-bold text-gray-500">--</p>
-          {% endif %}
+          <h3 class="text-sm font-medium text-gray-400">Total Watch Time</h3>
+          <p class="text-2xl font-bold">
+            {{ total_watch_time }}
+          </p>
         </div>
       </div>
       <div class="bg-[#2a2f35] rounded-lg p-6 flex items-center">
