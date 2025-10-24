@@ -322,12 +322,13 @@
                                 class="px-4 py-2 bg-gray-600 hover:bg-gray-500 text-white rounded-md transition-colors cursor-pointer">
                           Cancel
                         </button>
-                        <button hx-delete="{% url 'delete_youtube_video' video.id %}"
-                                hx-confirm="false"
-                                hx-target="closest .bg-\[#2a2f35\]"
-                                hx-swap="outerHTML swap:0.5s"
-                                @click="confirmDelete = false"
-                                class="px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-md transition-colors cursor-pointer">
+      <button hx-delete="{% url 'delete_youtube_video' video.id %}"
+        hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
+        hx-confirm="false"
+        hx-target="closest .bg-\[#2a2f35\]"
+        hx-swap="outerHTML swap:0.5s"
+        @click="confirmDelete = false"
+        class="px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-md transition-colors cursor-pointer">
                           Delete
                         </button>
                       </div>
