@@ -1,5 +1,16 @@
 # CHANGELOG - RT Fork
 
+## [0.25.10.RT] - 2025-10-24
+
+### ✨ Mejoras
+- Permitir hasta 4 dígitos (9999) en el campo "Season Number" al crear temporadas manualmente.
+  - Se actualizó el modelo, migración y formulario para aceptar valores hasta 9999.
+  - Se corrigió el límite visual y de validación en el frontend (HTML).
+
+---
+
+# CHANGELOG - RT Fork
+
 ## [0.25.9.RT] - 2025-01-24
 
 ### 🐛 Fixes

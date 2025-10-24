@@ -384,7 +384,7 @@ class TvForm(MediaForm):
 class SeasonForm(MediaForm):
     """Form for seasons."""
 
-    season_number = forms.IntegerField(widget=forms.HiddenInput(), required=False)
+    season_number = forms.IntegerField(widget=forms.HiddenInput(), required=False, min_value=1, max_value=9999)
 
     class Meta(MediaForm.Meta):
         """Bind form to model."""
