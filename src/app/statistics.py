@@ -23,8 +23,14 @@ logger = logging.getLogger(__name__)
 
 def get_user_media(user, start_date, end_date):
     """Get all media items and their counts for a user within date range."""
+    def _get_model_name_for_media_type(media_type):
+        # Map YouTube to TV model since they have the same structure
+        if media_type == MediaTypes.YOUTUBE.value:
+            return "tv"
+        return media_type
+
     media_models = [
-        apps.get_model(app_label="app", model_name=media_type)
+        apps.get_model(app_label="app", model_name=_get_model_name_for_media_type(media_type))
         for media_type in user.get_active_media_types()
     ]
     user_media = {}
@@ -518,8 +524,15 @@ def get_filtered_historical_data(start_date, end_date, user):
 
     day_buckets = defaultdict(int)
 
+
     for model_name in historical_models:
-        model = apps.get_model("app", model_name)
+        # Map 'historicalyoutube' to 'historicaltv' to avoid LookupError
+        mapped_model_name = "historicaltv" if model_name == "historicalyoutube" else model_name
+        try:
+            model = apps.get_model("app", mapped_model_name)
+        except LookupError:
+            logger.warning(f"Model {mapped_model_name} not found in app; skipping.")
+            continue
 
         qs = model.objects.filter(history_user_id=user)
 
@@ -531,7 +544,6 @@ def get_filtered_historical_data(start_date, end_date, user):
         # We only need the timestamp, stream results to keep memory usage flat
         for ts in qs.values_list("history_date", flat=True).iterator(chunk_size=2_000):
             aware_ts = timezone.localtime(ts, local_tz)
-
             day_buckets[aware_ts.date()] += 1
 
     combined_data = [

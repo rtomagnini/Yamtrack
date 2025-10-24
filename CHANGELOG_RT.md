@@ -1,4 +1,11 @@
+
 # CHANGELOG - RT Fork
+
+## [0.25.13.RT] - 2025-10-24
+
+### 🐛 Fixes
+- Corrige error en estadísticas: LookupError por modelo 'historicalyoutube'. Ahora se mapea correctamente a 'historicaltv' para evitar el fallo al mostrar estadísticas de YouTube.
+
 
 ## [0.25.12.RT] - 2025-10-24
 
