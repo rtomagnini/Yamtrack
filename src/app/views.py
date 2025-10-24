@@ -166,9 +166,13 @@ def media_list(request, media_type):
         f"{media_type}_sort",
         request.GET.get("sort"),
     )
+    # Si es YouTube y no hay filtro, usar 'Pending' por defecto
+    status_param = request.GET.get("status")
+    if media_type == MediaTypes.YOUTUBE.value and not status_param:
+        status_param = MediaStatusChoices.PENDING
     status_filter = request.user.update_preference(
         f"{media_type}_status",
-        request.GET.get("status"),
+        status_param,
     )
     search_query = request.GET.get("search", "")
     page = request.GET.get("page", 1)
@@ -177,14 +181,30 @@ def media_list(request, media_type):
     if not status_filter:
         status_filter = MediaStatusChoices.ALL
 
-    # Get media list with filters applied
-    media_queryset = BasicMedia.objects.get_media_list(
-        user=request.user,
-        media_type=media_type,
-        status_filter=status_filter,
-        sort_filter=sort_filter,
-        search=search_query,
-    )
+
+    # Soporte para filtro 'Pending' en canales de YouTube
+    if media_type == MediaTypes.YOUTUBE.value and status_filter == MediaStatusChoices.PENDING:
+        # Obtener todos los canales y filtrar los que tengan episodios pendientes
+        all_queryset = BasicMedia.objects.get_media_list(
+            user=request.user,
+            media_type=media_type,
+            status_filter=MediaStatusChoices.ALL,
+            sort_filter=sort_filter,
+            search=search_query,
+        )
+        # Anotar max_progress
+        BasicMedia.objects.annotate_max_progress(all_queryset, media_type)
+        # Filtrar canales con episodios pendientes
+        media_queryset = [media for media in all_queryset if getattr(media, 'progress', 0) < getattr(media, 'max_progress', 0)]
+    else:
+        # Get media list with filters applied
+        media_queryset = BasicMedia.objects.get_media_list(
+            user=request.user,
+            media_type=media_type,
+            status_filter=status_filter,
+            sort_filter=sort_filter,
+            search=search_query,
+        )
 
     # Paginate results
     items_per_page = 32

@@ -1,5 +1,16 @@
 # CHANGELOG - RT Fork
 
+## [0.25.11.RT] - 2025-10-24
+
+### ✨ Mejoras
+- Añadido filtro "Pending" en medialist de YouTube para mostrar solo canales con episodios pendientes.
+- El filtro por defecto en medialist de YouTube ahora es "Pending".
+- Corrección: el filtro "Pending" ya no aparece duplicado.
+
+---
+
+# CHANGELOG - RT Fork
+
 ## [0.25.10.RT] - 2025-10-24
 
 ### ✨ Mejoras

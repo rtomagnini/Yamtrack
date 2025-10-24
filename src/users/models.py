@@ -49,6 +49,7 @@ class MediaStatusChoices(models.TextChoices):
     PLANNING = Status.PLANNING.value, Status.PLANNING.label
     PAUSED = Status.PAUSED.value, Status.PAUSED.label
     DROPPED = Status.DROPPED.value, Status.DROPPED.label
+    PENDING = "Pending", "Pending"
 
 
 class LayoutChoices(models.TextChoices):
