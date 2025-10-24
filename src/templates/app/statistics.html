@@ -587,27 +587,45 @@
   {{ watch_time_timeseries|json_script:"watch_time_timeseries" }}
 
   <script src="{% static 'js/statistics-charts.js' %}{% get_static_file_mtime 'js/statistics-charts.js' %}"></script>
-  <script>
-    document.addEventListener('DOMContentLoaded', function() {
-      const data = JSON.parse(document.getElementById('watch_time_timeseries').textContent);
-      const ctx = document.getElementById('watchTimeLineChart').getContext('2d');
-      new Chart(ctx, {
-        type: 'line',
-        data: data,
-        options: {
-          responsive: true,
-          plugins: {
-            legend: { display: false },
-            title: { display: false },
-            tooltip: { mode: 'index', intersect: false }
-          },
-          interaction: { mode: 'nearest', axis: 'x', intersect: false },
-          scales: {
-            x: { display: true, title: { display: false } },
-            y: { display: true, title: { display: true, text: 'Minutos' } }
-          }
-        }
-      });
-    });
-  </script>
+      <script>
+        document.addEventListener('DOMContentLoaded', function() {
+          const data = JSON.parse(document.getElementById('watch_time_timeseries').textContent);
+          const ctx = document.getElementById('watchTimeLineChart').getContext('2d');
+          new Chart(ctx, {
+            type: 'line',
+            data: data,
+            options: {
+              responsive: true,
+              plugins: {
+                legend: { display: false },
+                title: { display: false },
+                tooltip: {
+                  mode: 'index',
+                  intersect: false,
+                  callbacks: {
+                    label: function(context) {
+                      const value = context.parsed.y;
+                      const hours = Math.floor(value / 60);
+                      const minutes = value % 60;
+                      let label = '';
+                      if (hours > 0) {
+                        label += hours + 'h';
+                      }
+                      if (minutes > 0 || hours === 0) {
+                        label += minutes + 'm';
+                      }
+                      return label;
+                    }
+                  }
+                }
+              },
+              interaction: { mode: 'nearest', axis: 'x', intersect: false },
+              scales: {
+                x: { display: true, title: { display: false } },
+                y: { display: true, title: { display: true, text: 'Minutos' } }
+              }
+            }
+          });
+        });
+      </script>
 {% endblock js %}
