@@ -211,7 +211,10 @@ def get_user_media(user, start_date, end_date):
     for media_type in other_types:
         model = apps.get_model(app_label="app", model_name=media_type)
         if start_date is None and end_date is None:
-            queryset = model.objects.filter(user=user)
+            queryset = model.objects.filter(user=user, end_date__isnull=False)
+        else:
+            queryset = model.objects.filter(user=user, end_date__isnull=False, end_date__range=(start_date, end_date))
+        other_media[media_type] = queryset
 
     # Construir user_media y media_count
     user_media = {}
@@ -550,55 +553,23 @@ def get_timeline(user_media):
     """Build a timeline of media consumption organized by month-year."""
     timeline = defaultdict(list)
 
-    # Process each media type
+    # Incluir todos los tipos, incluyendo episodios de TV
     for media_type, queryset in user_media.items():
-        if media_type == MediaTypes.TV.value:
-            continue
         for media in queryset:
-            # Usar start_date/end_date del objeto o de su item
-            start_date = getattr(media, 'start_date', None)
+            # Usar end_date como referencia principal para timeline
             end_date = getattr(media, 'end_date', None)
-            if start_date is None and hasattr(media, 'item'):
-                start_date = getattr(media.item, 'start_date', None)
             if end_date is None and hasattr(media, 'item'):
                 end_date = getattr(media.item, 'end_date', None)
+            if not end_date:
+                continue  # Solo mostrar consumidos (con end_date)
+            local_end_date = timezone.localdate(end_date)
+            year = local_end_date.year
+            month = local_end_date.month
+            month_name = calendar.month_name[month]
+            month_year = f"{month_name} {year}"
+            timeline[month_year].append(media)
 
-            local_start_date = timezone.localdate(start_date) if start_date else None
-            local_end_date = timezone.localdate(end_date) if end_date else None
-
-            if start_date and end_date:
-                # add media to all months between start and end
-                current_date = local_start_date
-                while current_date <= local_end_date:
-                    year = current_date.year
-                    month = current_date.month
-                    month_name = calendar.month_name[month]
-                    month_year = f"{month_name} {year}"
-
-                    timeline[month_year].append(media)
-
-                    # Move to next month
-                    current_date += relativedelta(months=1)
-                    current_date = current_date.replace(day=1)
-            elif start_date:
-                # If only start date, add to the start month
-                year = local_start_date.year
-                month = local_start_date.month
-                month_name = calendar.month_name[month]
-                month_year = f"{month_name} {year}"
-
-                timeline[month_year].append(media)
-            elif end_date:
-                # If only end date, add to the end month
-                year = local_end_date.year
-                month = local_end_date.month
-                month_name = calendar.month_name[month]
-                month_year = f"{month_name} {year}"
-
-                timeline[month_year].append(media)
-
-    # Convert to sorted dictionary with media sorted by start date
-    # Create a list sorted by year and month in reverse order
+    # Convert to sorted dictionary with media sorted by end_date (más reciente primero)
     sorted_items = []
     for month_year, media_list in timeline.items():
         month_name, year_str = month_year.split()
@@ -609,11 +580,16 @@ def get_timeline(user_media):
     # Sort by year and month in reverse chronological order
     sorted_items.sort(key=lambda x: (x[2], x[3]), reverse=True)
 
-    # Create the final result dictionary
+    # Ordenar cada lista de medios por end_date descendente
+    def end_date_sort_key(media):
+        end_date = getattr(media, 'end_date', None)
+        if end_date is None and hasattr(media, 'item'):
+            end_date = getattr(media.item, 'end_date', None)
+        return end_date or timezone.now()
+
     result = {}
     for month_year, media_list, _, _ in sorted_items:
-        # Sort the media list using our custom sort key
-        result[month_year] = sorted(media_list, key=time_line_sort_key, reverse=True)
+        result[month_year] = sorted(media_list, key=end_date_sort_key, reverse=True)
     return result
 
 
