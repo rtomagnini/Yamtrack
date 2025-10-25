@@ -418,36 +418,40 @@
         {% endif %}
       </div>
 
-      <!-- Score Distribution by Media Type Section -->
+      <!-- Most Watched Shows Section -->
       <div class="bg-[#2a2f35] rounded-lg p-6">
-        <h2 class="text-xl font-semibold mb-4">Score Distribution by Media Type</h2>
-
-        {% if score_distribution.total_scored %}
-          <div class="h-80 flex justify-center items-center">
-            <canvas id="scoreStackedChart"></canvas>
-          </div>
-        {% else %}
-          <div class="flex flex-col items-center justify-center py-16">
-            <div class="bg-[#39404b] rounded-full p-4 w-16 h-16 mx-auto mb-4 flex items-center justify-center">
-              <svg xmlns="http://www.w3.org/2000/svg"
-                   width="24"
-                   height="24"
-                   viewBox="0 0 24 24"
-                   fill="none"
-                   stroke="currentColor"
-                   stroke-width="2"
-                   stroke-linecap="round"
-                   stroke-linejoin="round"
-                   class="w-8 h-8 text-gray-400">
-                <path d="m15.477 12.89 1.515 8.526a.5.5 0 0 1-.81.47l-3.58-2.687a1 1 0 0 0-1.197 0l-3.586 2.686a.5.5 0 0 1-.81-.469l1.514-8.526">
-                </path>
-                <circle cx="12" cy="8" r="6"></circle>
-              </svg>
+        <h2 class="text-xl font-semibold mb-6 text-center text-white">Most Watched Shows</h2>
+        <div class="flex flex-col md:flex-row items-stretch justify-center gap-0 relative">
+          <!-- TV Shows Column -->
+          <div class="flex-1 flex flex-col items-center px-4">
+            <h3 class="text-lg font-bold mb-4 text-white">Top TV Shows</h3>
+            <div class="w-full">
+              {% for show in top_tv_shows %}
+                <div class="flex justify-between items-center py-2 px-2 md:px-4 text-white">
+                  <span class="truncate text-base md:text-lg font-medium">{{ show.title }}</span>
+                  <span class="text-base md:text-lg font-bold">{{ show.count }}</span>
+                </div>
+              {% empty %}
+                <div class="text-center text-white py-8">No TV Shows watched</div>
+              {% endfor %}
             </div>
-            <h3 class="text-lg font-medium mb-2">No ratings yet</h3>
-            <p class="text-gray-400 text-center max-w-md">Rate your media items to see score distribution statistics.</p>
           </div>
-        {% endif %}
+          <!-- Vertical Divider (removed for dark background) -->
+          <!-- YouTube Channels Column -->
+          <div class="flex-1 flex flex-col items-center px-4">
+            <h3 class="text-lg font-bold mb-4 text-white">Top YouTube Channels</h3>
+            <div class="w-full">
+              {% for channel in top_youtube_channels %}
+                <div class="flex justify-between items-center py-2 px-2 md:px-4 text-white">
+                  <span class="truncate text-base md:text-lg font-medium">{{ channel.channel_name }}</span>
+                  <span class="text-base md:text-lg font-bold">{{ channel.count }}</span>
+                </div>
+              {% empty %}
+                <div class="text-center text-white py-8">No YouTube channels watched</div>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 

@@ -1,3 +1,78 @@
+def get_top_tv_shows(user, start_date, end_date, limit=6):
+    """
+    Devuelve los TV Shows con más episodios vistos por el usuario en el periodo filtrado.
+    Agrupa por TV (Season.related_tv) donde source=manual o tmdb, suma episodios vistos.
+    Retorna lista: { 'title': ..., 'count': ..., 'item': ... }
+    """
+    from app.models import Episode, TV
+    from django.db.models import Count
+    filters = {
+        'related_season__related_tv__user': user,
+        'item__media_type': 'episode',
+        'item__source__in': ['tmdb', 'manual'],
+        'end_date__isnull': False,
+    }
+    if start_date:
+        filters['end_date__gte'] = start_date
+    if end_date:
+        filters['end_date__lte'] = end_date
+
+    qs = (
+        Episode.objects.filter(**filters)
+        .values('related_season__related_tv')
+        .annotate(count=Count('id'))
+        .order_by('-count')[:limit]
+    )
+    tv_ids = [row['related_season__related_tv'] for row in qs]
+    tvs = {tv.id: tv for tv in TV.objects.filter(id__in=tv_ids).select_related('item')}
+    result = []
+    for row in qs:
+        tv_obj = tvs.get(row['related_season__related_tv'])
+        if tv_obj:
+            result.append({
+                'title': tv_obj.item.title,
+                'count': row['count'],
+                'item': tv_obj.item,
+            })
+    return result
+
+def get_top_youtube_channels(user, start_date, end_date, limit=6):
+    """
+    Devuelve los canales de YouTube con más episodios vistos por el usuario en el periodo filtrado.
+    Agrupa por TV (Season.related_tv) donde source=youtube, suma episodios vistos.
+    Retorna lista: { 'channel_name': ..., 'count': ..., 'item': ... }
+    """
+    from app.models import Episode, TV
+    from django.db.models import Count
+    filters = {
+        'related_season__related_tv__user': user,
+        'item__media_type': 'episode',
+        'item__source': 'youtube',
+        'end_date__isnull': False,
+    }
+    if start_date:
+        filters['end_date__gte'] = start_date
+    if end_date:
+        filters['end_date__lte'] = end_date
+
+    qs = (
+        Episode.objects.filter(**filters)
+        .values('related_season__related_tv')
+        .annotate(count=Count('id'))
+        .order_by('-count')[:limit]
+    )
+    tv_ids = [row['related_season__related_tv'] for row in qs]
+    tvs = {tv.id: tv for tv in TV.objects.filter(id__in=tv_ids).select_related('item')}
+    result = []
+    for row in qs:
+        tv_obj = tvs.get(row['related_season__related_tv'])
+        if tv_obj:
+            result.append({
+                'channel_name': tv_obj.item.title,
+                'count': row['count'],
+                'item': tv_obj.item,
+            })
+    return result
 def get_watch_time_timeseries(user, start_date, end_date):
     """
     Devuelve el tiempo de visionado (runtime de episodios vistos) agrupado por día, semana o mes.
@@ -111,24 +186,6 @@ def get_user_media(user, start_date, end_date):
         apps.get_model(app_label="app", model_name=_get_model_name_for_media_type(media_type))
         for media_type in user.get_active_media_types()
     ]
-    user_media = {}
-    media_count = {"total": 0}
-
-    # Cache the base episodes query
-    base_episodes = None
-    if TV in media_models or Season in media_models:
-        if start_date is None and end_date is None:
-            # No date filtering for "All Time"
-            base_episodes = Episode.objects.filter(
-                related_season__user=user,
-            )
-        else:
-            base_episodes = Episode.objects.filter(
-                related_season__user=user,
-                end_date__range=(start_date, end_date),
-            )
-
-
 
     # --- Nueva lógica para separar TV Show y YouTube correctamente ---
     # 1. TV Show: Episodios con source TMDB o MANUAL
@@ -155,30 +212,56 @@ def get_user_media(user, start_date, end_date):
         model = apps.get_model(app_label="app", model_name=media_type)
         if start_date is None and end_date is None:
             queryset = model.objects.filter(user=user)
-        else:
-            queryset = model.objects.filter(user=user).filter(
-                (
-                    Q(start_date__isnull=False)
-                    & Q(end_date__isnull=False)
-                    & ~(Q(end_date__lt=start_date) | Q(start_date__gt=end_date))
-                )
-                |
-                (
-                    Q(start_date__isnull=False)
-                    & Q(end_date__isnull=True)
-                    & Q(start_date__gte=start_date)
-                    & Q(start_date__lte=end_date)
-                )
-                |
-                (
-                    Q(start_date__isnull=True)
-                    & Q(end_date__isnull=False)
-                    & Q(end_date__gte=start_date)
-                    & Q(end_date__lte=end_date)
-                ),
-            )
-        queryset = queryset.select_related("item")
-        other_media[media_type] = queryset
+
+    # Construir user_media y media_count
+    user_media = {}
+    media_count = {"total": 0}
+    # Solo episodios de TV vistos (end_date no nulo y en rango)
+    if start_date is None and end_date is None:
+        tv_episodes_watched = tv_episodes.filter(end_date__isnull=False)
+        youtube_episodes_watched = youtube_episodes.filter(end_date__isnull=False)
+    else:
+        tv_episodes_watched = tv_episodes.filter(end_date__isnull=False, end_date__range=(start_date, end_date))
+        youtube_episodes_watched = youtube_episodes.filter(end_date__isnull=False, end_date__range=(start_date, end_date))
+    user_media[MediaTypes.TV.value] = tv_episodes_watched
+    media_count[MediaTypes.TV.value] = tv_episodes_watched.count()
+    user_media[MediaTypes.YOUTUBE.value] = youtube_episodes_watched
+    media_count[MediaTypes.YOUTUBE.value] = youtube_episodes_watched.count()
+    for media_type, queryset in other_media.items():
+        user_media[media_type] = queryset
+        media_count[media_type] = queryset.count()
+    media_count["total"] = sum(media_count[mt] for mt in media_count if mt != "total")
+
+    logger.info(
+        "%s - Retrieved media %s",
+        user,
+        "for all time" if start_date is None else f"from {start_date} to {end_date}",
+    )
+    # Calculate total episodes watched (end_date not null)
+    if start_date is None and end_date is None:
+        watched_episodes = Episode.objects.filter(related_season__user=user, end_date__isnull=False)
+        watched_movies = TV.objects.none()  # placeholder
+        watched_movies_qs = apps.get_model("app", "movie").objects.filter(user=user, end_date__isnull=False)
+    else:
+        watched_episodes = Episode.objects.filter(related_season__user=user, end_date__isnull=False, end_date__range=(start_date, end_date))
+        watched_movies = TV.objects.none()  # placeholder
+        watched_movies_qs = apps.get_model("app", "movie").objects.filter(user=user, end_date__isnull=False, end_date__range=(start_date, end_date))
+
+    episodes_watched = watched_episodes.count()
+
+    # Sum runtime for watched episodes (from related Item)
+    episode_minutes = watched_episodes.select_related("item").aggregate(
+        total=models.Sum("item__runtime")
+    )["total"] or 0
+
+    # Sum runtime for watched movies
+    movie_minutes = watched_movies_qs.select_related("item").aggregate(
+        total=models.Sum("item__runtime")
+    )["total"] or 0
+
+    total_watch_minutes = episode_minutes + movie_minutes
+
+    return user_media, media_count, episodes_watched, total_watch_minutes
 
     # Construir user_media y media_count
     user_media = {}

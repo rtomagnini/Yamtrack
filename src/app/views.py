@@ -1315,6 +1315,10 @@ def statistics(request):
         mins = minutes % 60
         return f"{hours}h {mins:02d}m" if hours else f"{mins}m"
 
+    from app.statistics import get_top_tv_shows, get_top_youtube_channels
+    top_tv_shows = get_top_tv_shows(request.user, start_date, end_date, limit=6)
+    top_youtube_channels = get_top_youtube_channels(request.user, start_date, end_date, limit=6)
+
     context = {
         "start_date": start_date,
         "end_date": end_date,
@@ -1328,6 +1332,8 @@ def statistics(request):
         "timeline": timeline,
         "episodes_watched": episodes_watched,
         "total_watch_time": format_minutes(total_watch_minutes),
+        "top_tv_shows": top_tv_shows,
+        "top_youtube_channels": top_youtube_channels,
     }
 
     return render(request, "app/statistics.html", context)
