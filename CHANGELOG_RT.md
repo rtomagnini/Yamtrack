@@ -1,3 +1,11 @@
+# CHANGELOG - RT Fork
+
+## [0.25.14.RT] - 2025-10-25
+
+### ✨ Mejoras
+- Rediseño de la sección de estadísticas: ahora muestra "Most Watched Shows" en dos columnas (TV Shows y YouTube), agrupando y sumando episodios vistos por cada TV/canal.
+- El fondo de la sección mantiene el estilo oscuro, pero el texto es blanco para mejor integración visual.
+- Corrección de errores de importación y agrupación en el backend de estadísticas.
 
 # CHANGELOG - RT Fork
 
