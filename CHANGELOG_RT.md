@@ -14,6 +14,13 @@
 
 ### ✨ Mejoras
 - Rediseño de la sección de estadísticas: ahora muestra "Most Watched Shows" en dos columnas (TV Shows y YouTube), agrupando y sumando episodios vistos por cada TV/canal.
+## [0.25.16.RT] - 2025-10-26
+
+### ✨ Mejoras
+- Al crear un episodio manual (source = manual) con una YouTube URL, ahora se guarda automáticamente el youtube_video_id en el modelo Item. Esto permite identificar y enlazar episodios manuales con videos de YouTube de forma robusta.
+
+---
+
 - El fondo de la sección mantiene el estilo oscuro, pero el texto es blanco para mejor integración visual.
 - Corrección de errores de importación y agrupación en el backend de estadísticas.
 

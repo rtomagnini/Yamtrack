@@ -207,24 +207,29 @@ class ManualItemForm(forms.ModelForm):
 
     def save(self, commit=True):  # noqa: FBT002
         """Save the form and handle manual media ID generation."""
+        from app.providers import youtube
         # Handle YouTube URL if provided for episodes
         youtube_url = self.cleaned_data.get("youtube_url")
         if youtube_url and self.cleaned_data.get("media_type") == MediaTypes.EPISODE.value:
             # Set the source to Manual for episodes with YouTube URLs (custom episodes)
             self.cleaned_data["source"] = Sources.MANUAL.value
-        
+            # Extraer el video_id y guardarlo en youtube_video_id
+            video_id = youtube.extract_video_id(youtube_url)
+        else:
+            video_id = None
+
         # Handle YouTube Channel URL if provided for YouTube media type
         channel_url = self.cleaned_data.get("channel_url")
         if channel_url and self.cleaned_data.get("media_type") == MediaTypes.YOUTUBE.value:
             # Set the source to YouTube for channels
             self.cleaned_data["source"] = Sources.YOUTUBE.value
-        
+
         # Remove non-model fields from cleaned_data
         if "youtube_url" in self.cleaned_data:
             del self.cleaned_data["youtube_url"]
         if "channel_url" in self.cleaned_data:
             del self.cleaned_data["channel_url"]
-        
+
         instance = super().save(commit=False)
         instance.source = self.cleaned_data.get("source", Sources.MANUAL.value)
 
@@ -235,6 +240,9 @@ class ManualItemForm(forms.ModelForm):
             parent_season = self.cleaned_data["parent_season"]
             instance.media_id = parent_season.item.media_id
             instance.season_number = parent_season.item.season_number
+            # Guardar el youtube_video_id si corresponde
+            if video_id:
+                instance.youtube_video_id = video_id
         elif instance.media_type == MediaTypes.YOUTUBE.value:
             # For YouTube channels, use auto-generated media_id specific to YouTube source
             instance.media_id = Item.generate_next_id(Sources.YOUTUBE.value, instance.media_type)
