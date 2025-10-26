@@ -1,3 +1,13 @@
+
+# CHANGELOG - RT Fork
+
+## [0.25.15.RT] - 2025-10-26
+
+### 🐛 Fixes
+- El webhook de Plex para YouTube ahora asocia correctamente los episodios a la temporada (Season) del canal de YouTube, evitando colisiones con TV Shows manuales o de otros orígenes.
+
+---
+
 # CHANGELOG - RT Fork
 
 ## [0.25.14.RT] - 2025-10-25

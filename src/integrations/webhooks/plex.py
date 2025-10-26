@@ -207,6 +207,7 @@ class PlexWebhookProcessor(BaseWebhookProcessor):
             season_instance = app.models.Season.objects.filter(
                 item__media_id=episode_item.media_id,
                 item__season_number=episode_item.season_number,
+                item__source=app.models.Sources.YOUTUBE.value,
                 user=user,
             ).first()
         except Exception:
