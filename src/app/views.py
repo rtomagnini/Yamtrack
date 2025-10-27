@@ -1262,13 +1262,12 @@ def delete_history_record(request, media_type, history_id):
 @require_GET
 def statistics(request):
     """Return the statistics page."""
-    # Set default date range to last year
+    # Set default date range to today
     timeformat = "%Y-%m-%d"
     today = timezone.localdate()
-    one_year_ago = today.replace(year=today.year - 1)
 
     # Get date parameters with defaults
-    start_date_str = request.GET.get("start-date") or one_year_ago.strftime(timeformat)
+    start_date_str = request.GET.get("start-date") or today.strftime(timeformat)
     end_date_str = request.GET.get("end-date") or today.strftime(timeformat)
 
     if start_date_str == "all" and end_date_str == "all":
