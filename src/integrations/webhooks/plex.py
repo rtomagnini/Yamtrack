@@ -187,27 +187,37 @@ class PlexWebhookProcessor(BaseWebhookProcessor):
             logger.info("No YouTube video ID found in payload (file path, GUIDs, or Plex API)")
             return False
 
-        # Find the matching Item by youtube_video_id
+
+        # Try to find a matching Item by youtube_video_id (YouTube source first, then manual TV Show)
+        episode_item = None
         try:
+            # Try YouTube source first
             episode_item = app.models.Item.objects.filter(
                 source=app.models.Sources.YOUTUBE.value,
                 media_type=app.models.MediaTypes.EPISODE.value,
                 youtube_video_id=video_id,
             ).first()
+            if not episode_item:
+                # Fallback: try manual TV Show with youtube_video_id
+                episode_item = app.models.Item.objects.filter(
+                    source=app.models.Sources.MANUAL.value,
+                    media_type=app.models.MediaTypes.EPISODE.value,
+                    youtube_video_id=video_id,
+                ).first()
         except Exception:
-            logger.exception("DB error while looking up YouTube item")
+            logger.exception("DB error while looking up YouTube or manual TV Show item")
             return False
 
         if not episode_item:
-            logger.info("No local Item found with youtube_video_id=%s", video_id)
+            logger.info("No local Item found with youtube_video_id=%s (YouTube or manual TV Show)", video_id)
             return False
 
-        # Find season instance for this user
+        # Find season instance for this user, using the same source as the episode item
         try:
             season_instance = app.models.Season.objects.filter(
                 item__media_id=episode_item.media_id,
                 item__season_number=episode_item.season_number,
-                item__source=app.models.Sources.YOUTUBE.value,
+                item__source=episode_item.source,
                 user=user,
             ).first()
         except Exception:
@@ -215,7 +225,7 @@ class PlexWebhookProcessor(BaseWebhookProcessor):
             return False
 
         if not season_instance:
-            logger.info("User %s does not track the season for item %s (channel=%s, year=%s)", user, episode_item.media_id, episode_item.media_id, episode_item.season_number)
+            logger.info("User %s does not track the season for item %s (source=%s, year=%s)", user, episode_item.media_id, episode_item.source, episode_item.season_number)
             return False
 
         # Create Episode directly with the specific Item we found
