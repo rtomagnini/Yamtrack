@@ -562,6 +562,10 @@ def get_timeline(user_media):
                 end_date = getattr(media.item, 'end_date', None)
             if not end_date:
                 continue  # Solo mostrar consumidos (con end_date)
+            # --- Añadir runtime al objeto media si no existe ---
+            if not hasattr(media, 'runtime') or media.runtime is None:
+                if hasattr(media, 'item') and hasattr(media.item, 'runtime'):
+                    media.runtime = media.item.runtime
             local_end_date = timezone.localdate(end_date)
             year = local_end_date.year
             month = local_end_date.month

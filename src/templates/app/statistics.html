@@ -279,7 +279,7 @@
           <div class="flex mb-2 pl-[36.68px]">
             {% for month, week_count in activity_data.months %}
               <div class="text-xs text-gray-400"
-                   style="width: calc({{ week_count }} * 1rem + ({{ week_count }} * 0.25rem))">{{ month }}</div>
+                   style="width: calc({{ week_count }} * 1rem + {{ week_count }} * 0.25rem)">{{ month }}</div>
             {% endfor %}
           </div>
 
@@ -474,84 +474,45 @@
       <h2 class="text-xl font-semibold mb-6 md:mb-10">Media Timeline</h2>
 
       {% if timeline %}
-        <div class="relative flex justify-center">
-          <div class="absolute top-0 bottom-0 w-px bg-indigo-500/50 hidden md:block"></div>
-
-          <div class="w-full space-y-10 md:space-y-20">
-            {% for month_year, media_list in timeline.items %}
-              <div class="relative">
-
-                <h3 class="text-lg font-medium text-center md:hidden md:text-left md:absolute md:top-0 md:left-1/2 md:transform md:translate-y-0 md:-translate-x-1/2 md:whitespace-nowrap">
-                  {{ month_year }}
-                </h3>
-
-                <div class="absolute -top-6 left-1/2 transform -translate-x-1/2 z-10 hidden md:block">
-                  <div class="w-3 h-3 rounded-full bg-indigo-500 mx-auto mb-2"></div>
-                  <div class="absolute top-1.5 left-1/2 flex -translate-y-1/2">
-                    {% if forloop.counter|divisibleby:2 %}
-                      {# to the left #}
-                      <div class="h-px w-40 bg-indigo-500/50 transform -translate-x-full"></div>
-                      <div class="absolute -top-7 right-46 whitespace-nowrap">
-                        <h3 class="text-lg font-medium">{{ month_year }}</h3>
+        <div class="w-full space-y-10">
+          {% for month_year, media_list in timeline.items %}
+            <div class="mb-8">
+              <h3 class="text-2xl font-semibold text-center mb-6">{{ month_year }}</h3>
+              <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8 justify-items-center">
+                {% for media in media_list %}
+                  <div class="bg-[#39404b] p-6 rounded-xl hover:ring-2 hover:ring-indigo-500 transition-all duration-200 w-full max-w-[340px] flex flex-col sm:flex-row gap-4 items-center sm:items-start">
+                    <a href="{{ media.item|media_url }}">
+                      <div style="aspect-ratio:16/9; width:100%; max-width:160px;" class="overflow-hidden rounded-lg bg-[#3e454d] flex-shrink-0 mx-auto sm:mx-0">
+                        <img alt="{{ media.item }}"
+                             class="lazyload w-full h-full object-cover hover:opacity-80 transition-opacity"
+                             src="{{ IMG_NONE }}"
+                             data-src="{{ media.item.image }}">
                       </div>
-                    {% else %}
-                      {# to the right #}
-                      <div class="h-px w-40 bg-indigo-500/50"></div>
-                      <div class="absolute -top-7 left-4 whitespace-nowrap">
-                        <h3 class="text-lg font-medium">{{ month_year }}</h3>
+                    </a>
+                    <div class="flex-1 min-w-0 w-full text-center sm:text-left">
+                      <h4 class="font-medium text-lg mb-1 break-words">
+                        <a href="{{ media.item|media_url }}" class="hover:text-indigo-400 transition-colors line-clamp-2 break-words">{{ media.item }}</a>
+                      </h4>
+                      <div class="text-sm text-gray-400 mb-2">
+                        <p class="break-words">
+                          {% if media.start_date %}{{ media.start_date|date_tracker_format }}{% endif %}
+                          {% if media.start_date and media.end_date %}-{% endif %}
+                          {% if media.end_date %}{{ media.end_date|date_tracker_format }}{% endif %}
+                        </p>
+                        {% if media.runtime %}<p class="break-words">- {{ media.runtime }} min</p>{% endif %}
                       </div>
-                    {% endif %}
-                  </div>
-                </div>
-                <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4 md:w-[calc(50%-2rem)] lg:w-[calc(50%-1rem)] {% if forloop.counter|divisibleby:2 %}md:mr-auto md:ml-0{% else %}md:ml-auto md:mr-0{% endif %}">
-                  {% for media in media_list %}
-                    <div class="bg-[#39404b] p-4 rounded-lg hover:ring-2 hover:ring-indigo-500 transition-all duration-200">
-                      <div class="flex items-start gap-4">
-                        <div class="flex-shrink-0 order-0">
-                          <a href="{{ media.item|media_url }}">
-                            <img alt="{{ media.item }}"
-                                 class="lazyload w-16 h-24 rounded-md bg-[#3e454d] {% if media.item.image != IMG_NONE %}object-cover{% endif %} hover:opacity-80 transition-opacity"
-                                 src="{{ IMG_NONE }}"
-                                 data-src="{{ media.item.image }}">
-                          </a>
+                      {% if media.score is not None %}
+                        <div class="flex items-center justify-center sm:justify-start text-sm text-yellow-400 mt-2">
+                          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 mr-1 fill-current"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
+                          <span>{{ media.formatted_score }}</span>
                         </div>
-                        <div class="flex-1 min-w-0">
-                          <h4 class="font-medium">
-                            <a href="{{ media.item|media_url }}"
-                               class="hover:text-indigo-400 transition-colors line-clamp-2">{{ media.item }}</a>
-                          </h4>
-                          <div class="text-sm text-gray-400 mt-1">
-                            <p>
-                              {% if media.start_date %}{{ media.start_date|date_tracker_format }}{% endif %}
-                              {% if media.start_date and media.end_date %}-{% endif %}
-                              {% if media.end_date %}{{ media.end_date|date_tracker_format }}{% endif %}
-                            </p>
-                          </div>
-                          {% if media.score is not None %}
-                            <div class="flex items-center text-sm text-yellow-400 mt-2">
-                              <svg xmlns="http://www.w3.org/2000/svg"
-                                   width="24"
-                                   height="24"
-                                   viewBox="0 0 24 24"
-                                   fill="none"
-                                   stroke="currentColor"
-                                   stroke-width="2"
-                                   stroke-linecap="round"
-                                   stroke-linejoin="round"
-                                   class="w-4 h-4 mr-1 fill-current">
-                                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
-                              </svg>
-                              <span>{{ media.formatted_score }}</span>
-                            </div>
-                          {% endif %}
-                        </div>
-                      </div>
+                      {% endif %}
                     </div>
-                  {% endfor %}
-                </div>
+                  </div>
+                {% endfor %}
               </div>
-            {% endfor %}
-          </div>
+            </div>
+          {% endfor %}
         </div>
       {% else %}
         <div class="flex flex-col items-center justify-center py-16">
