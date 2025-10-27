@@ -62,7 +62,7 @@
         </div>
       </div>
 
-      <div class="flex gap-2 flex-wrap">
+  <div class="flex gap-2 flex-wrap items-center">
         <!-- Filter by Status -->
         <div class="relative" x-data="{ open: false }">
           <button class="flex items-center px-4 py-2 bg-[#39404b] rounded-md hover:bg-[#454d5a] transition-colors cursor-pointer"
@@ -178,8 +178,8 @@
           </div>
         </div>
 
-        <!-- Layout Toggle -->
-        <div class="flex rounded-md overflow-hidden border border-gray-700">
+  <!-- Layout Toggle -->
+  <div class="flex rounded-md overflow-hidden border border-gray-700">
           <a :href="`{% url 'medialist' media_type %}?${search ? 'search=' + search + '&' : ''}${status !== 'all' ? 'status=' + status + '&' : ''}${sort !== 'score' ? 'sort=' + sort + '&' : ''}layout=grid`"
              class="p-2 cursor-pointer"
              :class="layout === 'grid' ? 'bg-indigo-600 text-white' : 'bg-[#39404b] hover:bg-[#454d5a]'"
@@ -220,6 +220,16 @@
             </svg>
           </a>
         </div>
+        <!-- Refresh Button -->
+        <button type="button"
+                class="flex items-center justify-center p-2 bg-[#39404b] rounded-md hover:bg-[#454d5a] transition-colors cursor-pointer ml-2"
+                title="Recargar página"
+                onclick="location.reload()">
+          <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5 text-gray-300">
+            <polyline points="23 4 23 10 17 10"></polyline>
+            <path d="M1 20a11 11 0 0 1 9-10.95 11 11 0 0 1 13 9.95"></path>
+          </svg>
+        </button>
       </div>
     </div>
 
