@@ -151,8 +151,10 @@ MEDIA_TYPE_CONFIG = {
         "text_color": "text-red-500",
         "stats_color": "#ef4444",
         "svg_icon": """
-            <polygon points="6 3 20 12 6 21 6 3"/>
-            <rect width="20" height="14" x="2" y="5" rx="2"/>""",
+            <rect x='2' y='5' width='20' height='14' rx='3' fill='currentColor' fill-opacity='0.15'/>
+            <polygon points='10 9 16 12 10 15 10 9' fill='currentColor'/>
+            <rect x='2' y='5' width='20' height='14' rx='3' stroke='currentColor' stroke-width='2' fill='none'/>
+        """,
         "unit": ("V", "Video"),
         "date_key": "publish_date",
     },
@@ -165,8 +167,10 @@ MEDIA_TYPE_CONFIG = {
         "text_color": "text-red-400",
         "stats_color": "#f87171",
         "svg_icon": """
-            <polygon points="6 3 20 12 6 21 6 3"/>
-            <circle cx="12" cy="12" r="2"/>""",
+            <circle cx='12' cy='12' r='9' fill='currentColor' fill-opacity='0.15'/>
+            <polygon points='11 9 16 12 11 15 11 9' fill='currentColor'/>
+            <circle cx='12' cy='12' r='9' stroke='currentColor' stroke-width='2' fill='none'/>
+        """,
         "unit": ("V", "Video"),
         "date_key": "air_date",
     },
