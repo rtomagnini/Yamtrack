@@ -1,20 +1,5 @@
 
-# CHANGELOG - RT Fork
-
-## [0.25.15.RT] - 2025-10-26
-
-### 🐛 Fixes
-- El webhook de Plex para YouTube ahora asocia correctamente los episodios a la temporada (Season) del canal de YouTube, evitando colisiones con TV Shows manuales o de otros orígenes.
-
----
-
-# CHANGELOG - RT Fork
-
-## [0.25.14.RT] - 2025-10-25
-
-### ✨ Mejoras
-- Rediseño de la sección de estadísticas: ahora muestra "Most Watched Shows" en dos columnas (TV Shows y YouTube), agrupando y sumando episodios vistos por cada TV/canal.
-
+## CHANGELOG - RT Fork
 
 ## [0.25.17.RT] - 2025-10-27
 
@@ -28,56 +13,55 @@
 
 ## [0.25.16.RT] - 2025-10-26
 
-### ✨ Mejoras
-- Al crear un episodio manual (source = manual) con una YouTube URL, ahora se guarda automáticamente el youtube_video_id en el modelo Item. Esto permite identificar y enlazar episodios manuales con videos de YouTube de forma robusta.
+### ✨ Improvements
+- When creating a manual episode (source = manual) with a YouTube URL, the youtube_video_id is now automatically saved in the Item model. This allows robust identification and linking of manual episodes with YouTube videos.
 
 ---
 
-- El fondo de la sección mantiene el estilo oscuro, pero el texto es blanco para mejor integración visual.
-- Corrección de errores de importación y agrupación en el backend de estadísticas.
+- The section background remains dark style, but text is white for better visual integration.
+- Fixed import and grouping errors in statistics backend.
 
-# CHANGELOG - RT Fork
+## [0.25.15.RT] - 2025-10-26
+
+### 🐛 Fixes
+- Plex webhook for YouTube now correctly associates episodes to the Season of the YouTube channel, avoiding collisions with manual TV Shows or other sources.
+
+---
+
+## [0.25.14.RT] - 2025-10-25
+
+### ✨ Improvements
+- Redesigned statistics section: now shows "Most Watched Shows" in two columns (TV Shows and YouTube), grouping and summing episodes watched per TV/channel.
 
 ## [0.25.13.RT] - 2025-10-24
 
 ### 🐛 Fixes
-- Corrige error en estadísticas: LookupError por modelo 'historicalyoutube'. Ahora se mapea correctamente a 'historicaltv' para evitar el fallo al mostrar estadísticas de YouTube.
-
+- Fixed statistics error: LookupError for model 'historicalyoutube'. Now correctly maps to 'historicaltv' to avoid failure when displaying YouTube statistics.
 
 ## [0.25.12.RT] - 2025-10-24
 
-### ✨ Mejoras
-- Los episodios en la vista de detalles de canal de YouTube ahora se ordenan por número de episodio (ascendente o descendente según filtro).
+### ✨ Improvements
+- Episodes in the YouTube channel details view are now sorted by episode number (ascending or descending according to filter).
 
 ---
-
-# CHANGELOG - RT Fork
 
 ## [0.25.11.RT] - 2025-10-24
 
-### ✨ Mejoras
-- Añadido filtro "Pending" en medialist de YouTube para mostrar solo canales con episodios pendientes.
-- El filtro por defecto en medialist de YouTube ahora es "Pending".
-- Corrección: el filtro "Pending" ya no aparece duplicado.
+### ✨ Improvements
+- Added "Pending" filter in YouTube medialist to show only channels with pending episodes.
+- The default filter in YouTube medialist is now "Pending".
+- Fix: the "Pending" filter no longer appears duplicated.
 
 ---
-
-# CHANGELOG - RT Fork
 
 ## [0.25.10.RT] - 2025-10-24
 
-### ✨ Mejoras
-- Permitir hasta 4 dígitos (9999) en el campo "Season Number" al crear temporadas manualmente.
-  - Se actualizó el modelo, migración y formulario para aceptar valores hasta 9999.
-  - Se corrigió el límite visual y de validación en el frontend (HTML).
+### ✨ Improvements
+- Allow up to 4 digits (9999) in the "Season Number" field when creating manual seasons.
+  - Model, migration, and form updated to accept values up to 9999.
+  - Visual and validation limits fixed in the frontend (HTML).
 
 ---
-
-# CHANGELOG - RT Fork
-
-## [0.25.9.RT] - 2025-01-24
-
-### 🐛 Fixes
 - fix(youtube): Fix delete button not working and remove custom lists button for YouTube videos.
   - Fixed HTML structure in media_details.html (incorrect div closing).
   - Removed "Add to custom lists" button for YouTube videos (only show for other media types).
