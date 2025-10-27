@@ -1,3 +1,12 @@
+## [0.25.18.RT] - 2025-10-27
+## [0.25.18.RT] - 2025-10-27
+
+### ✨ Improvements & Fixes
+- Fix: YouTube episode creation now always calculates the next episode_number before creating the Item, preventing unique constraint errors.
+- UI: Updated YouTube and YouTube Video icons for the sidebar and creation UI.
+- UI: Added a refresh icon button to the top search bar and unified the style of the "Watch Time Over Time" chart with the "Status Distribution" chart.
+- UI: Added a refresh button to the main layout and improved layout toggle controls.
+
 
 ## CHANGELOG - RT Fork
 
