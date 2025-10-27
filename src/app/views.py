@@ -906,33 +906,31 @@ def handle_youtube_video_creation(request, form):
             messages.info(request, f"El video '{existing_video.title}' ya existe en {channel_item.title}.")
             return redirect("youtube_channel_details", source=channel_item.source, media_id=channel_item.media_id, title=channel_item.title)
 
-    episode_item = Item.objects.create(
-        media_id=channel_item.media_id,
-        source=Sources.YOUTUBE.value,
-        media_type=MediaTypes.EPISODE.value,
-        season_number=video_year,
-        episode_number=1,  # We'll update this to be the next available episode number
-        title=video_metadata.get("title", "Unknown Video"),
-        image=video_metadata.get("thumbnail", ""),
-        air_date=published_date,
-        runtime=video_metadata.get("duration_minutes", 0),
-        youtube_video_id=(video_id if video_id else None),
-    )
-    
-    # Get next episode number for this season
+    # Get next episode number for this season BEFORE creating the Item
     latest_episode = Item.objects.filter(
         media_id=channel_item.media_id,
         source=Sources.YOUTUBE.value,
         media_type=MediaTypes.EPISODE.value,
         season_number=video_year,
     ).order_by('-episode_number').first()
-    
+
     if latest_episode:
-        episode_item.episode_number = latest_episode.episode_number + 1
+        next_episode_number = latest_episode.episode_number + 1
     else:
-        episode_item.episode_number = 1
-    
-    episode_item.save()
+        next_episode_number = 1
+
+    episode_item = Item.objects.create(
+        media_id=channel_item.media_id,
+        source=Sources.YOUTUBE.value,
+        media_type=MediaTypes.EPISODE.value,
+        season_number=video_year,
+        episode_number=next_episode_number,
+        title=video_metadata.get("title", "Unknown Video"),
+        image=video_metadata.get("thumbnail", ""),
+        air_date=published_date,
+        runtime=video_metadata.get("duration_minutes", 0),
+        youtube_video_id=(video_id if video_id else None),
+    )
     
     # Don't create Episode instance automatically - let user mark as watched manually
     
