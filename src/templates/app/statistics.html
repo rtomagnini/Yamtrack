@@ -470,19 +470,19 @@
     </div>
 
     <!-- Media Timeline Section -->
-    <div class="bg-[#2a2f35] rounded-lg p-6 max-w-[calc(100svw-4rem)]">
+    <div class="bg-[#2a2f35] rounded-lg p-6">
       <h2 class="text-xl font-semibold mb-6 md:mb-10">Media Timeline</h2>
 
       {% if timeline %}
-        <div class="w-full space-y-10">
+        <div class="w-full">
           {% for month_year, media_list in timeline.items %}
             <div class="mb-8">
               <h3 class="text-2xl font-semibold text-center mb-6">{{ month_year }}</h3>
-              <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8 justify-items-center">
+              <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-8 w-full">
                 {% for media in media_list %}
-                  <div class="bg-[#39404b] p-6 rounded-xl hover:ring-2 hover:ring-indigo-500 transition-all duration-200 w-full max-w-[340px] flex flex-col sm:flex-row gap-4 items-center sm:items-start">
-                    <a href="{{ media.item|media_url }}">
-                      <div style="aspect-ratio:16/9; width:100%; max-width:160px;" class="overflow-hidden rounded-lg bg-[#3e454d] flex-shrink-0 mx-auto sm:mx-0">
+                  <div class="bg-[#39404b] p-6 rounded-xl hover:ring-2 hover:ring-indigo-500 transition-all duration-200 w-full flex flex-col sm:flex-row gap-4 items-center sm:items-start">
+                    <a href="{{ media.item|media_url }}" class="w-full sm:w-auto">
+                      <div style="aspect-ratio:16/9; width:100%; max-width:220px;" class="overflow-hidden rounded-lg bg-[#3e454d] flex-shrink-0 mx-auto sm:mx-0">
                         <img alt="{{ media.item }}"
                              class="lazyload w-full h-full object-cover hover:opacity-80 transition-opacity"
                              src="{{ IMG_NONE }}"
