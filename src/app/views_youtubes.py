@@ -1,0 +1,61 @@
+from django.shortcuts import render
+from django.db.models import Q, OuterRef, Exists, Subquery, Value, CharField
+from app.models import Item, TV, Season, Episode, Sources, MediaTypes
+from django.views.decorators.http import require_GET
+
+@require_GET
+def youtubes_view(request):
+    search = request.GET.get('search', '').strip()
+    filter_status = request.GET.get('status', 'unwatched')
+    sort = request.GET.get('sort', 'air_date')
+
+    # Base queryset: Items that are YouTube videos
+    qs = Item.objects.filter(source=Sources.YOUTUBE.value, media_type=MediaTypes.EPISODE.value)
+
+    # Annotate with whether watched (has Episode with end_date)
+    qs = qs.annotate(
+        is_watched=Exists(
+            Episode.objects.filter(item=OuterRef('pk'), end_date__isnull=False)
+        ),
+        end_date_sub=Episode.objects.filter(item=OuterRef('pk'), end_date__isnull=False).values('end_date')[:1]
+    )
+
+    # Search by title
+    if search:
+        qs = qs.filter(title__icontains=search)
+
+    # Filter by watched/unwatched
+    if filter_status == 'watched':
+        qs = qs.filter(is_watched=True)
+    elif filter_status == 'unwatched':
+        qs = qs.filter(is_watched=False)
+    # else 'all': no filter
+
+    # Sorting
+    if sort == 'title':
+        qs = qs.order_by('title')
+    elif sort == 'runtime':
+        qs = qs.order_by('runtime')
+    elif sort == 'end_date':
+        qs = qs.order_by('end_date_sub')
+    else:  # default to air_date
+        qs = qs.order_by('-air_date')
+
+
+    # Annotate with channel (TV) name by joining through Season
+    season_qs = Season.objects.filter(
+        item__media_id=OuterRef('media_id'),
+        item__source=OuterRef('source'),
+        item__media_type=MediaTypes.SEASON.value,
+        item__season_number=OuterRef('season_number'),
+    )
+    tv_title_qs = season_qs.filter(related_tv__isnull=False).values('related_tv__item__title')[:1]
+    qs = qs.annotate(channel_name=Subquery(tv_title_qs, output_field=CharField()))
+
+    context = {
+        'videos': qs,
+        'search': search,
+        'current_status': filter_status,
+        'current_sort': sort,
+    }
+    return render(request, 'app/youtubes_list.html', context)

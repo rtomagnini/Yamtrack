@@ -1,3 +1,11 @@
+
+## [0.25.19.RT] - 2025-10-27
+
+### ✨ UI Improvements
+- YouTube Videos view: Search box and filter/sort comboboxes now perfectly aligned for a cleaner look.
+- Removed visible labels from filter/sort comboboxes and added icons for a modern, compact UI (matching the style of other search bars in the app).
+
+---
 ## [0.25.18.RT] - 2025-10-27
 ## [0.25.18.RT] - 2025-10-27
 

@@ -7,6 +7,7 @@ register_converter(converters.SourceChecker, "source")
 
 
 urlpatterns = [
+    path("youtubes", __import__('app.views_youtubes').views_youtubes.youtubes_view, name="youtubes"),
     path("", views.home, name="home"),
     path("medialist/<media_type:media_type>", views.media_list, name="medialist"),
     path("search", views.media_search, name="search"),

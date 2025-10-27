@@ -91,6 +91,13 @@
                   </a>
                 </li>
               {% endfor %}
+              <li>
+                <a href="{% url 'youtubes' %}"
+                   class="flex items-center space-x-3 px-4 py-2 rounded-md transition-colors duration-200 text-sm {% if request.path|str_equals:'/youtubes' %}text-white bg-[#2c3136]{% else %}text-gray-400 hover:text-white hover:bg-[#23272b]{% endif %}">
+                  {% icon 'youtube' is_active=request.path|str_equals:'/youtubes' %}
+                  <span>Youtubes</span>
+                </a>
+              </li>
             </ul>
 
             <div class="border-t border-[#2c3136] pt-4">
@@ -233,7 +240,7 @@
                       <button type="button"
                               @click="isOpen = !isOpen"
                               @click.away="isOpen = false"
-                              class="flex items-center justify-between max-w-[110px] sm:max-w-none sm:w-32 px-2 sm:px-4 py-2 text-sm text-gray-300 bg-[#272c31] rounded-r-md focus:outline-none focus:ring-2 focus:ring-[#4a9eff] focus:ring-inset hover:bg-[#2a2e33] transition-colors duration-200 cursor-pointer">
+                              class="flex items-center justify-between max-w-[180px] sm:max-w-none sm:w-44 px-2 sm:px-4 py-2 text-sm text-gray-300 bg-[#272c31] rounded-r-md focus:outline-none focus:ring-2 focus:ring-[#4a9eff] focus:ring-inset hover:bg-[#2a2e33] transition-colors duration-200 cursor-pointer">
                         <span class="truncate sm:whitespace-normal" x-text="selectedType.display"></span>
                         <svg class="w-4 h-4 ml-2"
                              fill="none"
