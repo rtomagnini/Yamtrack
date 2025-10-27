@@ -14,6 +14,18 @@
 
 ### ✨ Mejoras
 - Rediseño de la sección de estadísticas: ahora muestra "Most Watched Shows" en dos columnas (TV Shows y YouTube), agrupando y sumando episodios vistos por cada TV/canal.
+
+
+## [0.25.17.RT] - 2025-10-27
+
+### ✨ Improvements
+- Plex webhook: Adds fallback logic to mark manual TV Show episodes as watched using youtube_video_id if no match is found by standard IDs. This improves integration for manually tracked TV Shows with YouTube videos.
+- Media Timeline: Improved grid layout to always show 3 cards per row on desktop, removed width restrictions, and enhanced responsive design for mobile/desktop.
+- Media Timeline: Cards now display runtime, use correct thumbnail aspect ratios (16:9 for TV/YouTube, 2:3 for Movies), and overall visual improvements.
+- Statistics view: Default combobox value changed to show today's data.
+
+---
+
 ## [0.25.16.RT] - 2025-10-26
 
 ### ✨ Mejoras
