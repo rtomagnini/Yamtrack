@@ -1,6 +1,7 @@
 
 
-## [Unreleased]
+
+## [0.25.21.RT] - 2025-10-28
 
 ### 🛠 Statistics Page Improvements
 - "Most Watched Shows" section now uses tables with visible lines for both TV Shows and YouTube Channels, matching the style of "Status Distribution by Media Type".
@@ -8,7 +9,6 @@
 - The "Watch Time Over Time" chart is always grouped by days (no more week/month grouping).
 - Removed values inside the bars for a cleaner look.
 - Added a visible y-axis scale on the left, showing tick labels in hours (1h, 2h, 3h, ...).
-
 - Replaced the "Status Distribution" pie chart with a new "Watch Time Distribution" pie chart, showing the percentage of total watch time by type (TV Show, YouTube, Movies).
 - Pie chart labels inside the chart now show only the name and percent (e.g., YouTube 55%).
 - The legend below the chart now shows only the name and total time in hours/minutes (e.g., TV Show (3h14m)), for a cleaner look.
