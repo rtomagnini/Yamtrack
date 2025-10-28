@@ -1,3 +1,11 @@
+
+## 0.25.XY.RT - 2025-10-28
+
+### ✨ Youtube Card Redesign
+- Youtube video cards now display the channel logo (from TV) instead of the channel name label.
+- "Air Date" and "Runtime" labels are now bold for improved readability.
+- "End Date" is only shown if it exists for the video.
+
 ## 0.25.XX.RT
 
 - Filtros de Youtube rediseñados: ahora usan menús con iconos y funcionan con htmx, igual que en medialist.

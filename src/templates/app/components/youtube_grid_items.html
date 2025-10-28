@@ -5,10 +5,18 @@
     </div>
     <div class="p-4 flex-1 flex flex-col">
       <div class="font-semibold text-lg mb-1">{{ video.title }}</div>
-      <div class="text-sm text-gray-400 mb-2">Channel: {{ video.channel_name|default:'—' }}</div>
-      <div class="text-xs text-gray-400 mb-1">Air date: {{ video.air_date|date:'Y-m-d' }}</div>
-      <div class="text-xs text-gray-400 mb-1">Runtime: {{ video.runtime|default:'—' }}</div>
-      <div class="text-xs text-gray-400">End date: {{ video.end_date_sub|default:'—' }}</div>
+      <div class="flex items-center mb-2">
+        {% if video.channel_image %}
+          <img src="{{ video.channel_image }}" alt="{{ video.channel_name }}" class="w-8 h-8 rounded-full mr-2 border border-gray-700 bg-[#222] object-cover" loading="lazy" />
+        {% else %}
+          <span class="text-sm text-gray-400">—</span>
+        {% endif %}
+      </div>
+      <div class="text-xs text-gray-400 mb-1"><span class="font-bold">Air date:</span> {{ video.air_date|date:'Y-m-d' }}</div>
+      <div class="text-xs text-gray-400 mb-1"><span class="font-bold">Runtime:</span> {{ video.runtime|default:'—' }}</div>
+      {% if video.end_date_sub %}
+        <div class="text-xs text-gray-400"><span class="font-bold">End date:</span> {{ video.end_date_sub }}</div>
+      {% endif %}
     </div>
   </div>
 {% empty %}

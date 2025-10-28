@@ -42,7 +42,7 @@ def youtubes_view(request):
         qs = qs.order_by('-air_date')
 
 
-    # Annotate with channel (TV) name by joining through Season
+    # Annotate with channel (TV) name and image (logo) by joining through Season
     season_qs = Season.objects.filter(
         item__media_id=OuterRef('media_id'),
         item__source=OuterRef('source'),
@@ -50,7 +50,11 @@ def youtubes_view(request):
         item__season_number=OuterRef('season_number'),
     )
     tv_title_qs = season_qs.filter(related_tv__isnull=False).values('related_tv__item__title')[:1]
-    qs = qs.annotate(channel_name=Subquery(tv_title_qs, output_field=CharField()))
+    tv_image_qs = season_qs.filter(related_tv__isnull=False).values('related_tv__item__image')[:1]
+    qs = qs.annotate(
+        channel_name=Subquery(tv_title_qs, output_field=CharField()),
+        channel_image=Subquery(tv_image_qs, output_field=CharField()),
+    )
 
     context = {
         'videos': qs,
