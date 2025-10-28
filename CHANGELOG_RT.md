@@ -1,3 +1,9 @@
+## 0.25.XX.RT
+
+- Filtros de Youtube rediseñados: ahora usan menús con iconos y funcionan con htmx, igual que en medialist.
+- Corrección de problemas de doble acción: los filtros y la búsqueda aplican el cambio al primer clic.
+- Refactor: el grid de vídeos se actualiza por fragmento parcial para soporte htmx eficiente.
+
 
 ## [0.25.19.RT] - 2025-10-27
 

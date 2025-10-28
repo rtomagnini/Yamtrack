@@ -58,4 +58,6 @@ def youtubes_view(request):
         'current_status': filter_status,
         'current_sort': sort,
     }
+    if request.headers.get('HX-Request'):
+        return render(request, 'app/components/youtube_grid_items.html', context)
     return render(request, 'app/youtubes_list.html', context)

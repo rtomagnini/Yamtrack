@@ -5,52 +5,87 @@
 
 {% block content %}
 <h1 class="text-3xl font-bold mb-6">Youtubes</h1>
-<div x-data="{ search: '{{ search }}', status: '{{ current_status }}', sort: '{{ current_sort }}' }">
-  <form method="get" class="flex flex-col md:flex-row gap-4 mb-6 items-end">
-    <div class="flex-1">
-      <label for="search" class="sr-only"></label>
-      <input id="search" type="text" name="search" x-model="search" placeholder="Search videos..." autocomplete="on" class="w-full py-2 px-4 bg-[#39404b] rounded-md text-white focus:outline-none focus:ring-2 focus:ring-[#4a9eff]" />
-    </div>
-    <div class="flex items-center">
-      <span class="mr-1 text-gray-400">
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707l-6.414 6.414A1 1 0 0013 13.414V19a1 1 0 01-1.447.894l-2-1A1 1 0 019 18v-4.586a1 1 0 00-.293-.707L2.293 6.707A1 1 0 012 6V4z" /></svg>
-      </span>
-      <select name="status" x-model="status" class="py-2 px-3 rounded-md bg-[#39404b] text-white" onchange="this.form.submit()">
-        <option value="all">All</option>
-        <option value="watched">Watched</option>
-        <option value="unwatched">Unwatched</option>
-      </select>
-    </div>
-    <div class="flex items-center">
-      <span class="mr-1 text-gray-400">
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 17l-4 4m0 0l-4-4m4 4V3" /></svg>
-      </span>
-      <select name="sort" x-model="sort" class="py-2 px-3 rounded-md bg-[#39404b] text-white" onchange="this.form.submit()">
-        <option value="title">Title</option>
-        <option value="air_date">Air date</option>
-        <option value="runtime">Runtime</option>
-        <option value="end_date">End date</option>
-      </select>
-    </div>
-  </form>
 
-  <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-    {% for video in videos %}
-      <div class="bg-[#2a2f35] rounded-lg overflow-hidden shadow-lg flex flex-col">
-        <div class="relative aspect-video bg-[#3e454d]">
-          <img alt="{{ video.title }}" class="w-full h-full object-cover" src="{{ video.image }}" loading="lazy" />
-        </div>
-        <div class="p-4 flex-1 flex flex-col">
-          <div class="font-semibold text-lg mb-1">{{ video.title }}</div>
-          <div class="text-sm text-gray-400 mb-2">Channel: {{ video.channel_name|default:'—' }}</div>
-          <div class="text-xs text-gray-400 mb-1">Air date: {{ video.air_date|date:'Y-m-d' }}</div>
-          <div class="text-xs text-gray-400 mb-1">Runtime: {{ video.runtime|default:'—' }}</div>
-          <div class="text-xs text-gray-400">End date: {{ video.end_date_sub|default:'—' }}</div>
-        </div>
+<div x-data="{ search: '{{ search }}', status: '{{ current_status }}', sort: '{{ current_sort }}', statusLabels: { all: 'All', watched: 'Watched', unwatched: 'Unwatched' }, sortLabels: { title: 'Title', air_date: 'Air date', runtime: 'Runtime', end_date: 'End date' }, openStatus: false, openSort: false }">
+  <form id="youtube-filter-form" x-ref="filterForm" class="hidden"
+    hx-get="{% url 'youtubes' %}"
+    hx-target="#youtube-grid"
+    hx-include="#youtube-filter-form"
+    hx-trigger="change, submit">
+    <input type="hidden" name="search" x-model="search">
+    <input type="hidden" name="status" x-model="status">
+    <input type="hidden" name="sort" x-model="sort">
+  </form>
+  <div class="flex flex-col md:flex-row gap-4 mb-6 items-end">
+    <div class="flex-1 relative">
+      <input id="search" type="text" name="search" x-model="search" placeholder="Search videos..." autocomplete="on"
+        class="w-full py-2 pl-10 pr-4 bg-[#39404b] rounded-md text-white focus:outline-none focus:ring-2 focus:ring-[#4a9eff]"
+        @input="$nextTick(() => $refs.filterForm.requestSubmit())"
+        hx-indicator="#youtube-search-indicator">
+      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400">
+        <circle cx="11" cy="11" r="8"></circle>
+        <path d="m21 21-4.3-4.3"></path>
+      </svg>
+      <div id="youtube-search-indicator" class="htmx-indicator absolute right-3 top-1/2 transform -translate-y-1/2">
+        <div class="animate-spin rounded-full h-4 w-4 border-b-2 border-indigo-500"></div>
       </div>
-    {% empty %}
-      <div class="col-span-full text-center text-gray-400 py-12">No videos found.</div>
-    {% endfor %}
+    </div>
+    <!-- Status Filter Dropdown -->
+    <div class="relative" x-data="{ open: false }">
+      <button type="button" class="flex items-center px-4 py-2 bg-[#39404b] rounded-md hover:bg-[#454d5a] transition-colors cursor-pointer" @click="open = !open">
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 mr-2">
+          <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
+        </svg>
+        <span x-text="statusLabels[status] || status"></span>
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 ml-2">
+          <path d="m6 9 6 6 6-6"></path>
+        </svg>
+      </button>
+      <div class="absolute z-10 mt-2 py-1 w-40 bg-[#39404b] rounded-md shadow-lg overflow-hidden border border-gray-700"
+        x-cloak x-show="open" @click.outside="open = false"
+        x-transition:enter="transition ease-out duration-100"
+        x-transition:enter-start="transform opacity-0 scale-95"
+        x-transition:enter-end="transform opacity-100 scale-100"
+        x-transition:leave="transition ease-in duration-75"
+        x-transition:leave-start="transform opacity-100 scale-100"
+        x-transition:leave-end="transform opacity-0 scale-95">
+  <button class="block w-full px-4 py-2 text-left text-sm transition-colors cursor-pointer" :class="status === 'all' ? 'bg-indigo-600 text-white font-medium' : 'text-gray-300 hover:bg-[#454d5a] hover:text-white'" @click="status = 'all'; open = false; $nextTick(() => $refs.filterForm.requestSubmit())" type="button">All</button>
+  <button class="block w-full px-4 py-2 text-left text-sm transition-colors cursor-pointer" :class="status === 'watched' ? 'bg-indigo-600 text-white font-medium' : 'text-gray-300 hover:bg-[#454d5a] hover:text-white'" @click="status = 'watched'; open = false; $nextTick(() => $refs.filterForm.requestSubmit())" type="button">Watched</button>
+  <button class="block w-full px-4 py-2 text-left text-sm transition-colors cursor-pointer" :class="status === 'unwatched' ? 'bg-indigo-600 text-white font-medium' : 'text-gray-300 hover:bg-[#454d5a] hover:text-white'" @click="status = 'unwatched'; open = false; $nextTick(() => $refs.filterForm.requestSubmit())" type="button">Unwatched</button>
+      </div>
+    </div>
+    <!-- Sort Dropdown -->
+    <div class="relative" x-data="{ open: false }">
+      <button type="button" class="flex items-center px-4 py-2 bg-[#39404b] rounded-md hover:bg-[#454d5a] transition-colors cursor-pointer" @click="open = !open">
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 mr-2">
+          <path d="m21 16-4 4-4-4"></path>
+          <path d="M17 20V4"></path>
+          <path d="m3 8 4-4 4 4"></path>
+          <path d="M7 4v16"></path>
+        </svg>
+        <span x-text="sortLabels[sort] || sort"></span>
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 ml-2">
+          <path d="m6 9 6 6 6-6"></path>
+        </svg>
+      </button>
+      <div class="absolute z-10 mt-2 py-1 w-40 bg-[#39404b] rounded-md shadow-lg overflow-hidden border border-gray-700"
+        x-cloak x-show="open" @click.outside="open = false"
+        x-transition:enter="transition ease-out duration-100"
+        x-transition:enter-start="transform opacity-0 scale-95"
+        x-transition:enter-end="transform opacity-100 scale-100"
+        x-transition:leave="transition ease-in duration-75"
+        x-transition:leave-start="transform opacity-100 scale-100"
+        x-transition:leave-end="transform opacity-0 scale-95">
+  <button class="block w-full px-4 py-2 text-left text-sm transition-colors cursor-pointer" :class="sort === 'title' ? 'bg-indigo-600 text-white font-medium' : 'text-gray-300 hover:bg-[#454d5a] hover:text-white'" @click="sort = 'title'; open = false; $nextTick(() => $refs.filterForm.requestSubmit())" type="button">Title</button>
+  <button class="block w-full px-4 py-2 text-left text-sm transition-colors cursor-pointer" :class="sort === 'air_date' ? 'bg-indigo-600 text-white font-medium' : 'text-gray-300 hover:bg-[#454d5a] hover:text-white'" @click="sort = 'air_date'; open = false; $nextTick(() => $refs.filterForm.requestSubmit())" type="button">Air date</button>
+  <button class="block w-full px-4 py-2 text-left text-sm transition-colors cursor-pointer" :class="sort === 'runtime' ? 'bg-indigo-600 text-white font-medium' : 'text-gray-300 hover:bg-[#454d5a] hover:text-white'" @click="sort = 'runtime'; open = false; $nextTick(() => $refs.filterForm.requestSubmit())" type="button">Runtime</button>
+  <button class="block w-full px-4 py-2 text-left text-sm transition-colors cursor-pointer" :class="sort === 'end_date' ? 'bg-indigo-600 text-white font-medium' : 'text-gray-300 hover:bg-[#454d5a] hover:text-white'" @click="sort = 'end_date'; open = false; $nextTick(() => $refs.filterForm.requestSubmit())" type="button">End date</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="youtube-grid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+    {% include "app/components/youtube_grid_items.html" %}
   </div>
 </div>
 {% endblock %}

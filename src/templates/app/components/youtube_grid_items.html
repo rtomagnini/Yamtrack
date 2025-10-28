@@ -1,0 +1,16 @@
+{% for video in videos %}
+  <div class="bg-[#2a2f35] rounded-lg overflow-hidden shadow-lg flex flex-col">
+    <div class="relative aspect-video bg-[#3e454d]">
+      <img alt="{{ video.title }}" class="w-full h-full object-cover" src="{{ video.image }}" loading="lazy" />
+    </div>
+    <div class="p-4 flex-1 flex flex-col">
+      <div class="font-semibold text-lg mb-1">{{ video.title }}</div>
+      <div class="text-sm text-gray-400 mb-2">Channel: {{ video.channel_name|default:'—' }}</div>
+      <div class="text-xs text-gray-400 mb-1">Air date: {{ video.air_date|date:'Y-m-d' }}</div>
+      <div class="text-xs text-gray-400 mb-1">Runtime: {{ video.runtime|default:'—' }}</div>
+      <div class="text-xs text-gray-400">End date: {{ video.end_date_sub|default:'—' }}</div>
+    </div>
+  </div>
+{% empty %}
+  <div class="col-span-full text-center text-gray-400 py-12">No videos found.</div>
+{% endfor %}
