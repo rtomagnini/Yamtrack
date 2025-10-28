@@ -1,5 +1,6 @@
 
-## [Unreleased]
+
+## [0.25.20.RT] - 2025-10-28
 
 ### ✨ Youtube List & Card Redesign
 - Youtube video cards now display the channel logo (from TV) instead of the channel name label.
