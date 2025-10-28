@@ -482,7 +482,11 @@
                 {% for media in media_list %}
                   <div class="bg-[#39404b] p-3 rounded-xl hover:ring-2 hover:ring-indigo-500 transition-all duration-200 w-full flex flex-row gap-3 items-start min-h-0">
                     <a href="{{ media.item|media_url }}" class="w-auto flex-shrink-0">
-                      <div style="aspect-ratio:16/9; width:128px; max-width:128px;" class="overflow-hidden rounded-lg bg-[#3e454d] flex-shrink-0">
+                      {% if media.item.media_type == 'movie' %}
+                        <div style="aspect-ratio:2/3; width:96px; max-width:96px;" class="overflow-hidden rounded-lg bg-[#3e454d] flex-shrink-0">
+                      {% else %}
+                        <div style="aspect-ratio:16/9; width:128px; max-width:128px;" class="overflow-hidden rounded-lg bg-[#3e454d] flex-shrink-0">
+                      {% endif %}
                         <img alt="{{ media.item }}"
                              class="lazyload w-full h-full object-cover hover:opacity-80 transition-opacity"
                              src="{{ IMG_NONE }}"

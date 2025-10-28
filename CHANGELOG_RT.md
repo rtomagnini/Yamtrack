@@ -4,6 +4,7 @@
 ### 🛠 Media Timeline Tweaks
 - Media Timeline thumbnail size increased for better visibility.
 - Timeline cards are now more compact: smaller/left-aligned title, left-aligned air date, runtime on a new line, and reduced card height.
+- Movie thumbnails now use 2:3 aspect ratio (portrait); all other types remain 16:9.
 
 
 ## [0.25.20.RT] - 2025-10-28
