@@ -421,34 +421,57 @@
       <!-- Most Watched Shows Section -->
       <div class="bg-[#2a2f35] rounded-lg p-6">
         <h2 class="text-xl font-semibold mb-6 text-center text-white">Most Watched Shows</h2>
-        <div class="flex flex-col md:flex-row items-stretch justify-center gap-0 relative">
-          <!-- TV Shows Column -->
-          <div class="flex-1 flex flex-col items-center px-4">
-            <h3 class="text-lg font-bold mb-4 text-white">Top TV Shows</h3>
-            <div class="w-full">
-              {% for show in top_tv_shows %}
-                <div class="flex justify-between items-center py-2 px-2 md:px-4 text-white">
-                  <span class="truncate text-base md:text-lg font-medium">{{ show.title }}</span>
-                  <span class="text-base md:text-lg font-bold">{{ show.count }}</span>
-                </div>
-              {% empty %}
-                <div class="text-center text-white py-8">No TV Shows watched</div>
-              {% endfor %}
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <!-- TV Shows Table -->
+          <div>
+            <h3 class="text-lg font-bold mb-4 text-white text-center">Top TV Shows</h3>
+            <div class="overflow-x-auto">
+              <table class="min-w-full border border-gray-700 rounded-lg overflow-hidden">
+                <thead>
+                  <tr class="bg-[#39404b]">
+                    <th class="px-4 py-2 text-left text-gray-300 font-semibold border-b border-gray-700">Show</th>
+                    <th class="px-4 py-2 text-right text-gray-300 font-semibold border-b border-gray-700">Count</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for show in top_tv_shows %}
+                    <tr class="border-b border-gray-700 last:border-b-0">
+                      <td class="px-4 py-2 text-white truncate">{{ show.title }}</td>
+                      <td class="px-4 py-2 text-white text-right font-bold">{{ show.count }}</td>
+                    </tr>
+                  {% empty %}
+                    <tr>
+                      <td colspan="2" class="text-center text-white py-8">No TV Shows watched</td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
             </div>
           </div>
-          <!-- Vertical Divider (removed for dark background) -->
-          <!-- YouTube Channels Column -->
-          <div class="flex-1 flex flex-col items-center px-4">
-            <h3 class="text-lg font-bold mb-4 text-white">Top YouTube Channels</h3>
-            <div class="w-full">
-              {% for channel in top_youtube_channels %}
-                <div class="flex justify-between items-center py-2 px-2 md:px-4 text-white">
-                  <span class="truncate text-base md:text-lg font-medium">{{ channel.channel_name }}</span>
-                  <span class="text-base md:text-lg font-bold">{{ channel.count }}</span>
-                </div>
-              {% empty %}
-                <div class="text-center text-white py-8">No YouTube channels watched</div>
-              {% endfor %}
+          <!-- YouTube Channels Table -->
+          <div>
+            <h3 class="text-lg font-bold mb-4 text-white text-center">Top YouTube Channels</h3>
+            <div class="overflow-x-auto">
+              <table class="min-w-full border border-gray-700 rounded-lg overflow-hidden">
+                <thead>
+                  <tr class="bg-[#39404b]">
+                    <th class="px-4 py-2 text-left text-gray-300 font-semibold border-b border-gray-700">Channel</th>
+                    <th class="px-4 py-2 text-right text-gray-300 font-semibold border-b border-gray-700">Count</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for channel in top_youtube_channels %}
+                    <tr class="border-b border-gray-700 last:border-b-0">
+                      <td class="px-4 py-2 text-white truncate">{{ channel.channel_name }}</td>
+                      <td class="px-4 py-2 text-white text-right font-bold">{{ channel.count }}</td>
+                    </tr>
+                  {% empty %}
+                    <tr>
+                      <td colspan="2" class="text-center text-white py-8">No YouTube channels watched</td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
             </div>
           </div>
         </div>

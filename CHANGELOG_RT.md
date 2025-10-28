@@ -1,5 +1,9 @@
 
+
 ## [Unreleased]
+
+### 🛠 Statistics Page Improvements
+- "Most Watched Shows" section now uses tables with visible lines for both TV Shows and YouTube Channels, matching the style of "Status Distribution by Media Type".
 
 ### 🛠 Media Timeline Tweaks
 - Media Timeline thumbnail size increased for better visibility.
