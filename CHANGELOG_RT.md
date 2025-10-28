@@ -4,6 +4,10 @@
 
 ### 🛠 Statistics Page Improvements
 - "Most Watched Shows" section now uses tables with visible lines for both TV Shows and YouTube Channels, matching the style of "Status Distribution by Media Type".
+- Unified the style of the "Watch Time Over Time" chart: now uses the same blue color, lighter grid lines, and thinner bars as the "Status Distribution by Media Type" chart.
+- The "Watch Time Over Time" chart is always grouped by days (no more week/month grouping).
+- Removed values inside the bars for a cleaner look.
+- Added a visible y-axis scale on the left, showing tick labels in hours (1h, 2h, 3h, ...).
 
 ### 🛠 Media Timeline Tweaks
 - Media Timeline thumbnail size increased for better visibility.
