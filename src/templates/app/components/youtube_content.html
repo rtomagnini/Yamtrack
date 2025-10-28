@@ -1,0 +1,23 @@
+{% if current_layout == "grid" %}
+  <div id="youtube-grid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+    {% include "app/components/youtube_grid_items.html" %}
+  </div>
+{% else %}
+  <div class="bg-[#2a2f35] p-4 rounded-lg overflow-hidden max-w-[calc(100svw-4rem)] overflow-x-scroll">
+    <table class="w-full bg-[#2a2f35]">
+      <thead class="text-left text-gray-400 text-sm">
+        <tr>
+          <th class="p-2 w-15"></th>
+          <th class="p-2 pe-8 w-2/5">Title</th>
+          <th class="p-2 text-center">Runtime</th>
+          <th class="p-2 text-center">Status</th>
+          <th class="p-2 text-center">Air Date</th>
+          <th class="p-2 text-center">End Date</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% include "app/components/youtube_table_items.html" %}
+      </tbody>
+    </table>
+  </div>
+{% endif %}

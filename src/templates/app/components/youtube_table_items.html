@@ -1,0 +1,20 @@
+{% for video in videos %}
+  <tr>
+    <td class="p-2 w-15">
+      {% if video.channel_image %}
+        <img src="{{ video.channel_image }}" alt="{{ video.channel_name }}" class="w-8 h-8 rounded-full border border-gray-700 bg-[#222] object-cover" loading="lazy" />
+      {% else %}
+        <span class="text-sm text-gray-400">—</span>
+      {% endif %}
+    </td>
+    <td class="p-2 pe-8 w-2/5">
+      <div class="font-semibold">{{ video.title }}</div>
+    </td>
+    <td class="p-2 text-center">{{ video.runtime|default:'—' }}</td>
+    <td class="p-2 text-center">{{ video.status|default:'—' }}</td>
+    <td class="p-2 text-center">{{ video.air_date|date:'Y-m-d'|default:'—' }}</td>
+    <td class="p-2 text-center">{% if video.end_date_sub %}{{ video.end_date_sub }}{% else %}—{% endif %}</td>
+  </tr>
+{% empty %}
+  <tr><td colspan="6" class="text-center text-gray-400 py-12">No videos found.</td></tr>
+{% endfor %}

@@ -6,15 +6,16 @@
 {% block content %}
 <h1 class="text-3xl font-bold mb-6">Youtubes</h1>
 
-<div x-data="{ search: '{{ search }}', status: '{{ current_status }}', sort: '{{ current_sort }}', statusLabels: { all: 'All', watched: 'Watched', unwatched: 'Unwatched' }, sortLabels: { title: 'Title', air_date: 'Air date', runtime: 'Runtime', end_date: 'End date' }, openStatus: false, openSort: false }">
+<div x-data="{ search: '{{ search }}', status: '{{ current_status }}', sort: '{{ current_sort }}', layout: '{{ current_layout|default:'grid' }}', statusLabels: { all: 'All', watched: 'Watched', unwatched: 'Unwatched' }, sortLabels: { title: 'Title', air_date: 'Air date', runtime: 'Runtime', end_date: 'End date' }, openStatus: false, openSort: false }">
   <form id="youtube-filter-form" x-ref="filterForm" class="hidden"
     hx-get="{% url 'youtubes' %}"
-    hx-target="#youtube-grid"
+    hx-target="#youtube-content"
     hx-include="#youtube-filter-form"
     hx-trigger="change, submit">
     <input type="hidden" name="search" x-model="search">
     <input type="hidden" name="status" x-model="status">
     <input type="hidden" name="sort" x-model="sort">
+    <input type="hidden" name="layout" x-model="layout">
   </form>
   <div class="flex flex-col md:flex-row gap-4 mb-6 items-end">
     <div class="flex-1 relative">
@@ -82,10 +83,34 @@
   <button class="block w-full px-4 py-2 text-left text-sm transition-colors cursor-pointer" :class="sort === 'end_date' ? 'bg-indigo-600 text-white font-medium' : 'text-gray-300 hover:bg-[#454d5a] hover:text-white'" @click="sort = 'end_date'; open = false; $nextTick(() => $refs.filterForm.requestSubmit())" type="button">End date</button>
       </div>
     </div>
+    <!-- Layout Toggle -->
+    <div class="flex rounded-md overflow-hidden border border-gray-700 ml-2">
+      <button type="button"
+        class="p-2 cursor-pointer"
+        :class="layout === 'grid' ? 'bg-indigo-600 text-white' : 'bg-[#39404b] hover:bg-[#454d5a]'"
+        title="Grid View"
+        @click="layout = 'grid'; $nextTick(() => $refs.filterForm.requestSubmit())">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5">
+          <rect width="7" height="7" x="3" y="3" rx="1"></rect><rect width="7" height="7" x="14" y="3" rx="1"></rect><rect width="7" height="7" x="14" y="14" rx="1"></rect><rect width="7" height="7" x="3" y="14" rx="1"></rect>
+        </svg>
+      </button>
+      <button type="button"
+        class="p-2 cursor-pointer"
+        :class="layout === 'table' ? 'bg-indigo-600 text-white' : 'bg-[#39404b] hover:bg-[#454d5a]'"
+        title="Table View"
+        @click="layout = 'table'; $nextTick(() => $refs.filterForm.requestSubmit())">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5">
+          <path d="M12 3v18"></path>
+          <rect width="18" height="18" x="3" y="3" rx="2"></rect>
+          <path d="M3 9h18"></path>
+          <path d="M3 15h18"></path>
+        </svg>
+      </button>
+    </div>
   </div>
 
-  <div id="youtube-grid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-    {% include "app/components/youtube_grid_items.html" %}
+  <div id="youtube-content">
+    {% include "app/components/youtube_content.html" %}
   </div>
 </div>
 {% endblock %}

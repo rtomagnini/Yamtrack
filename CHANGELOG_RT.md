@@ -1,16 +1,15 @@
 
-## 0.25.XY.RT - 2025-10-28
+## [Unreleased]
 
-### ✨ Youtube Card Redesign
+### ✨ Youtube List & Card Redesign
 - Youtube video cards now display the channel logo (from TV) instead of the channel name label.
 - "Air Date" and "Runtime" labels are now bold for improved readability.
 - "End Date" is only shown if it exists for the video.
-
-## 0.25.XX.RT
-
-- Filtros de Youtube rediseñados: ahora usan menús con iconos y funcionan con htmx, igual que en medialist.
-- Corrección de problemas de doble acción: los filtros y la búsqueda aplican el cambio al primer clic.
-- Refactor: el grid de vídeos se actualiza por fragmento parcial para soporte htmx eficiente.
+- Youtube filters redesigned: now use icon-based dropdowns and htmx, matching medialist.
+- Double-action bug fixed: filters and search apply changes on first click.
+- Refactor: Youtube grid updates via partial for efficient htmx support.
+- Added layout toggle: switch between card (grid) and table view for Youtube videos, matching medialist UX.
+- Table view for Youtube videos with all relevant fields and channel logo.
 
 
 ## [0.25.19.RT] - 2025-10-27

@@ -56,12 +56,15 @@ def youtubes_view(request):
         channel_image=Subquery(tv_image_qs, output_field=CharField()),
     )
 
+    layout = request.GET.get('layout', 'grid')
     context = {
         'videos': qs,
         'search': search,
         'current_status': filter_status,
         'current_sort': sort,
+        'current_layout': layout,
     }
     if request.headers.get('HX-Request'):
-        return render(request, 'app/components/youtube_grid_items.html', context)
+        # Render only the content area (grid or table) for htmx
+        return render(request, 'app/components/youtube_content.html', context)
     return render(request, 'app/youtubes_list.html', context)
