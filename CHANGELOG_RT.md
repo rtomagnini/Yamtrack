@@ -1,4 +1,10 @@
 
+## [Unreleased]
+
+### 🛠 Media Timeline Tweaks
+- Media Timeline thumbnail size increased for better visibility.
+- Timeline cards are now more compact: smaller/left-aligned title, left-aligned air date, runtime on a new line, and reduced card height.
+
 
 ## [0.25.20.RT] - 2025-10-28
 
