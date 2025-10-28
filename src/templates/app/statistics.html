@@ -356,11 +356,11 @@
         {% endif %}
       </div>
 
-      <!-- Status Distribution Section -->
+      <!-- Watch Time Distribution Section -->
       <div class="bg-[#2a2f35] rounded-lg p-6">
-        <h2 class="text-xl font-semibold mb-4">Status Distribution</h2>
+        <h2 class="text-xl font-semibold mb-4">Watch Time Distribution</h2>
 
-        {% if status_pie_chart_data.labels %}
+        {% if watch_time_distribution_pie_chart_data.labels %}
           <div class="h-80 flex justify-center items-center">
             <canvas id="statusChart"></canvas>
           </div>
@@ -380,8 +380,8 @@
                 <line x1="12" x2="12" y1="20" y2="10"></line><line x1="18" x2="18" y1="20" y2="4"></line><line x1="6" x2="6" y1="20" y2="16"></line>
               </svg>
             </div>
-            <h3 class="text-lg font-medium mb-2">No status data to display</h3>
-            <p class="text-gray-400 text-center max-w-md">Track media items with different statuses to see their distribution.</p>
+            <h3 class="text-lg font-medium mb-2">No watch time data to display</h3>
+            <p class="text-gray-400 text-center max-w-md">Watch media to see your time distribution by type.</p>
           </div>
         {% endif %}
       </div>
@@ -576,7 +576,25 @@
 
   <!-- JSON data for charts -->
   {{ media_type_distribution|json_script:"media_type_distribution" }}
-  {{ status_pie_chart_data|json_script:"status_pie_chart_data" }}
+  {{ watch_time_distribution_pie_chart_data|json_script:"status_pie_chart_data" }}
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      // Patch legend labels for Watch Time Distribution pie chart
+      const pieDataScript = document.getElementById('status_pie_chart_data');
+      if (pieDataScript) {
+        try {
+          const pieData = JSON.parse(pieDataScript.textContent);
+          if (pieData.legend_labels) {
+            const chartCanvas = document.getElementById('statusChart');
+            if (chartCanvas && chartCanvas.chart) {
+              chartCanvas.chart.data.legend_labels = pieData.legend_labels;
+              chartCanvas.chart.update();
+            }
+          }
+        } catch (e) {}
+      }
+    });
+  </script>
   {{ status_distribution|json_script:"status_distribution" }}
   {{ score_distribution|json_script:"score_distribution" }}
   {{ watch_time_timeseries|json_script:"watch_time_timeseries" }}

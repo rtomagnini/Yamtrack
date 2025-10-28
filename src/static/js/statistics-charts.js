@@ -158,10 +158,9 @@ document.addEventListener("DOMContentLoaded", function () {
         color: "#D1D5DB",
         font: { size: 12 },
         formatter: (value, ctx) => {
-          const total = ctx.dataset.data.reduce((acc, data) => acc + data, 0);
-          const percentage = Math.round((value / total) * 100);
+          // The label already includes the percent, so just show the label
           const label = ctx.chart.data.labels[ctx.dataIndex];
-          return percentage > 5 ? `${label}\n${percentage}%` : "";
+          return label;
         },
         textAlign: "center",
         textStrokeColor: "rgba(0,0,0,0.5)",
@@ -178,13 +177,16 @@ document.addEventListener("DOMContentLoaded", function () {
           usePointStyle: true,
           pointStyle: "rectRounded",
           generateLabels: function (chart) {
-            const original =
-              Chart.overrides.pie.plugins.legend.labels.generateLabels;
+            // Use legend_labels from backend if present
+            const legendLabels = chart.data.legend_labels || [];
+            const original = Chart.overrides.pie.plugins.legend.labels.generateLabels;
             const labels = original.call(this, chart);
-            labels.forEach((label, i) => {
-              label.text = `${label.text} (${chart.data.datasets[0].data[i]})`;
-              label.strokeStyle = "transparent";
-            });
+            if (legendLabels.length === labels.length) {
+              labels.forEach((label, i) => {
+                label.text = legendLabels[i];
+                label.strokeStyle = "transparent";
+              });
+            }
             return labels;
           },
         },

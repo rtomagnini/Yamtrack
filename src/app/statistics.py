@@ -1,3 +1,50 @@
+def get_watch_time_distribution_pie_chart_data(user_media):
+    """Aggregate total watch time (in minutes) by media type for pie chart."""
+    from . import media_type_config
+    from .templatetags import app_tags
+    from app.models import MediaTypes
+    chart_data = {
+        "labels": [],
+        "datasets": [
+            {
+                "data": [],
+                "backgroundColor": [],
+            },
+        ],
+    }
+    # Only TV SHOW (tmdb/manual), YouTube, Movies
+    media_types = [MediaTypes.TV.value, MediaTypes.YOUTUBE.value, MediaTypes.MOVIE.value]
+    total_minutes = 0
+    media_type_minutes = {}
+    for media_type in media_types:
+        queryset = user_media.get(media_type)
+        if queryset is not None:
+            if media_type == MediaTypes.MOVIE.value:
+                # For movies, sum item__runtime for all watched movies
+                minutes = queryset.select_related("item").aggregate(total=models.Sum("item__runtime"))["total"] or 0
+            else:
+                # For TV/YouTube, sum item__runtime for all watched episodes
+                minutes = queryset.select_related("item").aggregate(total=models.Sum("item__runtime"))["total"] or 0
+            media_type_minutes[media_type] = minutes
+            total_minutes += minutes
+        else:
+            media_type_minutes[media_type] = 0
+    legend_labels = []
+    for media_type in media_types:
+        minutes = media_type_minutes[media_type]
+        if minutes > 0:
+            label = app_tags.media_type_readable(media_type)
+            hours = minutes // 60
+            mins = minutes % 60
+            time_str = f"{hours}h{mins:02d}m" if hours else f"{mins}m"
+            # Pie chart label: name only
+            chart_data["labels"].append(label)
+            # Legend label: name (time only)
+            legend_labels.append(f"{label} ({time_str})")
+            chart_data["datasets"][0]["data"].append(minutes)
+            chart_data["datasets"][0]["backgroundColor"].append(media_type_config.get_stats_color(media_type))
+    chart_data["legend_labels"] = legend_labels
+    return chart_data
 def get_top_tv_shows(user, start_date, end_date, limit=6):
     """
     Devuelve los TV Shows con más episodios vistos por el usuario en el periodo filtrado.
