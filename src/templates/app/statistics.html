@@ -486,9 +486,7 @@
         <canvas id="watchTimeLineChart" style="width:100% !important; max-width:100% !important; height:100% !important; display:block;"></canvas>
       </div>
       <div class="text-gray-400 text-xs mt-2">
-        <span>
-          {% if watch_time_timeseries.group == 'day' %}Agrupado por día{% elif watch_time_timeseries.group == 'week' %}Agrupado por semana{% else %}Agrupado por mes{% endif %}
-        </span>
+        <span>Agrupado por día</span>
       </div>
     </div>
 
@@ -588,11 +586,29 @@
         document.addEventListener('DOMContentLoaded', function() {
           const data = JSON.parse(document.getElementById('watch_time_timeseries').textContent);
           const ctx = document.getElementById('watchTimeLineChart').getContext('2d');
+          // Set unified blue color for all bars
+          const unifiedBlue = '#6366f1';
+          if (data && data.datasets && data.datasets.length > 0) {
+            data.datasets.forEach(ds => {
+              ds.backgroundColor = unifiedBlue;
+              ds.borderRadius = 6;
+              ds.borderWidth = 1;
+              ds.borderColor = 'rgba(255,255,255,0.1)';
+            });
+          }
+          // Dynamic bar thickness: thinner bars if few data points
+          let barPercentage = 0.5;
+          let categoryPercentage = 0.7;
+          if (data && data.labels && data.labels.length <= 7) {
+            barPercentage = 0.3;
+            categoryPercentage = 0.5;
+          }
           new Chart(ctx, {
             type: 'bar',
             data: data,
             options: {
               responsive: true,
+              maintainAspectRatio: false,
               plugins: {
                 legend: { display: false },
                 title: { display: false },
@@ -614,12 +630,25 @@
                       return label;
                     }
                   }
-                }
+                },
+                datalabels: { display: false }
               },
               interaction: { mode: 'nearest', axis: 'x', intersect: false },
               scales: {
-                x: { display: true, title: { display: false } },
-                y: { display: true, title: { display: true, text: '' }, ticks: { display: false } }
+                x: {
+                  display: true,
+                  title: { display: false },
+                  grid: { color: 'rgba(255,255,255,0.08)' },
+                  ticks: { color: '#D1D5DB' },
+                  barPercentage: barPercentage,
+                  categoryPercentage: categoryPercentage
+                },
+                y: {
+                  display: true,
+                  title: { display: true, text: '' },
+                  grid: { color: 'rgba(255,255,255,0.08)' },
+                  ticks: { display: false, color: '#D1D5DB' }
+                }
               }
             }
           });
