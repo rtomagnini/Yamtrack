@@ -142,15 +142,31 @@
         <div x-cloak>
           <label class="block text-sm font-medium mb-2 text-gray-300">Media Type</label>
           <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            {# Render YouTube Video first #}
             {% for media_type in media_types %}
-              <button type="button"
-                      @click="mediaType = '{{ media_type }}'"
-                      :class="mediaType === '{{ media_type }}' ? 'bg-indigo-600 border-indigo-500 text-white' : 'border-gray-600 text-gray-300 hover:bg-[#39404b]'"
-                      class="flex items-center gap-2 p-3 rounded-md border transition-colors cursor-pointer">
-                {% icon media_type is_active=False %}
-                <span class="text-sm font-medium">{{ media_type|media_type_readable }}</span>
-              </button>
+              {% if media_type == 'youtube_video' %}
+                <button type="button"
+                        @click="mediaType = '{{ media_type }}'"
+                        :class="mediaType === '{{ media_type }}' ? 'bg-indigo-600 border-indigo-500 text-white' : 'border-gray-600 text-gray-300 hover:bg-[#39404b]'"
+                        class="flex items-center gap-2 p-3 rounded-md border transition-colors cursor-pointer">
+                  {% icon media_type is_active=False %}
+                  <span class="text-sm font-medium">{{ media_type|media_type_readable }}</span>
+                </button>
+              {% endif %}
             {% endfor %}
+            {# Then all except YouTube and YouTube Video #}
+            {% for media_type in media_types %}
+              {% if media_type != 'youtube' and media_type != 'youtube_video' %}
+                <button type="button"
+                        @click="mediaType = '{{ media_type }}'"
+                        :class="mediaType === '{{ media_type }}' ? 'bg-indigo-600 border-indigo-500 text-white' : 'border-gray-600 text-gray-300 hover:bg-[#39404b]'"
+                        class="flex items-center gap-2 p-3 rounded-md border transition-colors cursor-pointer">
+                  {% icon media_type is_active=False %}
+                  <span class="text-sm font-medium">{{ media_type|media_type_readable }}</span>
+                </button>
+              {% endif %}
+            {% endfor %}
+            {# Do NOT render the YouTube channel button at all #}
           </div>
         </div>
 
