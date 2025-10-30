@@ -80,7 +80,13 @@
                   <span>Home</span>
                 </a>
               </li>
-
+              <li>
+                <a href="{% url 'youtubes' %}"
+                   class="flex items-center space-x-3 px-4 py-2 rounded-md transition-colors duration-200 text-sm {% if request.path|str_equals:'/youtubes' %}text-white bg-[#2c3136]{% else %}text-gray-400 hover:text-white hover:bg-[#23272b]{% endif %}">
+                  {% icon 'youtube' is_active=request.path|str_equals:'/youtubes' %}
+                  <span>YT Videos</span>
+                </a>
+              </li>
         {% get_sidebar_media_types user as sidebar_media_types %}
         {% for item in sidebar_media_types %}
                 <li>
@@ -91,13 +97,6 @@
                   </a>
                 </li>
         {% endfor %}
-              <li>
-                <a href="{% url 'youtubes' %}"
-                   class="flex items-center space-x-3 px-4 py-2 rounded-md transition-colors duration-200 text-sm {% if request.path|str_equals:'/youtubes' %}text-white bg-[#2c3136]{% else %}text-gray-400 hover:text-white hover:bg-[#23272b]{% endif %}">
-                  {% icon 'youtube' is_active=request.path|str_equals:'/youtubes' %}
-                  <span>YT Videos</span>
-                </a>
-              </li>
             </ul>
 
             <div class="border-t border-[#2c3136] pt-4">
