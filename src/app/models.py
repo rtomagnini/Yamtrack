@@ -758,45 +758,56 @@ class MediaManager(models.Manager):
         return set(available_episode_items.values_list('episode_number', flat=True).distinct())
     
     def _get_tmdb_available_episodes(self, season, current_datetime):
-        """Get available episodes from TMDB API (for TMDB sources)."""
+        """Get available episodes from TMDB API (for TMDB sources), considering broadcast_time if set."""
         try:
             from app.providers import tmdb
-            
+            from datetime import datetime, time
+
             # Get season metadata from TMDB using the correct function
             tv_data = tmdb.tv_with_seasons(
-                season.item.media_id, 
+                season.item.media_id,
                 [season.item.season_number]
             )
-            
+
             season_key = f"season/{season.item.season_number}"
             if season_key not in tv_data:
                 # Fallback to local database if season not found
                 return self._get_local_available_episodes(season, current_datetime)
-                
+
             season_metadata = tv_data[season_key]
-            
-            # Filter episodes by air date (same logic as detail pages)
+
+            # Filter episodes by air date and broadcast_time
             available_episode_numbers = set()
             for episode in season_metadata.get("episodes", []):
                 episode_number = episode.get("episode_number")
                 air_date_str = episode.get("air_date")
-                
+
                 if episode_number:
-                    # Include episode if: no air_date OR air_date <= today
+                    # If no air_date, always available
                     if not air_date_str:
                         available_episode_numbers.add(episode_number)
                     else:
                         try:
-                            from datetime import datetime
                             air_date = datetime.fromisoformat(air_date_str).replace(tzinfo=current_datetime.tzinfo)
-                            if air_date <= current_datetime:
+                            # If broadcast_time is set, combine with air_date
+                            if season.broadcast_time:
+                                # Use the season's broadcast_time (as time object)
+                                air_datetime = air_date.replace(
+                                    hour=season.broadcast_time.hour,
+                                    minute=season.broadcast_time.minute,
+                                    second=season.broadcast_time.second or 0,
+                                    microsecond=0
+                                )
+                            else:
+                                air_datetime = air_date
+                            if air_datetime <= current_datetime:
                                 available_episode_numbers.add(episode_number)
-                        except (ValueError, TypeError):
+                        except (ValueError, TypeError, AttributeError):
                             # If air_date parsing fails, include the episode
                             available_episode_numbers.add(episode_number)
-            
+
             return available_episode_numbers
-            
+
         except Exception:
             # If TMDB API fails, fallback to local database
             return self._get_local_available_episodes(season, current_datetime)
@@ -1333,6 +1344,12 @@ class Season(Media):
     )
 
     tracker = FieldTracker()
+
+    broadcast_time = models.TimeField(
+        null=True,
+        blank=True,
+        help_text="Hora de emisión local (opcional, solo para filtrar pendientes en Home)."
+    )
 
     class Meta:
         """Limit the uniqueness of seasons.

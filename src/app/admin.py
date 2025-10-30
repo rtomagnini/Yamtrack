@@ -62,11 +62,28 @@ class YouTubeChannelFilterAdmin(admin.ModelAdmin):
     autocomplete_fields = ["user"]
 
 
+
 # Register models with custom admin classes
 admin.site.register(Item, ItemAdmin)
 admin.site.register(Episode, EpisodeAdmin)
 admin.site.register(ExternalIdMapping, ExternalIdMappingAdmin)
 admin.site.register(YouTubeChannelFilter, YouTubeChannelFilterAdmin)
+
+# Custom admin for Season to expose broadcast_time
+from app.models import Season
+class SeasonAdmin(MediaAdmin):
+    fieldsets = (
+        (None, {
+            'fields': ('item', 'related_tv', 'status', 'score', 'notes', 'broadcast_time')
+        }),
+    )
+    list_display = MediaAdmin.list_display + ["broadcast_time"]
+
+try:
+    admin.site.unregister(Season)
+except Exception:
+    pass
+admin.site.register(Season, SeasonAdmin)
 
 
 # Auto-register remaining models
