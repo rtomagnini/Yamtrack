@@ -65,6 +65,19 @@ def home(request):
     # Build lists of (media_type, media_list) pairs so templates don't need
     # to do dictionary lookups with bracket notation (not supported in Django
     # template variable expressions).
+    # Add pending_videos for YouTube items
+    for media_list in list_by_type.get(MediaTypes.YOUTUBE.value, {}).get('items', []):
+        try:
+            max_progress = getattr(media_list, 'max_progress', None)
+            progress = getattr(media_list, 'progress', None)
+            if max_progress is not None and progress is not None:
+                pending = max_progress - progress
+                media_list.pending_videos = pending if pending > 0 else 0
+            else:
+                media_list.pending_videos = 0
+        except Exception:
+            media_list.pending_videos = 0
+
     preferred_sections = []
     for mt in context["preferred_order"]:
         if mt in list_by_type:
@@ -1300,8 +1313,8 @@ def statistics(request):
     score_distribution, _ = stats.get_score_distribution(user_media)
     watch_time_timeseries = stats.get_watch_time_timeseries(request.user, start_date, end_date)
     status_distribution = stats.get_status_distribution(user_media)
-    status_pie_chart_data = stats.get_status_pie_chart_data(
-        status_distribution,
+    watch_time_distribution_pie_chart_data = stats.get_watch_time_distribution_pie_chart_data(
+        user_media
     )
     timeline = stats.get_timeline(user_media)
 
@@ -1325,7 +1338,7 @@ def statistics(request):
         "score_distribution": score_distribution,
         "watch_time_timeseries": watch_time_timeseries,
         "status_distribution": status_distribution,
-        "status_pie_chart_data": status_pie_chart_data,
+    "watch_time_distribution_pie_chart_data": watch_time_distribution_pie_chart_data,
         "timeline": timeline,
         "episodes_watched": episodes_watched,
         "total_watch_time": format_minutes(total_watch_minutes),

@@ -83,19 +83,13 @@
     </button>
 
     <div class="text-xs text-indigo-400 font-medium min-w-[4ch] text-center">
-      {{ media.formatted_progress }}
-
-      {% if media.item.media_type != MediaTypes.GAME.value and media.item.media_type != MediaTypes.MOVIE.value %}
-        {% if media.max_progress %}
-          / {{ media.max_progress }} 
-          {% if media.item.media_type == 'youtube' %}
-            Episode{{ media.max_progress|pluralize }}
-          {% else %}
-            {{ media.item.media_type|long_unit }}{{ media.max_progress|pluralize }}
-          {% endif %}
-        {% else %}
-          {% if media.item.media_type == 'youtube' %}
-            Episode{{ media.progress|pluralize }}
+      {% if media.item.media_type == MediaTypes.YOUTUBE.value %}
+        {{ media.pending_videos|default:0 }} video{{ media.pending_videos|pluralize }}
+      {% else %}
+        {{ media.formatted_progress }}
+        {% if media.item.media_type != MediaTypes.GAME.value and media.item.media_type != MediaTypes.MOVIE.value %}
+          {% if media.max_progress %}
+            / {{ media.max_progress }} {{ media.item.media_type|long_unit }}{{ media.max_progress|pluralize }}
           {% else %}
             {{ media.item.media_type|long_unit }}{{ media.progress|pluralize }}
           {% endif %}
