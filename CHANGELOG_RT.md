@@ -1,10 +1,13 @@
 
 ## [UNRELEASED]
 
+
 ### 🛠 Improvements
 - Changed the Total Watch Time icon on the statistics page to a clock for better clarity.
 - Updated Docker workflow: after frontend/backend changes, a new build is required to see updates in the running container.
 - Minor deployment and UI tweaks for statistics visuals.
+- Sidebar menu: Renamed 'Youtubes' to 'YT Channels' in the main list and to 'YT Videos' in the bottom link.
+- Fixed sidebar template logic and for loop to prevent TemplateSyntaxError and ensure correct label rendering.
 
 
 

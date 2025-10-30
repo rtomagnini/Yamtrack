@@ -81,21 +81,21 @@
                 </a>
               </li>
 
-              {% get_sidebar_media_types user as sidebar_media_types %}
-              {% for item in sidebar_media_types %}
+        {% get_sidebar_media_types user as sidebar_media_types %}
+        {% for item in sidebar_media_types %}
                 <li>
                   <a href="{% url 'medialist' media_type=item.media_type %}"
                      class="flex items-center space-x-3 px-4 py-2 rounded-md transition-colors duration-200 text-sm {% if media_type == item.media_type %}text-white bg-[#2c3136]{% else %}text-gray-400 hover:text-white hover:bg-[#23272b]{% endif %}">
                     {% icon item.media_type is_active=media_type|str_equals:item.media_type %}
-                    <span>{{ item.display_name }}</span>
+                    <span>{% if item.media_type == 'youtube' %}YT Channels{% else %}{{ item.display_name }}{% endif %}</span>
                   </a>
                 </li>
-              {% endfor %}
+        {% endfor %}
               <li>
                 <a href="{% url 'youtubes' %}"
                    class="flex items-center space-x-3 px-4 py-2 rounded-md transition-colors duration-200 text-sm {% if request.path|str_equals:'/youtubes' %}text-white bg-[#2c3136]{% else %}text-gray-400 hover:text-white hover:bg-[#23272b]{% endif %}">
                   {% icon 'youtube' is_active=request.path|str_equals:'/youtubes' %}
-                  <span>Youtubes</span>
+                  <span>YT Videos</span>
                 </a>
               </li>
             </ul>
