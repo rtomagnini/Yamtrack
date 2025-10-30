@@ -1,4 +1,12 @@
 
+## [UNRELEASED]
+
+### 🛠 Improvements
+- Changed the Total Watch Time icon on the statistics page to a clock for better clarity.
+- Updated Docker workflow: after frontend/backend changes, a new build is required to see updates in the running container.
+- Minor deployment and UI tweaks for statistics visuals.
+
+
 
 
 ## [0.25.21.RT] - 2025-10-28
