@@ -57,12 +57,16 @@ def youtubes_view(request):
     )
 
     layout = request.GET.get('layout', 'grid')
+    from django.utils import timezone
+    from django.middleware.csrf import get_token
     context = {
         'videos': qs,
         'search': search,
         'current_status': filter_status,
         'current_sort': sort,
         'current_layout': layout,
+        'today': timezone.now().date(),
+        'csrf_token': get_token(request),
     }
     if request.headers.get('HX-Request'):
         # Render only the content area (grid or table) for htmx

@@ -1,4 +1,11 @@
+
 ## [UNRELEASED]
+
+### ✨ YT Videos Grid Improvements
+- Mark as watched (eye) button is now always blue, perfectly round, and visually consistent with the delete button.
+- Watched/unwatched state is shown by opacity, never disables the button.
+- Action buttons (eye and delete) are right-aligned and on the same row as the info, but Air date, Runtime, and End date remain on separate lines.
+- Fixed all layout and alignment issues for a cleaner, more consistent UI.
 
 
 

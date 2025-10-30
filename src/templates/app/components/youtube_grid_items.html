@@ -1,5 +1,5 @@
 {% for video in videos %}
-  <div class="bg-[#2a2f35] rounded-lg overflow-hidden shadow-lg flex flex-col">
+  <div class="bg-[#2a2f35] rounded-lg overflow-hidden shadow-lg flex flex-col" data-video-card>
     <div class="relative aspect-video bg-[#3e454d]">
       <img alt="{{ video.title }}" class="w-full h-full object-cover" src="{{ video.image }}" loading="lazy" />
     </div>
@@ -12,11 +12,77 @@
           <span class="text-sm text-gray-400">—</span>
         {% endif %}
       </div>
-      <div class="text-xs text-gray-400 mb-1"><span class="font-bold">Air date:</span> {{ video.air_date|date:'Y-m-d' }}</div>
-      <div class="text-xs text-gray-400 mb-1"><span class="font-bold">Runtime:</span> {{ video.runtime|default:'—' }}</div>
-      {% if video.end_date_sub %}
-        <div class="text-xs text-gray-400"><span class="font-bold">End date:</span> {{ video.end_date_sub }}</div>
-      {% endif %}
+      <div class="flex items-start justify-between mt-2">
+        <div class="flex flex-col gap-1 text-xs text-gray-400">
+          <div><span class="font-bold">Air date:</span> {{ video.air_date|date:'Y-m-d' }}</div>
+          <div><span class="font-bold">Runtime:</span> {{ video.runtime|default:'—' }}</div>
+          {% if video.end_date_sub %}
+            <div><span class="font-bold">End date:</span> {{ video.end_date_sub }}</div>
+          {% endif %}
+        </div>
+        <div class="flex gap-2 items-center ml-2 mt-0">
+          {# Mark as Watched Button #}
+          <button
+            class="p-2.5 bg-blue-600 text-white rounded-full flex items-center justify-center hover:bg-blue-500 hover:scale-110 hover:shadow-[0_0_15px_rgba(37,99,235,0.5)] transition-all duration-200 cursor-pointer min-w-[44px] min-h-[44px]{% if video.end_date_sub %} opacity-50{% endif %}"
+            style="background-color: #2563eb; border-radius: 9999px;"
+            title="{% if not video.end_date_sub %}Mark as watched{% else %}Watched{% endif %}"
+            {% if not video.end_date_sub %}
+              hx-post="{% url 'episode_save' %}"
+              hx-vals='{"media_id": "{{ video.media_id }}", "source": "{{ video.source }}", "season_number": "{{ video.season_number }}", "episode_number": "{{ video.episode_number }}", "end_date": "{{ today|date:'Y-m-d' }}"}'
+              hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
+              hx-target="closest [data-video-card]"
+              hx-swap="outerHTML swap:0.5s"
+            {% endif %}
+          >
+            {% if not video.end_date_sub %}
+              <!-- Eye Off SVG -->
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M17.94 17.94A10.94 10.94 0 0 1 12 19c-7 0-11-7-11-7a21.81 21.81 0 0 1 5.06-5.94"/>
+                <path d="M1 1l22 22"/>
+                <path d="M9.53 9.53A3 3 0 0 0 12 15a3 3 0 0 0 2.47-5.47"/>
+                <path d="M14.47 14.47A3 3 0 0 1 12 9a3 3 0 0 1-2.47 5.47"/>
+              </svg>
+            {% else %}
+              <!-- Eye SVG -->
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/>
+                <circle cx="12" cy="12" r="3"/>
+              </svg>
+            {% endif %}
+          </button>
+          {# Delete Video Button #}
+          <div x-data="{ confirmDelete: false }">
+            <button @click="confirmDelete = true"
+                    class="p-2.5 bg-red-600 text-white rounded-full hover:bg-red-500 hover:scale-110 hover:shadow-[0_0_15px_rgba(220,38,38,0.5)] transition-all duration-200 cursor-pointer"
+                    title="Delete video">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3 6h18"></path>
+                <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
+                <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
+                <line x1="10" x2="10" y1="11" y2="17"></line>
+                <line x1="14" x2="14" y1="11" y2="17"></line>
+              </svg>
+            </button>
+            <div x-show="confirmDelete" x-cloak @click.away="confirmDelete = false" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" style="display: none;">
+              <div class="bg-[#1e2328] rounded-lg p-6 max-w-md w-full mx-4 shadow-xl" @click.stop>
+                <h3 class="text-lg font-semibold mb-4">Delete Video?</h3>
+                <p class="text-gray-300 mb-6">Are you sure you want to delete '{{ video.title }}'? This action cannot be undone.</p>
+                <div class="flex gap-3 justify-end">
+                  <button @click="confirmDelete = false" class="px-4 py-2 bg-gray-600 hover:bg-gray-500 text-white rounded-md transition-colors cursor-pointer">Cancel</button>
+                  <button hx-delete="{% url 'delete_youtube_video' video.id %}"
+                          hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
+                          hx-target="closest [data-video-card]"
+                          hx-swap="outerHTML swap:0.5s"
+                          @click="confirmDelete = false"
+                          class="px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-md transition-colors cursor-pointer">
+                    Delete
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 {% empty %}

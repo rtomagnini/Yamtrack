@@ -661,6 +661,7 @@ def media_delete(request):
 @require_POST
 def episode_save(request):
     """Handle the creation, deletion, and updating of episodes for a season."""
+    from app.models import Season, Item, Episode, MediaTypes, Sources, Status
     media_id = request.POST["media_id"]
     source = request.POST["source"]
     
@@ -804,6 +805,46 @@ def episode_save(request):
     
     related_season.watch(episode_number, form.cleaned_data["end_date"], auto_complete=auto_complete)
 
+    # If HTMX request, return only the updated card HTML
+    if request.headers.get('HX-Request'):
+        # Find the updated video item
+        item = Item.objects.get(
+            media_id=media_id,
+            source=source,
+            media_type=MediaTypes.EPISODE.value,
+            episode_number=episode_number,
+        )
+        # Annotate with channel info and watched status for template
+        from django.db.models import OuterRef, Exists, Subquery, CharField
+        from app.models import Season
+        item_qs = Item.objects.filter(pk=item.pk)
+        item_qs = item_qs.annotate(
+            is_watched=Exists(
+                Episode.objects.filter(item=OuterRef('pk'), end_date__isnull=False)
+            ),
+            end_date_sub=Episode.objects.filter(item=OuterRef('pk'), end_date__isnull=False).values('end_date')[:1]
+        )
+        season_qs = Season.objects.filter(
+            item__media_id=OuterRef('media_id'),
+            item__source=OuterRef('source'),
+            item__media_type=MediaTypes.SEASON.value,
+            item__season_number=OuterRef('season_number'),
+        )
+        tv_title_qs = season_qs.filter(related_tv__isnull=False).values('related_tv__item__title')[:1]
+        tv_image_qs = season_qs.filter(related_tv__isnull=False).values('related_tv__item__image')[:1]
+        item_qs = item_qs.annotate(
+            channel_name=Subquery(tv_title_qs, output_field=CharField()),
+            channel_image=Subquery(tv_image_qs, output_field=CharField()),
+        )
+        video = item_qs.first()
+        from django.utils import timezone
+        from django.middleware.csrf import get_token
+        context = {
+            'video': video,
+            'today': timezone.now().date(),
+            'csrf_token': get_token(request),
+        }
+        return render(request, 'app/components/youtube_grid_items_card.html', context)
     return helpers.redirect_back(request)
 
 
