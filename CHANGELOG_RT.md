@@ -1,4 +1,5 @@
-## [UNRELEASED]
+
+## [0.25.23.RT] - 2025-10-30
 
 ### 🚀 TV Season Broadcast Time
 - YT Videos grid: Air date, Runtime, End date y los botones de acción ahora siempre quedan alineados abajo en cada card, sin importar la altura del título. Mejora visual y de consistencia en la cuadrícula.
