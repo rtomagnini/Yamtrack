@@ -14,6 +14,51 @@
     {# djlint:off #}
     <form method="post" class="space-y-6" x-data="{
   mediaType: '{{ initial_media_type|default:'youtube_video' }}',
+  atresplayerLoading: false,
+  
+  async extractAtresplayerMetadata() {
+    const input = document.querySelector('input[name=atresplayer_url]');
+    const url = input?.value.trim();
+    if (!url) return;
+    this.atresplayerLoading = true;
+    try {
+      const response = await fetch('{% url "atresplayer_metadata" %}', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': '{{ csrf_token }}'
+        },
+        body: JSON.stringify({ url: url })
+      });
+      const data = await response.json();
+      this.atresplayerLoading = false;
+      if (data.success) {
+        const metadata = data.metadata;
+        if (metadata.title) {
+          document.querySelector('input[name=title]').value = metadata.title;
+        }
+        if (metadata.thumbnail) {
+          const imageInput = document.querySelector('input[name=image]');
+          imageInput.value = metadata.thumbnail;
+          const event = new Event('input', { bubbles: true });
+          imageInput.dispatchEvent(event);
+        }
+        if (metadata.air_date) {
+          document.querySelector('input[name=air_date]').value = metadata.air_date;
+        }
+        if (metadata.duration_minutes) {
+          document.querySelector('input[name=runtime]').value = metadata.duration_minutes;
+        }
+        console.log('Atresplayer metadata extracted successfully:', metadata);
+      } else {
+        alert('Error: ' + data.error);
+      }
+    } catch (error) {
+      this.atresplayerLoading = false;
+      console.error('Error extracting Atresplayer metadata:', error);
+      alert('Error extracting Atresplayer metadata. Please try again.');
+    }
+  },
     
       updateImagePreview(input) {
         const previewDiv = document.getElementById('image-preview');
@@ -419,6 +464,35 @@
           </div>
         </div>
 
+        <!-- Atresplayer URL field (Episode) -->
+        <div x-show="mediaType === 'episode'"
+             class="atresplayer-url-container">
+          <label class="block text-sm font-medium mb-2 text-gray-300">
+            Atresplayer URL 
+            <span class="text-xs text-gray-400">(optional - auto-fills episode info)</span>
+          </label>
+          <div class="flex gap-2">
+            <input class="flex-1 p-2 bg-[#39404b] rounded-md text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-[#4a9eff] appearance-none"
+                   name="atresplayer_url"
+                   placeholder="https://www.atresplayer.com/..."
+                   type="url"
+                   value="">
+            <button type="button"
+                    @click="extractAtresplayerMetadata()"
+                    :disabled="atresplayerLoading"
+                    class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white rounded-md font-medium transition-colors flex items-center gap-2">
+              <svg x-show="atresplayerLoading" class="animate-spin w-4 h-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="m4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+              <span x-text="atresplayerLoading ? 'Extracting...' : 'Extract Info'"></span>
+            </button>
+          </div>
+          <p class="text-xs text-gray-400 mt-1">
+            Paste an Atresplayer URL and click "Extract Info" to automatically fill episode title, thumbnail, air date, and duration.
+          </p>
+        </div>
+
         <!-- Image URL field (All types) -->
         <div x-show="showField('image')">
           <label class="block text-sm font-medium mb-2 text-gray-300">Image URL</label>
@@ -732,6 +806,66 @@ function youtubeExtractor() {
         this.loading = false;
         console.error('Error extracting YouTube metadata:', error);
         alert('Error extracting YouTube metadata. Please try again.');
+      }
+    }
+  };
+}
+
+function atresplayerExtractor() {
+  return {
+    loading: false,
+    
+    async extractAtresplayerMetadata() {
+      const url = this.$refs.atresplayerInput.value.trim();
+      if (!url) return;
+      
+      this.loading = true;
+      
+      try {
+        const response = await fetch('{% url "atresplayer_metadata" %}', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token }}'
+          },
+          body: JSON.stringify({ url: url })
+        });
+        
+        const data = await response.json();
+        this.loading = false;
+        
+        if (data.success) {
+          const metadata = data.metadata;
+          
+          // Auto-fill form fields
+          if (metadata.title) {
+            document.querySelector('input[name="title"]').value = metadata.title;
+          }
+          
+          if (metadata.thumbnail) {
+            const imageInput = document.querySelector('input[name="image"]');
+            imageInput.value = metadata.thumbnail;
+            // Trigger image preview update
+            const event = new Event('input', { bubbles: true });
+            imageInput.dispatchEvent(event);
+          }
+          
+          if (metadata.air_date) {
+            document.querySelector('input[name="air_date"]').value = metadata.air_date;
+          }
+          
+          if (metadata.duration_minutes) {
+            document.querySelector('input[name="runtime"]').value = metadata.duration_minutes;
+          }
+          
+          console.log('Atresplayer metadata extracted successfully:', metadata);
+        } else {
+          alert('Error: ' + data.error);
+        }
+      } catch (error) {
+        this.loading = false;
+        console.error('Error extracting Atresplayer metadata:', error);
+        alert('Error extracting Atresplayer metadata. Please try again.');
       }
     }
   };

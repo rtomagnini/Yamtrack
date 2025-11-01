@@ -1,4 +1,11 @@
+## [0.25.24.RT] - 2025-11-01
 
+### ✨ Integración Atresplayer en Episodios
+- Ahora puedes extraer automáticamente título, thumbnail, fecha de emisión y duración de episodios de atresplayer.com en el formulario de creación de episodios personalizados.
+- El campo de Atresplayer aparece solo para tipo "Episode" y permite pegar la URL del episodio para autocompletar los datos.
+- Se corrigieron errores de sintaxis y corrupción en el proveedor de Atresplayer.
+- Añadidos tests automáticos para la extracción de metadatos de Atresplayer.
+- Mejoras de robustez y limpieza en el backend y template.
 ## [0.25.23.RT] - 2025-10-30
 
 ### 🚀 TV Season Broadcast Time
