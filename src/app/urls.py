@@ -81,6 +81,7 @@ urlpatterns = [
     ),
     path("create", views.create_entry, name="create_entry"),
     path("api/youtube/metadata", views.youtube_metadata, name="youtube_metadata"),
+    path("api/atresplayer/metadata", views.atresplayer_metadata, name="atresplayer_metadata"),
     path("api/youtube/video/<int:video_id>/delete/", views.delete_youtube_video, name="delete_youtube_video"),
     path("search/parent_tv", views.search_parent_tv, name="search_parent_tv"),
     path(

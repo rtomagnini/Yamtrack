@@ -1155,6 +1155,50 @@ def youtube_metadata(request):
         }, status=500)
 
 
+@require_POST
+def atresplayer_metadata(request):
+    """Extract metadata from Atresplayer URL via AJAX."""
+    import json
+    from app.providers import atresplayer
+    
+    try:
+        data = json.loads(request.body)
+        atresplayer_url = data.get('url', '').strip()
+        
+        if not atresplayer_url:
+            return JsonResponse({'success': False, 'error': 'No URL provided'}, status=400)
+        
+        # Extract episode ID from URL
+        episode_id = atresplayer.extract_episode_id(atresplayer_url)
+        if not episode_id:
+            return JsonResponse({
+                'success': False, 
+                'error': 'Invalid Atresplayer URL format'
+            }, status=400)
+        
+        # Fetch metadata from Atresplayer API
+        metadata = atresplayer.fetch_video_metadata(episode_id)
+        if not metadata:
+            return JsonResponse({
+                'success': False, 
+                'error': 'Could not fetch video metadata from Atresplayer'
+            }, status=404)
+        
+        return JsonResponse({
+            'success': True,
+            'metadata': metadata
+        })
+        
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'error': 'Invalid JSON'}, status=400)
+    except Exception as e:
+        logger.error(f"Error extracting Atresplayer metadata: {e}")
+        return JsonResponse({
+            'success': False, 
+            'error': 'Internal server error'
+        }, status=500)
+
+
 @require_GET
 def search_parent_tv(request):
     """Return the search results for parent TV shows."""
