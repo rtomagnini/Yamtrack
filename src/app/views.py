@@ -154,6 +154,7 @@ def progress_edit(request, media_type, instance_id):
         if media_type == MediaTypes.COMIC.value and reading_time:
             try:
                 media.reading_time = int(reading_time)
+                media.save(update_fields=['reading_time'])
             except (ValueError, TypeError):
                 media.reading_time = 0
         media.increase_progress()
