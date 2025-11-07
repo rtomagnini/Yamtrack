@@ -290,15 +290,21 @@ class BaseWebhookProcessor:
     def _handle_movie(self, media_id, payload, user):
         """Handle movie playback event."""
         movie_metadata = app.providers.tmdb.movie(media_id)
-        movie_item, _ = app.models.Item.objects.get_or_create(
+        movie_item, created = app.models.Item.objects.get_or_create(
             media_id=media_id,
             source=Sources.TMDB.value,
             media_type=MediaTypes.MOVIE.value,
             defaults={
                 "title": movie_metadata["title"],
                 "image": movie_metadata["image"],
+                "runtime": movie_metadata.get("runtime"),
             },
         )
+        
+        # Update runtime if it was missing
+        if not created and movie_item.runtime is None and movie_metadata.get("runtime"):
+            movie_item.runtime = movie_metadata["runtime"]
+            movie_item.save(update_fields=["runtime"])
 
         movie_instances = app.models.Movie.objects.filter(item=movie_item, user=user)
         current_instance = movie_instances.first()

@@ -254,14 +254,20 @@ class IMDBImporter:
 
     def _create_or_update_item(self, tmdb_data, media_type):
         """Create or update the item in database."""
+        defaults = {
+            "title": tmdb_data["title"],
+            "image": tmdb_data["image"],
+        }
+        
+        # Add runtime for movies if available
+        if media_type == MediaTypes.MOVIE.value and tmdb_data.get("runtime"):
+            defaults["runtime"] = tmdb_data["runtime"]
+        
         return app.models.Item.objects.update_or_create(
             media_id=tmdb_data["media_id"],
             source=Sources.TMDB.value,
             media_type=media_type,
-            defaults={
-                "title": tmdb_data["title"],
-                "image": tmdb_data["image"],
-            },
+            defaults=defaults,
         )
 
     def _create_media_instance(self, item, row, media_type):

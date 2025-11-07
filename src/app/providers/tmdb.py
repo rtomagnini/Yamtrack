@@ -156,6 +156,7 @@ def movie(media_id):
             "genres": get_genres(response["genres"]),
             "score": get_score(response["vote_average"]),
             "score_count": response["vote_count"],
+            "runtime": response["runtime"] if response["runtime"] else None,  # Runtime in minutes
             "details": {
                 "format": "Movie",
                 "release_date": get_start_date(response["release_date"]),

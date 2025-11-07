@@ -370,15 +370,21 @@ class SimklImporter:
                         continue
                     raise
 
-                movie_item, _ = app.models.Item.objects.get_or_create(
+                movie_item, created = app.models.Item.objects.get_or_create(
                     media_id=tmdb_id,
                     source=Sources.TMDB.value,
                     media_type=MediaTypes.MOVIE.value,
                     defaults={
                         "title": metadata["title"],
                         "image": metadata["image"],
+                        "runtime": metadata.get("runtime"),
                     },
                 )
+                
+                # Update runtime if it was missing
+                if not created and movie_item.runtime is None and metadata.get("runtime"):
+                    movie_item.runtime = metadata["runtime"]
+                    movie_item.save(update_fields=["runtime"])
 
                 movie_instance = app.models.Movie(
                     item=movie_item,

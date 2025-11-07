@@ -340,11 +340,20 @@ class TraktImporter:
             "title": metadata["title"],
             "image": metadata["image"],
         }
+        
+        # Add runtime for movies if available
+        if media_type == MediaTypes.MOVIE.value and metadata.get("runtime"):
+            defaults["runtime"] = metadata["runtime"]
 
-        item, _ = app.models.Item.objects.get_or_create(
+        item, created = app.models.Item.objects.get_or_create(
             **item_kwargs,
             defaults=defaults,
         )
+        
+        # Update runtime if it was missing
+        if not created and media_type == MediaTypes.MOVIE.value and item.runtime is None and metadata.get("runtime"):
+            item.runtime = metadata["runtime"]
+            item.save(update_fields=["runtime"])
 
         return item
 
