@@ -150,13 +150,14 @@ def progress_edit(request, media_type, instance_id):
         else:
             media.increase_progress()
     elif operation == "increase":
-        # For comics, save reading_time if provided
+        # For comics, accumulate reading_time if provided
         if media_type == MediaTypes.COMIC.value and reading_time:
             try:
-                media.reading_time = int(reading_time)
+                time_to_add = int(reading_time)
+                media.reading_time = (media.reading_time or 0) + time_to_add
                 media.save(update_fields=['reading_time'])
             except (ValueError, TypeError):
-                media.reading_time = 0
+                pass
         media.increase_progress()
     elif operation == "decrease":
         media.decrease_progress()

@@ -506,10 +506,17 @@
                     </a>
                     <div class="flex-1 min-w-0 w-full text-left">
                       <h4 class="font-medium text-base mb-0.5 break-words leading-tight">
-                        <a href="{{ media.item|media_url }}" class="hover:text-indigo-400 transition-colors line-clamp-2 break-words">{{ media.item }}</a>
+                        <a href="{{ media.item|media_url }}" class="hover:text-indigo-400 transition-colors line-clamp-2 break-words">
+                          {{ media.item }}
+                          {% if media.media_type == 'comic_issue' %}
+                            <span class="text-indigo-400">#{{ media.issue_number }}</span>
+                          {% endif %}
+                        </a>
                       </h4>
                       <div class="text-xs text-gray-400 mb-0.5">
-                        {% if media.start_date or media.end_date %}
+                        {% if media.media_type == 'comic_issue' %}
+                          <span>{{ media.end_date|date:"Y-m-d H:i" }}</span>
+                        {% elif media.start_date or media.end_date %}
                           <span>
                             {% if media.start_date %}{{ media.start_date|date_tracker_format }}{% endif %}
                             {% if media.start_date and media.end_date %}-{% endif %}

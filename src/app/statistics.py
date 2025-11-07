@@ -23,10 +23,8 @@ def get_watch_time_distribution_pie_chart_data(user_media):
                 # For movies, sum item__runtime for all watched movies
                 minutes = queryset.select_related("item").aggregate(total=models.Sum("item__runtime"))["total"] or 0
             elif media_type == MediaTypes.COMIC.value:
-                # For comics, sum reading_time * progress for all comics with progress > 0
-                minutes = 0
-                for comic in queryset.filter(progress__gt=0):
-                    minutes += (comic.reading_time or 0) * comic.progress
+                # For comics, sum accumulated reading_time for all comics with progress > 0
+                minutes = queryset.aggregate(total=models.Sum("reading_time"))["total"] or 0
             else:
                 # For TV/YouTube, sum item__runtime for all watched episodes
                 minutes = queryset.select_related("item").aggregate(total=models.Sum("item__runtime"))["total"] or 0
@@ -189,7 +187,7 @@ def get_watch_time_timeseries(user, start_date, end_date):
         data.setdefault(key, 0)
         data[key] += ep.item.runtime or 0
 
-    # Agrupar y sumar reading_time de comics (reading_time * progress)
+    # Agrupar y sumar reading_time de comics (accumulated total, not per issue)
     for comic in comics:
         dt = comic.progressed_at
         if group == 'day':
@@ -199,7 +197,7 @@ def get_watch_time_timeseries(user, start_date, end_date):
         else:
             key = dt.date().replace(day=1)  # primer día del mes
         data.setdefault(key, 0)
-        data[key] += (comic.reading_time or 0) * comic.progress
+        data[key] += comic.reading_time or 0
 
     # Ordenar por fecha
     sorted_keys = sorted(data.keys())
@@ -357,11 +355,10 @@ def get_user_media(user, start_date, end_date):
         total=models.Sum("item__runtime")
     )["total"] or 0
 
-    # Sum reading time for comic issues (reading_time * progress for each comic)
-    comic_minutes = 0
-    for comic in read_comics_qs:
-        # reading_time is per issue, so multiply by progress (number of issues read)
-        comic_minutes += (comic.reading_time or 0) * comic.progress
+    # Sum reading time for comic issues (reading_time is already accumulated per comic)
+    comic_minutes = read_comics_qs.aggregate(
+        total=models.Sum("reading_time")
+    )["total"] or 0
 
     total_watch_minutes = episode_minutes + movie_minutes + comic_minutes
 
@@ -426,6 +423,9 @@ def get_status_distribution(user_media):
             count = 0
         elif media_type in [MediaTypes.TV.value, MediaTypes.YOUTUBE.value]:
             count = queryset.count()
+        elif media_type == MediaTypes.COMIC.value:
+            # For comics, count total issues read (sum of progress)
+            count = queryset.aggregate(total=models.Sum("progress"))["total"] or 0
         else:
             model = getattr(queryset, 'model', None)
             if model and 'status' in [f.name for f in model._meta.get_fields()]:
@@ -602,30 +602,69 @@ def get_status_color(status):
 
 def get_timeline(user_media):
     """Build a timeline of media consumption organized by month-year."""
+    from app.models import MediaTypes
     timeline = defaultdict(list)
 
     # Incluir todos los tipos, incluyendo episodios de TV
     for media_type, queryset in user_media.items():
-        for media in queryset:
-            # Usar end_date como referencia principal para timeline
-            end_date = getattr(media, 'end_date', None)
-            if end_date is None and hasattr(media, 'item'):
-                end_date = getattr(media.item, 'end_date', None)
-            if not end_date:
-                continue  # Solo mostrar consumidos (con end_date)
-            # --- Añadir runtime al objeto media si no existe ---
-            if not hasattr(media, 'runtime') or media.runtime is None:
-                if hasattr(media, 'item') and hasattr(media.item, 'runtime'):
-                    media.runtime = media.item.runtime
-                elif hasattr(media, 'reading_time'):
-                    # Para comics, usar reading_time como runtime
-                    media.runtime = media.reading_time
-            local_end_date = timezone.localdate(end_date)
-            year = local_end_date.year
-            month = local_end_date.month
-            month_name = calendar.month_name[month]
-            month_year = f"{month_name} {year}"
-            timeline[month_year].append(media)
+        if media_type == MediaTypes.COMIC.value:
+            # For comics, expand into individual issue entries from history
+            for comic in queryset:
+                # Get historical records to see progress changes
+                history = comic.history.all().order_by('history_date')
+                previous_progress = 0
+                
+                for record in history:
+                    if record.progress > previous_progress:
+                        # Issues were read
+                        issues_read = record.progress - previous_progress
+                        for i in range(issues_read):
+                            issue_number = previous_progress + i + 1
+                            # Create a pseudo-object for the issue
+                            issue_entry = type('ComicIssue', (), {})()
+                            issue_entry.item = comic.item
+                            issue_entry.media_type = 'comic_issue'
+                            issue_entry.issue_number = issue_number
+                            issue_entry.end_date = record.history_date
+                            issue_entry.progressed_at = record.history_date
+                            # Estimate reading time per issue
+                            if comic.progress > 0:
+                                issue_entry.runtime = (comic.reading_time or 0) // comic.progress
+                            else:
+                                issue_entry.runtime = 0
+                            issue_entry.comic_id = comic.id
+                            issue_entry.user = comic.user
+                            
+                            local_end_date = timezone.localdate(record.history_date)
+                            year = local_end_date.year
+                            month = local_end_date.month
+                            month_name = calendar.month_name[month]
+                            month_year = f"{month_name} {year}"
+                            timeline[month_year].append(issue_entry)
+                        
+                        previous_progress = record.progress
+        else:
+            # For other media types, use existing logic
+            for media in queryset:
+                # Usar end_date como referencia principal para timeline
+                end_date = getattr(media, 'end_date', None)
+                if end_date is None and hasattr(media, 'item'):
+                    end_date = getattr(media.item, 'end_date', None)
+                if not end_date:
+                    continue  # Solo mostrar consumidos (con end_date)
+                # --- Añadir runtime al objeto media si no existe ---
+                if not hasattr(media, 'runtime') or media.runtime is None:
+                    if hasattr(media, 'item') and hasattr(media.item, 'runtime'):
+                        media.runtime = media.item.runtime
+                    elif hasattr(media, 'reading_time'):
+                        # Para comics, usar reading_time como runtime
+                        media.runtime = media.reading_time
+                local_end_date = timezone.localdate(end_date)
+                year = local_end_date.year
+                month = local_end_date.month
+                month_name = calendar.month_name[month]
+                month_year = f"{month_name} {year}"
+                timeline[month_year].append(media)
 
     # Convert to sorted dictionary with media sorted by end_date (más reciente primero)
     sorted_items = []

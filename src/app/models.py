@@ -1844,7 +1844,7 @@ class Comic(Media):
 
     reading_time = models.PositiveIntegerField(
         default=0,
-        help_text="Reading time in minutes for this issue",
+        help_text="Total accumulated reading time in minutes for all issues read",
     )
     
     tracker = FieldTracker()
