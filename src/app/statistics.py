@@ -752,8 +752,9 @@ def get_activity_data(user, start_date, end_date):
 
     # Calculate activity statistics
     most_active_day, day_percentage = calculate_day_of_week_stats(
-        date_counts,
-        start_date.date(),
+        user,
+        start_date,
+        end_date,
     )
     current_streak, longest_streak = calculate_streaks(
         date_counts,
@@ -867,30 +868,77 @@ def get_filtered_historical_data(start_date, end_date, user):
     return combined_data
 
 
-def calculate_day_of_week_stats(date_counts, start_date):
-    """Calculate the most active day of the week based on activity frequency.
+def calculate_day_of_week_stats(user, start_date, end_date):
+    """Calculate the most active day of the week based on total watch time.
 
-    Returns the day name and its percentage of total activity.
+    Returns the day name and its percentage of total watch time.
     """
-    # Initialize counters for each day of the week
-    day_counts = defaultdict(int)
-    total_active_days = 0
+    from app.models import Episode, Comic, Movie
+    
+    # Initialize counters for total minutes per day of the week
+    day_minutes = defaultdict(int)
+    total_minutes = 0
 
-    # Count occurrences of each day of the week where activity happened
-    for date in date_counts:
-        if date < start_date:
-            continue
-        if date_counts[date] > 0:
-            day_name = date.strftime("%A")  # Get full day name
-            day_counts[day_name] += 1
-            total_active_days += 1
+    # Get episodes watched in date range
+    episode_filters = {
+        'end_date__isnull': False,
+        'item__runtime__isnull': False,
+        'related_season__user': user,
+    }
+    if start_date:
+        episode_filters['end_date__gte'] = start_date
+    if end_date:
+        episode_filters['end_date__lte'] = end_date
+    
+    episodes = Episode.objects.filter(**episode_filters).select_related('item')
+    for ep in episodes:
+        day_name = ep.end_date.strftime("%A")
+        runtime = ep.item.runtime or 0
+        day_minutes[day_name] += runtime
+        total_minutes += runtime
 
-    if not total_active_days:
+    # Get movies watched in date range
+    movie_filters = {
+        'end_date__isnull': False,
+        'item__runtime__isnull': False,
+        'user': user,
+    }
+    if start_date:
+        movie_filters['end_date__gte'] = start_date
+    if end_date:
+        movie_filters['end_date__lte'] = end_date
+    
+    movies = Movie.objects.filter(**movie_filters).select_related('item')
+    for movie in movies:
+        day_name = movie.end_date.strftime("%A")
+        runtime = movie.item.runtime or 0
+        day_minutes[day_name] += runtime
+        total_minutes += runtime
+
+    # Get comics read in date range
+    comic_filters = {
+        'progress__gt': 0,
+        'reading_time__gt': 0,
+        'user': user,
+    }
+    if start_date:
+        comic_filters['progressed_at__gte'] = start_date
+    if end_date:
+        comic_filters['progressed_at__lte'] = end_date
+    
+    comics = Comic.objects.filter(**comic_filters)
+    for comic in comics:
+        day_name = comic.progressed_at.strftime("%A")
+        reading_time = comic.reading_time or 0
+        day_minutes[day_name] += reading_time
+        total_minutes += reading_time
+
+    if not total_minutes:
         return None, 0
 
-    # Find the most active day
-    most_active_day = max(day_counts.items(), key=lambda x: x[1])
-    percentage = (most_active_day[1] / total_active_days) * 100
+    # Find the day with most watch time
+    most_active_day = max(day_minutes.items(), key=lambda x: x[1])
+    percentage = (most_active_day[1] / total_minutes) * 100
 
     return most_active_day[0], round(percentage)
 
