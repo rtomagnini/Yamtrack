@@ -23,8 +23,10 @@ def get_watch_time_distribution_pie_chart_data(user_media):
                 # For movies, sum item__runtime for all watched movies
                 minutes = queryset.select_related("item").aggregate(total=models.Sum("item__runtime"))["total"] or 0
             elif media_type == MediaTypes.COMIC.value:
-                # For comics, sum reading_time for all read comics
-                minutes = queryset.aggregate(total=models.Sum("reading_time"))["total"] or 0
+                # For comics, sum reading_time * progress for all comics with progress > 0
+                minutes = 0
+                for comic in queryset.filter(progress__gt=0):
+                    minutes += (comic.reading_time or 0) * comic.progress
             else:
                 # For TV/YouTube, sum item__runtime for all watched episodes
                 minutes = queryset.select_related("item").aggregate(total=models.Sum("item__runtime"))["total"] or 0
@@ -164,14 +166,14 @@ def get_watch_time_timeseries(user, start_date, end_date):
 
     # Query de comics leídos por el usuario en el rango
     comic_filters = {
-        'end_date__isnull': False,
-        'reading_time__isnull': False,
+        'progress__gt': 0,
+        'reading_time__gt': 0,
         'user': user,
     }
     if start_date:
-        comic_filters['end_date__gte'] = start_date
+        comic_filters['progressed_at__gte'] = start_date
     if end_date:
-        comic_filters['end_date__lte'] = end_date
+        comic_filters['progressed_at__lte'] = end_date
     comics = Comic.objects.filter(**comic_filters)
 
     # Agrupar y sumar runtime
@@ -187,9 +189,9 @@ def get_watch_time_timeseries(user, start_date, end_date):
         data.setdefault(key, 0)
         data[key] += ep.item.runtime or 0
 
-    # Agrupar y sumar reading_time de comics
+    # Agrupar y sumar reading_time de comics (reading_time * progress)
     for comic in comics:
-        dt = comic.end_date
+        dt = comic.progressed_at
         if group == 'day':
             key = dt.date()
         elif group == 'week':
@@ -197,7 +199,7 @@ def get_watch_time_timeseries(user, start_date, end_date):
         else:
             key = dt.date().replace(day=1)  # primer día del mes
         data.setdefault(key, 0)
-        data[key] += comic.reading_time or 0
+        data[key] += (comic.reading_time or 0) * comic.progress
 
     # Ordenar por fecha
     sorted_keys = sorted(data.keys())
@@ -284,10 +286,18 @@ def get_user_media(user, start_date, end_date):
     other_media = {}
     for media_type in other_types:
         model = apps.get_model(app_label="app", model_name=media_type)
-        if start_date is None and end_date is None:
-            queryset = model.objects.filter(user=user, end_date__isnull=False)
+        if media_type == MediaTypes.COMIC.value:
+            # For comics, include all with progress > 0 (issues read)
+            if start_date is None and end_date is None:
+                queryset = model.objects.filter(user=user, progress__gt=0)
+            else:
+                queryset = model.objects.filter(user=user, progress__gt=0, progressed_at__range=(start_date, end_date))
         else:
-            queryset = model.objects.filter(user=user, end_date__isnull=False, end_date__range=(start_date, end_date))
+            # For other media types, use end_date
+            if start_date is None and end_date is None:
+                queryset = model.objects.filter(user=user, end_date__isnull=False)
+            else:
+                queryset = model.objects.filter(user=user, end_date__isnull=False, end_date__range=(start_date, end_date))
         other_media[media_type] = queryset
 
     # Construir user_media y media_count
@@ -306,7 +316,11 @@ def get_user_media(user, start_date, end_date):
     media_count[MediaTypes.YOUTUBE.value] = youtube_episodes_watched.count()
     for media_type, queryset in other_media.items():
         user_media[media_type] = queryset
-        media_count[media_type] = queryset.count()
+        if media_type == MediaTypes.COMIC.value:
+            # For comics, count total issues read (sum of progress)
+            media_count[media_type] = queryset.aggregate(total=models.Sum("progress"))["total"] or 0
+        else:
+            media_count[media_type] = queryset.count()
     media_count["total"] = sum(media_count[mt] for mt in media_count if mt != "total")
 
     logger.info(
@@ -314,20 +328,23 @@ def get_user_media(user, start_date, end_date):
         user,
         "for all time" if start_date is None else f"from {start_date} to {end_date}",
     )
-    # Calculate total episodes watched and comics read (end_date not null)
+    # Calculate total episodes watched and comic issues read
     if start_date is None and end_date is None:
         watched_episodes = Episode.objects.filter(related_season__user=user, end_date__isnull=False)
         watched_movies = TV.objects.none()  # placeholder
         watched_movies_qs = apps.get_model("app", "movie").objects.filter(user=user, end_date__isnull=False)
-        read_comics_qs = apps.get_model("app", "comic").objects.filter(user=user, end_date__isnull=False)
+        # For comics, count issues read (sum of progress) instead of completed series
+        read_comics_qs = apps.get_model("app", "comic").objects.filter(user=user, progress__gt=0)
     else:
         watched_episodes = Episode.objects.filter(related_season__user=user, end_date__isnull=False, end_date__range=(start_date, end_date))
         watched_movies = TV.objects.none()  # placeholder
         watched_movies_qs = apps.get_model("app", "movie").objects.filter(user=user, end_date__isnull=False, end_date__range=(start_date, end_date))
-        read_comics_qs = apps.get_model("app", "comic").objects.filter(user=user, end_date__isnull=False, end_date__range=(start_date, end_date))
+        # For comics with date range, we need comics that have been updated in that range
+        read_comics_qs = apps.get_model("app", "comic").objects.filter(user=user, progress__gt=0, progressed_at__range=(start_date, end_date))
 
     episodes_watched = watched_episodes.count()
-    comics_read = read_comics_qs.count()
+    # For comics, sum the progress (number of issues read)
+    comics_read = read_comics_qs.aggregate(total=models.Sum("progress"))["total"] or 0
     items_watched = episodes_watched + comics_read
 
     # Sum runtime for watched episodes (from related Item)
@@ -340,10 +357,11 @@ def get_user_media(user, start_date, end_date):
         total=models.Sum("item__runtime")
     )["total"] or 0
 
-    # Sum reading time for comics
-    comic_minutes = read_comics_qs.aggregate(
-        total=models.Sum("reading_time")
-    )["total"] or 0
+    # Sum reading time for comic issues (reading_time * progress for each comic)
+    comic_minutes = 0
+    for comic in read_comics_qs:
+        # reading_time is per issue, so multiply by progress (number of issues read)
+        comic_minutes += (comic.reading_time or 0) * comic.progress
 
     total_watch_minutes = episode_minutes + movie_minutes + comic_minutes
 
