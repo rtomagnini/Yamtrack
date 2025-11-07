@@ -130,7 +130,7 @@ def get_watch_time_timeseries(user, start_date, end_date):
     - Entre 31 y 180 días: por semana
     - Más de 180 días: por mes
     """
-    from app.models import Episode, Comic
+    from app.models import Episode, Comic, Movie
     from django.db.models import Sum, F
     from django.utils import timezone
     import datetime
@@ -162,6 +162,18 @@ def get_watch_time_timeseries(user, start_date, end_date):
         episode_filters['end_date__lte'] = end_date
     episodes = Episode.objects.filter(**episode_filters)
 
+    # Query de películas vistas por el usuario en el rango
+    movie_filters = {
+        'end_date__isnull': False,
+        'item__runtime__isnull': False,
+        'user': user,
+    }
+    if start_date:
+        movie_filters['end_date__gte'] = start_date
+    if end_date:
+        movie_filters['end_date__lte'] = end_date
+    movies = Movie.objects.filter(**movie_filters).select_related('item')
+
     # Query de comics leídos por el usuario en el rango
     comic_filters = {
         'progress__gt': 0,
@@ -186,6 +198,18 @@ def get_watch_time_timeseries(user, start_date, end_date):
             key = dt.date().replace(day=1)  # primer día del mes
         data.setdefault(key, 0)
         data[key] += ep.item.runtime or 0
+
+    # Agrupar y sumar runtime de películas
+    for movie in movies:
+        dt = movie.end_date
+        if group == 'day':
+            key = dt.date()
+        elif group == 'week':
+            key = dt.date() - datetime.timedelta(days=dt.weekday())  # lunes de la semana
+        else:
+            key = dt.date().replace(day=1)  # primer día del mes
+        data.setdefault(key, 0)
+        data[key] += movie.item.runtime or 0
 
     # Agrupar y sumar reading_time de comics (accumulated total, not per issue)
     for comic in comics:
