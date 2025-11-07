@@ -31,15 +31,15 @@ def youtubes_view(request):
         qs = qs.filter(is_watched=False)
     # else 'all': no filter
 
-    # Sorting
+    # Sorting with secondary order by ID (descending) for consistent ordering
     if sort == 'title':
-        qs = qs.order_by('title')
+        qs = qs.order_by('title', '-id')
     elif sort == 'runtime':
-        qs = qs.order_by('runtime')
+        qs = qs.order_by('runtime', '-id')
     elif sort == 'end_date':
-        qs = qs.order_by('end_date_sub')
+        qs = qs.order_by('end_date_sub', '-id')
     else:  # default to air_date
-        qs = qs.order_by('-air_date')
+        qs = qs.order_by('-air_date', '-id')
 
 
     # Annotate with channel (TV) name and image (logo) by joining through Season
