@@ -1,3 +1,15 @@
+## [0.25.25.RT] - 2025-11-07
+
+### 🎬 Movie Runtime Auto-Update & Statistics Fix
+- **Auto-download movie runtime**: When marking a movie as completed (either by changing status or reaching max progress), the runtime is now automatically downloaded from TMDB and saved to the database.
+- **Movies in statistics**: Movies now properly appear in all statistics charts:
+  - Total Watch/Read Time
+  - Watch Time Distribution (pie chart)
+  - Watch Time Over Time (timeline chart)
+- **Fix**: Added movie runtime saving in all import sources (TMDB, Trakt, Simkl, IMDB) and webhooks (Jellyfin, Plex, Emby).
+- **Management command**: Added `update_movie_runtime` command to retroactively update runtime for existing movies without it.
+- **Note**: Movies without runtime in TMDB will not appear in statistics (this is a TMDB data limitation, not a bug).
+
 ## [0.25.24.RT] - 2025-11-01
 
 ### ✨ Integración Atresplayer en Episodios
