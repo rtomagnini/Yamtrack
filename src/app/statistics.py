@@ -12,8 +12,8 @@ def get_watch_time_distribution_pie_chart_data(user_media):
             },
         ],
     }
-    # Only TV SHOW (tmdb/manual), YouTube, Movies
-    media_types = [MediaTypes.TV.value, MediaTypes.YOUTUBE.value, MediaTypes.MOVIE.value]
+    # Include TV SHOW (tmdb/manual), YouTube, Movies, and Comics
+    media_types = [MediaTypes.TV.value, MediaTypes.YOUTUBE.value, MediaTypes.MOVIE.value, MediaTypes.COMIC.value]
     total_minutes = 0
     media_type_minutes = {}
     for media_type in media_types:
@@ -22,6 +22,9 @@ def get_watch_time_distribution_pie_chart_data(user_media):
             if media_type == MediaTypes.MOVIE.value:
                 # For movies, sum item__runtime for all watched movies
                 minutes = queryset.select_related("item").aggregate(total=models.Sum("item__runtime"))["total"] or 0
+            elif media_type == MediaTypes.COMIC.value:
+                # For comics, sum reading_time for all read comics
+                minutes = queryset.aggregate(total=models.Sum("reading_time"))["total"] or 0
             else:
                 # For TV/YouTube, sum item__runtime for all watched episodes
                 minutes = queryset.select_related("item").aggregate(total=models.Sum("item__runtime"))["total"] or 0
@@ -127,7 +130,7 @@ def get_watch_time_timeseries(user, start_date, end_date):
     - Entre 31 y 180 días: por semana
     - Más de 180 días: por mes
     """
-    from app.models import Episode
+    from app.models import Episode, Comic
     from django.db.models import Sum, F
     from django.utils import timezone
     import datetime
@@ -159,6 +162,18 @@ def get_watch_time_timeseries(user, start_date, end_date):
         episode_filters['end_date__lte'] = end_date
     episodes = Episode.objects.filter(**episode_filters)
 
+    # Query de comics leídos por el usuario en el rango
+    comic_filters = {
+        'end_date__isnull': False,
+        'reading_time__isnull': False,
+        'user': user,
+    }
+    if start_date:
+        comic_filters['end_date__gte'] = start_date
+    if end_date:
+        comic_filters['end_date__lte'] = end_date
+    comics = Comic.objects.filter(**comic_filters)
+
     # Agrupar y sumar runtime
     data = {}
     for ep in episodes.select_related('item'):
@@ -171,6 +186,18 @@ def get_watch_time_timeseries(user, start_date, end_date):
             key = dt.date().replace(day=1)  # primer día del mes
         data.setdefault(key, 0)
         data[key] += ep.item.runtime or 0
+
+    # Agrupar y sumar reading_time de comics
+    for comic in comics:
+        dt = comic.end_date
+        if group == 'day':
+            key = dt.date()
+        elif group == 'week':
+            key = dt.date() - datetime.timedelta(days=dt.weekday())  # lunes de la semana
+        else:
+            key = dt.date().replace(day=1)  # primer día del mes
+        data.setdefault(key, 0)
+        data[key] += comic.reading_time or 0
 
     # Ordenar por fecha
     sorted_keys = sorted(data.keys())
@@ -287,17 +314,21 @@ def get_user_media(user, start_date, end_date):
         user,
         "for all time" if start_date is None else f"from {start_date} to {end_date}",
     )
-    # Calculate total episodes watched (end_date not null)
+    # Calculate total episodes watched and comics read (end_date not null)
     if start_date is None and end_date is None:
         watched_episodes = Episode.objects.filter(related_season__user=user, end_date__isnull=False)
         watched_movies = TV.objects.none()  # placeholder
         watched_movies_qs = apps.get_model("app", "movie").objects.filter(user=user, end_date__isnull=False)
+        read_comics_qs = apps.get_model("app", "comic").objects.filter(user=user, end_date__isnull=False)
     else:
         watched_episodes = Episode.objects.filter(related_season__user=user, end_date__isnull=False, end_date__range=(start_date, end_date))
         watched_movies = TV.objects.none()  # placeholder
         watched_movies_qs = apps.get_model("app", "movie").objects.filter(user=user, end_date__isnull=False, end_date__range=(start_date, end_date))
+        read_comics_qs = apps.get_model("app", "comic").objects.filter(user=user, end_date__isnull=False, end_date__range=(start_date, end_date))
 
     episodes_watched = watched_episodes.count()
+    comics_read = read_comics_qs.count()
+    items_watched = episodes_watched + comics_read
 
     # Sum runtime for watched episodes (from related Item)
     episode_minutes = watched_episodes.select_related("item").aggregate(
@@ -309,59 +340,14 @@ def get_user_media(user, start_date, end_date):
         total=models.Sum("item__runtime")
     )["total"] or 0
 
-    total_watch_minutes = episode_minutes + movie_minutes
-
-    return user_media, media_count, episodes_watched, total_watch_minutes
-
-    # Construir user_media y media_count
-    user_media = {}
-    media_count = {"total": 0}
-    # Solo episodios de TV vistos (end_date no nulo y en rango)
-    if start_date is None and end_date is None:
-        tv_episodes_watched = tv_episodes.filter(end_date__isnull=False)
-        youtube_episodes_watched = youtube_episodes.filter(end_date__isnull=False)
-    else:
-        tv_episodes_watched = tv_episodes.filter(end_date__isnull=False, end_date__range=(start_date, end_date))
-        youtube_episodes_watched = youtube_episodes.filter(end_date__isnull=False, end_date__range=(start_date, end_date))
-    user_media[MediaTypes.TV.value] = tv_episodes_watched
-    media_count[MediaTypes.TV.value] = tv_episodes_watched.count()
-    user_media[MediaTypes.YOUTUBE.value] = youtube_episodes_watched
-    media_count[MediaTypes.YOUTUBE.value] = youtube_episodes_watched.count()
-    for media_type, queryset in other_media.items():
-        user_media[media_type] = queryset
-        media_count[media_type] = queryset.count()
-    media_count["total"] = sum(media_count[mt] for mt in media_count if mt != "total")
-
-    logger.info(
-        "%s - Retrieved media %s",
-        user,
-        "for all time" if start_date is None else f"from {start_date} to {end_date}",
-    )
-    # Calculate total episodes watched (end_date not null)
-    if start_date is None and end_date is None:
-        watched_episodes = Episode.objects.filter(related_season__user=user, end_date__isnull=False)
-        watched_movies = TV.objects.none()  # placeholder
-        watched_movies_qs = apps.get_model("app", "movie").objects.filter(user=user, end_date__isnull=False)
-    else:
-        watched_episodes = Episode.objects.filter(related_season__user=user, end_date__isnull=False, end_date__range=(start_date, end_date))
-        watched_movies = TV.objects.none()  # placeholder
-        watched_movies_qs = apps.get_model("app", "movie").objects.filter(user=user, end_date__isnull=False, end_date__range=(start_date, end_date))
-
-    episodes_watched = watched_episodes.count()
-
-    # Sum runtime for watched episodes (from related Item)
-    episode_minutes = watched_episodes.select_related("item").aggregate(
-        total=models.Sum("item__runtime")
+    # Sum reading time for comics
+    comic_minutes = read_comics_qs.aggregate(
+        total=models.Sum("reading_time")
     )["total"] or 0
 
-    # Sum runtime for watched movies
-    movie_minutes = watched_movies_qs.select_related("item").aggregate(
-        total=models.Sum("item__runtime")
-    )["total"] or 0
+    total_watch_minutes = episode_minutes + movie_minutes + comic_minutes
 
-    total_watch_minutes = episode_minutes + movie_minutes
-
-    return user_media, media_count, episodes_watched, total_watch_minutes
+    return user_media, media_count, items_watched, total_watch_minutes
 
 
 def get_media_type_distribution(media_count):
@@ -613,6 +599,9 @@ def get_timeline(user_media):
             if not hasattr(media, 'runtime') or media.runtime is None:
                 if hasattr(media, 'item') and hasattr(media.item, 'runtime'):
                     media.runtime = media.item.runtime
+                elif hasattr(media, 'reading_time'):
+                    # Para comics, usar reading_time como runtime
+                    media.runtime = media.reading_time
             local_end_date = timezone.localdate(end_date)
             year = local_end_date.year
             month = local_end_date.month

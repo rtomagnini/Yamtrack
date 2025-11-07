@@ -1392,7 +1392,7 @@ def statistics(request):
             )
 
     # Get all user media data in a single operation
-    user_media, media_count, episodes_watched, total_watch_minutes = stats.get_user_media(
+    user_media, media_count, items_watched, total_watch_minutes = stats.get_user_media(
         request.user,
         start_date,
         end_date,
@@ -1432,7 +1432,7 @@ def statistics(request):
         "status_distribution": status_distribution,
     "watch_time_distribution_pie_chart_data": watch_time_distribution_pie_chart_data,
         "timeline": timeline,
-        "episodes_watched": episodes_watched,
+        "items_watched": items_watched,
         "total_watch_time": format_minutes(total_watch_minutes),
         "top_tv_shows": top_tv_shows,
         "top_youtube_channels": top_youtube_channels,
