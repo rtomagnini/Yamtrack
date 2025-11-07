@@ -98,6 +98,7 @@ def progress_edit(request, media_type, instance_id):
     """Increase or decrease the progress of a media item from home page."""
     operation = request.POST["operation"]
     confirm_completion = request.POST.get("confirm_completion")
+    reading_time = request.POST.get("reading_time", 0)  # For comics
 
     media = BasicMedia.objects.get_media_prefetch(
         request.user,
@@ -149,6 +150,12 @@ def progress_edit(request, media_type, instance_id):
         else:
             media.increase_progress()
     elif operation == "increase":
+        # For comics, save reading_time if provided
+        if media_type == MediaTypes.COMIC.value and reading_time:
+            try:
+                media.reading_time = int(reading_time)
+            except (ValueError, TypeError):
+                media.reading_time = 0
         media.increase_progress()
     elif operation == "decrease":
         media.decrease_progress()

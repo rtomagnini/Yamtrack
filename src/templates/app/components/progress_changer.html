@@ -4,7 +4,15 @@
      x-data="{ 
        showConfirmation: false, 
        confirmationData: null,
+       showReadingTimePrompt: false,
+       readingTime: '',
        async handleIncreaseClick() {
+         // For comics, show reading time prompt first
+         if ('{{ media.item.media_type }}' === 'comic') {
+           this.showReadingTimePrompt = true;
+           return;
+         }
+         
          try {
            const response = await fetch('{% url 'progress_edit' media.item.media_type media.id %}', {
              method: 'POST',
@@ -27,6 +35,33 @@
            }
 
            // If we get here, it was successful - reload the progress component
+           if (response.ok) {
+             const html = await response.text();
+             document.getElementById('progress-{{ media.item.media_type }}-{{ media.id }}').innerHTML = html;
+           }
+         } catch (error) {
+           console.error('Error:', error);
+         }
+       },
+       async submitReadingTime() {
+         try {
+           const formData = new URLSearchParams({
+             'operation': 'increase'
+           });
+           
+           if (this.readingTime) {
+             formData.append('reading_time', this.readingTime);
+           }
+           
+           const response = await fetch('{% url 'progress_edit' media.item.media_type media.id %}', {
+             method: 'POST',
+             headers: {
+               'X-CSRFToken': '{{ csrf_token }}',
+               'X-Requested-With': 'XMLHttpRequest'
+             },
+             body: formData
+           });
+
            if (response.ok) {
              const html = await response.text();
              document.getElementById('progress-{{ media.item.media_type }}-{{ media.id }}').innerHTML = html;
@@ -60,7 +95,7 @@
      }">
   
   {# Normal progress controls #}
-  <div x-show="!showConfirmation" class="flex items-center justify-center space-x-4">
+  <div x-show="!showConfirmation && !showReadingTimePrompt" class="flex items-center justify-center space-x-4">
     <button class="p-1 bg-gray-700 hover:bg-gray-600 rounded-md transition-colors cursor-pointer disabled:opacity-50 disabled:hover:bg-gray-700 disabled:cursor-not-allowed"
             {% if media.progress == 0 %}disabled{% endif %}
             hx-post="{% url 'progress_edit' media.item.media_type media.id %}"
@@ -99,7 +134,7 @@
 
     <button class="p-1 bg-gray-700 hover:bg-gray-600 rounded-md transition-colors cursor-pointer disabled:opacity-50 disabled:hover:bg-gray-700 disabled:cursor-not-allowed"
             {% if media.progress == media.max_progress %}disabled{% endif %}
-            {% if media.item.media_type == MediaTypes.SEASON.value %}
+            {% if media.item.media_type == MediaTypes.SEASON.value or media.item.media_type == MediaTypes.COMIC.value %}
               @click="handleIncreaseClick()"
             {% else %}
               hx-post="{% url 'progress_edit' media.item.media_type media.id %}"
@@ -141,6 +176,28 @@
       <button @click="submitWithConfirmation('yes')"
               class="px-2 py-1 bg-indigo-600 text-white rounded text-xs hover:bg-indigo-700 transition-colors cursor-pointer">
         Yes
+      </button>
+    </div>
+  </div>
+
+  {# Reading time prompt for comics #}
+  <div x-show="showReadingTimePrompt" class="text-center space-y-3">
+    <p class="text-xs text-gray-300 mb-2">Reading time (minutes)?</p>
+    <input type="number" 
+           x-model="readingTime"
+           placeholder="Optional"
+           min="0"
+           class="w-20 px-2 py-1 bg-gray-700 text-white rounded text-xs text-center focus:outline-none focus:ring-1 focus:ring-indigo-500"
+           @keydown.enter="submitReadingTime()">
+    
+    <div class="flex justify-center gap-2">
+      <button @click="showReadingTimePrompt = false; readingTime = ''"
+              class="px-2 py-1 bg-gray-600 text-white rounded text-xs hover:bg-gray-700 transition-colors cursor-pointer">
+        Cancel
+      </button>
+      <button @click="submitReadingTime()"
+              class="px-2 py-1 bg-indigo-600 text-white rounded text-xs hover:bg-indigo-700 transition-colors cursor-pointer">
+        OK
       </button>
     </div>
   </div>

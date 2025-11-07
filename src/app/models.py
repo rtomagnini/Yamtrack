@@ -1842,6 +1842,11 @@ class Book(Media):
 class Comic(Media):
     """Model for comics."""
 
+    reading_time = models.PositiveIntegerField(
+        default=0,
+        help_text="Reading time in minutes for this issue",
+    )
+    
     tracker = FieldTracker()
 
 
