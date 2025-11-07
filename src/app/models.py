@@ -1044,14 +1044,22 @@ class Media(models.Model):
     def process_status(self):
         """Update fields depending on the status of the media."""
         if self.status == Status.COMPLETED.value:
-            max_progress = providers.services.get_media_metadata(
+            metadata = providers.services.get_media_metadata(
                 self.item.media_type,
                 self.item.media_id,
                 self.item.source,
-            )["max_progress"]
+            )
+            max_progress = metadata["max_progress"]
 
             if max_progress:
                 self.progress = max_progress
+            
+            # Update Item runtime if missing (for movies)
+            if self.item.media_type == MediaTypes.MOVIE.value and not self.item.runtime:
+                runtime = metadata.get("runtime")
+                if runtime:
+                    self.item.runtime = runtime
+                    self.item.save(update_fields=["runtime"])
 
         self.item.fetch_releases(delay=True)
 
