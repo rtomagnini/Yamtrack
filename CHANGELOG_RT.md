@@ -1,3 +1,18 @@
+## [0.25.26.RT] - 2025-11-17
+
+### 🎮 Game Session Time Tracking
+- **Modal-based play time input**: Replaced fixed 10-minute increments with flexible user input modal for game sessions.
+- When clicking the + button on a game, a modal now prompts "Play time (minutes)?" allowing you to enter the exact session duration.
+- Play time accumulates in the `play_time` field and updates progress accordingly.
+- Each session is stored separately via django-simple-history, enabling detailed timeline reconstruction.
+- **Full statistics integration**: Games now appear in all statistics charts:
+  - Total Watch/Read/Play Time
+  - Watch/Read/Play Time Distribution (pie chart)
+  - Watch/Read/Play Time Over Time (timeline chart)
+  - Most Active Day of the Week
+- Game sessions are displayed in the timeline with session numbers and duration.
+- Pattern similar to comics reading_time but required for games.
+
 ## [0.25.25.RT] - 2025-11-07
 
 ### 🎬 Movie Runtime Auto-Update & Statistics Fix
