@@ -6,10 +6,18 @@
        confirmationData: null,
        showReadingTimePrompt: false,
        readingTime: '',
+       showPlayTimePrompt: false,
+       playTime: '',
        async handleIncreaseClick() {
          // For comics, show reading time prompt first
          if ('{{ media.item.media_type }}' === 'comic') {
            this.showReadingTimePrompt = true;
+           return;
+         }
+         
+         // For games, show play time prompt first
+         if ('{{ media.item.media_type }}' === 'game') {
+           this.showPlayTimePrompt = true;
            return;
          }
          
@@ -70,6 +78,33 @@
            console.error('Error:', error);
          }
        },
+       async submitPlayTime() {
+         try {
+           const formData = new URLSearchParams({
+             'operation': 'increase'
+           });
+           
+           if (this.playTime) {
+             formData.append('play_time', this.playTime);
+           }
+           
+           const response = await fetch('{% url 'progress_edit' media.item.media_type media.id %}', {
+             method: 'POST',
+             headers: {
+               'X-CSRFToken': '{{ csrf_token }}',
+               'X-Requested-With': 'XMLHttpRequest'
+             },
+             body: formData
+           });
+
+           if (response.ok) {
+             const html = await response.text();
+             document.getElementById('progress-{{ media.item.media_type }}-{{ media.id }}').innerHTML = html;
+           }
+         } catch (error) {
+           console.error('Error:', error);
+         }
+       },
        async submitWithConfirmation(choice) {
          try {
            const response = await fetch('{% url 'progress_edit' media.item.media_type media.id %}', {
@@ -95,7 +130,7 @@
      }">
   
   {# Normal progress controls #}
-  <div x-show="!showConfirmation && !showReadingTimePrompt" class="flex items-center justify-center space-x-4">
+  <div x-show="!showConfirmation && !showReadingTimePrompt && !showPlayTimePrompt" class="flex items-center justify-center space-x-4">
     <button class="p-1 bg-gray-700 hover:bg-gray-600 rounded-md transition-colors cursor-pointer disabled:opacity-50 disabled:hover:bg-gray-700 disabled:cursor-not-allowed"
             {% if media.progress == 0 %}disabled{% endif %}
             hx-post="{% url 'progress_edit' media.item.media_type media.id %}"
@@ -134,7 +169,7 @@
 
     <button class="p-1 bg-gray-700 hover:bg-gray-600 rounded-md transition-colors cursor-pointer disabled:opacity-50 disabled:hover:bg-gray-700 disabled:cursor-not-allowed"
             {% if media.progress == media.max_progress %}disabled{% endif %}
-            {% if media.item.media_type == MediaTypes.SEASON.value or media.item.media_type == MediaTypes.COMIC.value %}
+            {% if media.item.media_type == MediaTypes.SEASON.value or media.item.media_type == MediaTypes.COMIC.value or media.item.media_type == MediaTypes.GAME.value %}
               @click="handleIncreaseClick()"
             {% else %}
               hx-post="{% url 'progress_edit' media.item.media_type media.id %}"
@@ -197,6 +232,28 @@
       </button>
       <button @click="submitReadingTime()"
               class="px-2 py-1 bg-indigo-600 text-white rounded text-xs hover:bg-indigo-700 transition-colors cursor-pointer">
+        OK
+      </button>
+    </div>
+  </div>
+
+  {# Play time prompt for games #}
+  <div x-show="showPlayTimePrompt" class="text-center space-y-3">
+    <p class="text-xs text-gray-300 mb-2">Play time (minutes)?</p>
+    <input type="number" 
+           x-model="playTime"
+           placeholder="Required"
+           min="1"
+           class="w-20 px-2 py-1 bg-gray-700 text-white rounded text-xs text-center focus:outline-none focus:ring-1 focus:ring-indigo-500"
+           @keydown.enter="submitPlayTime()">
+    
+    <div class="flex justify-center gap-2">
+      <button @click="showPlayTimePrompt = false; playTime = ''"
+              class="px-2 py-1 bg-gray-600 text-white rounded text-xs hover:bg-gray-700 transition-colors cursor-pointer">
+        Cancel
+      </button>
+      <button @click="submitPlayTime()"
+              class="px-2 py-1 bg-green-600 text-white rounded text-xs hover:bg-green-700 transition-colors cursor-pointer">
         OK
       </button>
     </div>

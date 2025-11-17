@@ -159,12 +159,15 @@ def progress_edit(request, media_type, instance_id):
                 media.save(update_fields=['reading_time'])
             except (ValueError, TypeError):
                 pass
-        # For games, accumulate play_time if provided (defaults to 10 minutes)
+        # For games, accumulate play_time (required from modal) and update progress
         elif media_type == MediaTypes.GAME.value:
             try:
-                time_to_add = int(play_time) if play_time else 10
-                media.play_time = (media.play_time or 0) + time_to_add
-                media.save(update_fields=['play_time'])
+                # play_time is required from the modal
+                time_to_add = int(play_time) if play_time else 0
+                if time_to_add > 0:
+                    media.play_time = (media.play_time or 0) + time_to_add
+                    media.progress = (media.progress or 0) + time_to_add
+                    media.save(update_fields=['play_time', 'progress'])
             except (ValueError, TypeError):
                 pass
         media.increase_progress()

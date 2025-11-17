@@ -1842,10 +1842,14 @@ class Game(Media):
         return app.helpers.minutes_to_hhmm(self.progress)
 
     def increase_progress(self):
-        """Increase the progress of the media by 10 minutes."""
-        self.progress += 10
-        self.save()
-        logger.info("Changed playtime of %s to %s", self, self.formatted_progress)
+        """Increase the progress of the media by the play time from session.
+        
+        Note: Progress is now tracked via play_time sessions from the modal.
+        This method is called by views.py after play_time is accumulated.
+        """
+        # Progress is handled by play_time accumulation in views.py
+        # We just log the current formatted progress
+        logger.info("Play session recorded for %s, total playtime: %s", self, self.formatted_progress)
 
     def decrease_progress(self):
         """Decrease the progress of the media by 10 minutes."""
