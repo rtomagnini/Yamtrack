@@ -12,8 +12,8 @@ def get_watch_time_distribution_pie_chart_data(user_media):
             },
         ],
     }
-    # Include TV SHOW (tmdb/manual), YouTube, Movies, and Comics
-    media_types = [MediaTypes.TV.value, MediaTypes.YOUTUBE.value, MediaTypes.MOVIE.value, MediaTypes.COMIC.value]
+    # Include TV SHOW (tmdb/manual), YouTube, Movies, Comics, and Games
+    media_types = [MediaTypes.TV.value, MediaTypes.YOUTUBE.value, MediaTypes.MOVIE.value, MediaTypes.COMIC.value, MediaTypes.GAME.value]
     total_minutes = 0
     media_type_minutes = {}
     for media_type in media_types:
@@ -25,6 +25,9 @@ def get_watch_time_distribution_pie_chart_data(user_media):
             elif media_type == MediaTypes.COMIC.value:
                 # For comics, sum accumulated reading_time for all comics with progress > 0
                 minutes = queryset.aggregate(total=models.Sum("reading_time"))["total"] or 0
+            elif media_type == MediaTypes.GAME.value:
+                # For games, sum accumulated play_time for all games with progress > 0
+                minutes = queryset.aggregate(total=models.Sum("play_time"))["total"] or 0
             else:
                 # For TV/YouTube, sum item__runtime for all watched episodes
                 minutes = queryset.select_related("item").aggregate(total=models.Sum("item__runtime"))["total"] or 0
@@ -130,7 +133,7 @@ def get_watch_time_timeseries(user, start_date, end_date):
     - Entre 31 y 180 días: por semana
     - Más de 180 días: por mes
     """
-    from app.models import Episode, Comic, Movie
+    from app.models import Episode, Comic, Movie, Game
     from django.db.models import Sum, F
     from django.utils import timezone
     import datetime
@@ -186,6 +189,18 @@ def get_watch_time_timeseries(user, start_date, end_date):
         comic_filters['progressed_at__lte'] = end_date
     comics = Comic.objects.filter(**comic_filters)
 
+    # Query de games jugados por el usuario en el rango
+    game_filters = {
+        'progress__gt': 0,
+        'play_time__gt': 0,
+        'user': user,
+    }
+    if start_date:
+        game_filters['progressed_at__gte'] = start_date
+    if end_date:
+        game_filters['progressed_at__lte'] = end_date
+    games = Game.objects.filter(**game_filters)
+
     # Agrupar y sumar runtime
     data = {}
     for ep in episodes.select_related('item'):
@@ -222,6 +237,18 @@ def get_watch_time_timeseries(user, start_date, end_date):
             key = dt.date().replace(day=1)  # primer día del mes
         data.setdefault(key, 0)
         data[key] += comic.reading_time or 0
+
+    # Agrupar y sumar play_time de games (accumulated total)
+    for game in games:
+        dt = game.progressed_at
+        if group == 'day':
+            key = dt.date()
+        elif group == 'week':
+            key = dt.date() - datetime.timedelta(days=dt.weekday())  # lunes de la semana
+        else:
+            key = dt.date().replace(day=1)  # primer día del mes
+        data.setdefault(key, 0)
+        data[key] += game.play_time or 0
 
     # Ordenar por fecha
     sorted_keys = sorted(data.keys())
@@ -298,18 +325,25 @@ def get_user_media(user, start_date, end_date):
         item__media_type=MediaTypes.EPISODE.value,
         item__source="youtube",
     )
-    # 3. Otros tipos (movie, comic, anime, book...)
+    # 3. Otros tipos (movie, comic, anime, book, game...)
     other_types = [
         MediaTypes.MOVIE.value,
         MediaTypes.ANIME.value,
         MediaTypes.COMIC.value,
         MediaTypes.BOOK.value,
+        MediaTypes.GAME.value,
     ]
     other_media = {}
     for media_type in other_types:
         model = apps.get_model(app_label="app", model_name=media_type)
         if media_type == MediaTypes.COMIC.value:
             # For comics, include all with progress > 0 (issues read)
+            if start_date is None and end_date is None:
+                queryset = model.objects.filter(user=user, progress__gt=0)
+            else:
+                queryset = model.objects.filter(user=user, progress__gt=0, progressed_at__range=(start_date, end_date))
+        elif media_type == MediaTypes.GAME.value:
+            # For games, include all with progress > 0 (time played)
             if start_date is None and end_date is None:
                 queryset = model.objects.filter(user=user, progress__gt=0)
             else:
@@ -341,6 +375,9 @@ def get_user_media(user, start_date, end_date):
         if media_type == MediaTypes.COMIC.value:
             # For comics, count total issues read (sum of progress)
             media_count[media_type] = queryset.aggregate(total=models.Sum("progress"))["total"] or 0
+        elif media_type == MediaTypes.GAME.value:
+            # For games, count number of games played (with progress > 0)
+            media_count[media_type] = queryset.count()
         else:
             media_count[media_type] = queryset.count()
     media_count["total"] = sum(media_count[mt] for mt in media_count if mt != "total")
@@ -367,7 +404,13 @@ def get_user_media(user, start_date, end_date):
     episodes_watched = watched_episodes.count()
     # For comics, sum the progress (number of issues read)
     comics_read = read_comics_qs.aggregate(total=models.Sum("progress"))["total"] or 0
-    items_watched = episodes_watched + comics_read
+    # For games, count number of games played
+    if start_date is None and end_date is None:
+        played_games_qs = apps.get_model("app", "game").objects.filter(user=user, progress__gt=0)
+    else:
+        played_games_qs = apps.get_model("app", "game").objects.filter(user=user, progress__gt=0, progressed_at__range=(start_date, end_date))
+    games_played = played_games_qs.count()
+    items_watched = episodes_watched + comics_read + games_played
 
     # Sum runtime for watched episodes (from related Item)
     episode_minutes = watched_episodes.select_related("item").aggregate(
@@ -384,7 +427,12 @@ def get_user_media(user, start_date, end_date):
         total=models.Sum("reading_time")
     )["total"] or 0
 
-    total_watch_minutes = episode_minutes + movie_minutes + comic_minutes
+    # Sum play time for games (play_time is already accumulated per game)
+    game_minutes = played_games_qs.aggregate(
+        total=models.Sum("play_time")
+    )["total"] or 0
+
+    total_watch_minutes = episode_minutes + movie_minutes + comic_minutes + game_minutes
 
     return user_media, media_count, items_watched, total_watch_minutes
 
@@ -403,7 +451,7 @@ def get_media_type_distribution(media_count):
         ],
     }
 
-    # Incluir TV, YouTube, Movie, Anime, Comic, Book
+    # Incluir TV, YouTube, Movie, Anime, Comic, Book, Game
     allowed_types = [
         MediaTypes.TV.value,
         MediaTypes.YOUTUBE.value,
@@ -411,6 +459,7 @@ def get_media_type_distribution(media_count):
         MediaTypes.ANIME.value,
         MediaTypes.COMIC.value,
         MediaTypes.BOOK.value,
+        MediaTypes.GAME.value,
     ]
     total = sum(media_count.get(mt, 0) for mt in allowed_types)
     for media_type in allowed_types:
@@ -667,6 +716,39 @@ def get_timeline(user_media):
                             timeline[month_year].append(issue_entry)
                         
                         previous_progress = record.progress
+        elif media_type == MediaTypes.GAME.value:
+            # For games, expand into individual play sessions from history
+            for game in queryset:
+                # Get historical records to see play_time changes
+                history = game.history.all().order_by('history_date')
+                previous_play_time = 0
+                session_count = 0
+                
+                for record in history:
+                    if hasattr(record, 'play_time') and record.play_time and record.play_time > previous_play_time:
+                        # A play session occurred
+                        session_count += 1
+                        session_time = record.play_time - previous_play_time
+                        
+                        # Create a pseudo-object for the session
+                        session_entry = type('GameSession', (), {})()
+                        session_entry.item = game.item
+                        session_entry.media_type = 'game_session'
+                        session_entry.session_number = session_count
+                        session_entry.end_date = record.history_date
+                        session_entry.progressed_at = record.history_date
+                        session_entry.runtime = session_time
+                        session_entry.game_id = game.id
+                        session_entry.user = game.user
+                        
+                        local_end_date = timezone.localdate(record.history_date)
+                        year = local_end_date.year
+                        month = local_end_date.month
+                        month_name = calendar.month_name[month]
+                        month_year = f"{month_name} {year}"
+                        timeline[month_year].append(session_entry)
+                        
+                        previous_play_time = record.play_time
         else:
             # For other media types, use existing logic
             for media in queryset:
@@ -683,6 +765,9 @@ def get_timeline(user_media):
                     elif hasattr(media, 'reading_time'):
                         # Para comics, usar reading_time como runtime
                         media.runtime = media.reading_time
+                    elif hasattr(media, 'play_time'):
+                        # Para games, usar play_time como runtime
+                        media.runtime = media.play_time
                 local_end_date = timezone.localdate(end_date)
                 year = local_end_date.year
                 month = local_end_date.month
@@ -873,7 +958,7 @@ def calculate_day_of_week_stats(user, start_date, end_date):
 
     Returns the day name and its percentage of total watch time.
     """
-    from app.models import Episode, Comic, Movie
+    from app.models import Episode, Comic, Movie, Game
     
     # Initialize counters for total minutes per day of the week
     day_minutes = defaultdict(int)
@@ -932,6 +1017,24 @@ def calculate_day_of_week_stats(user, start_date, end_date):
         reading_time = comic.reading_time or 0
         day_minutes[day_name] += reading_time
         total_minutes += reading_time
+
+    # Get games played in date range
+    game_filters = {
+        'progress__gt': 0,
+        'play_time__gt': 0,
+        'user': user,
+    }
+    if start_date:
+        game_filters['progressed_at__gte'] = start_date
+    if end_date:
+        game_filters['progressed_at__lte'] = end_date
+    
+    games = Game.objects.filter(**game_filters)
+    for game in games:
+        day_name = game.progressed_at.strftime("%A")
+        play_time = game.play_time or 0
+        day_minutes[day_name] += play_time
+        total_minutes += play_time
 
     if not total_minutes:
         return None, 0

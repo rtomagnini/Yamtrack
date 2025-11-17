@@ -1829,6 +1829,11 @@ class Movie(Media):
 class Game(Media):
     """Model for games."""
 
+    play_time = models.PositiveIntegerField(
+        default=0,
+        help_text="Total accumulated play time in minutes for all gaming sessions",
+    )
+    
     tracker = FieldTracker()
 
     @property
@@ -1837,14 +1842,14 @@ class Game(Media):
         return app.helpers.minutes_to_hhmm(self.progress)
 
     def increase_progress(self):
-        """Increase the progress of the media by 30 minutes."""
-        self.progress += 30
+        """Increase the progress of the media by 10 minutes."""
+        self.progress += 10
         self.save()
         logger.info("Changed playtime of %s to %s", self, self.formatted_progress)
 
     def decrease_progress(self):
-        """Decrease the progress of the media by 30 minutes."""
-        self.progress -= 30
+        """Decrease the progress of the media by 10 minutes."""
+        self.progress -= 10
         self.save()
         logger.info("Changed playtime of %s to %s", self, self.formatted_progress)
 

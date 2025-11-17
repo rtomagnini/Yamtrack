@@ -99,6 +99,7 @@ def progress_edit(request, media_type, instance_id):
     operation = request.POST["operation"]
     confirm_completion = request.POST.get("confirm_completion")
     reading_time = request.POST.get("reading_time", 0)  # For comics
+    play_time = request.POST.get("play_time", 0)  # For games
 
     media = BasicMedia.objects.get_media_prefetch(
         request.user,
@@ -156,6 +157,14 @@ def progress_edit(request, media_type, instance_id):
                 time_to_add = int(reading_time)
                 media.reading_time = (media.reading_time or 0) + time_to_add
                 media.save(update_fields=['reading_time'])
+            except (ValueError, TypeError):
+                pass
+        # For games, accumulate play_time if provided (defaults to 10 minutes)
+        elif media_type == MediaTypes.GAME.value:
+            try:
+                time_to_add = int(play_time) if play_time else 10
+                media.play_time = (media.play_time or 0) + time_to_add
+                media.save(update_fields=['play_time'])
             except (ValueError, TypeError):
                 pass
         media.increase_progress()

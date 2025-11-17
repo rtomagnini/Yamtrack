@@ -175,7 +175,7 @@
           </svg>
         </div>
         <div>
-          <h3 class="text-sm font-medium text-gray-400">Items Watched/Read</h3>
+          <h3 class="text-sm font-medium text-gray-400">Items Watched/Read/Played</h3>
           <p class="text-2xl font-bold">
             {{ items_watched }}
           </p>
@@ -190,7 +190,7 @@
           </svg>
         </div>
         <div>
-          <h3 class="text-sm font-medium text-gray-400">Total Watch/Read Time</h3>
+          <h3 class="text-sm font-medium text-gray-400">Total Watch/Read/Play Time</h3>
           <p class="text-2xl font-bold">
             {{ total_watch_time }}
           </p>
@@ -493,7 +493,7 @@
                 {% for media in media_list %}
                   <div class="bg-[#39404b] p-3 rounded-xl hover:ring-2 hover:ring-indigo-500 transition-all duration-200 w-full flex flex-row gap-3 items-start min-h-0">
                     <a href="{{ media.item|media_url }}" class="w-auto flex-shrink-0">
-                      {% if media.item.media_type == 'movie' or media.item.media_type == 'comic' or media.media_type == 'comic_issue' %}
+                      {% if media.item.media_type == 'movie' or media.item.media_type == 'comic' or media.media_type == 'comic_issue' or media.item.media_type == 'game' or media.media_type == 'game_session' %}
                         <div style="aspect-ratio:2/3; width:96px; max-width:96px;" class="overflow-hidden rounded-lg bg-[#3e454d] flex-shrink-0">
                       {% else %}
                         <div style="aspect-ratio:16/9; width:128px; max-width:128px;" class="overflow-hidden rounded-lg bg-[#3e454d] flex-shrink-0">
@@ -510,11 +510,13 @@
                           {{ media.item }}
                           {% if media.media_type == 'comic_issue' %}
                             <span class="text-indigo-400">#{{ media.issue_number }}</span>
+                          {% elif media.media_type == 'game_session' %}
+                            <span class="text-green-400">Session #{{ media.session_number }}</span>
                           {% endif %}
                         </a>
                       </h4>
                       <div class="text-xs text-gray-400 mb-0.5">
-                        {% if media.media_type == 'comic_issue' %}
+                        {% if media.media_type == 'comic_issue' or media.media_type == 'game_session' %}
                           <span>{{ media.end_date|date:"Y-m-d H:i" }}</span>
                         {% elif media.start_date or media.end_date %}
                           <span>
