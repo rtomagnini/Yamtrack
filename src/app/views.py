@@ -770,15 +770,43 @@ def episode_save(request):
             user=request.user,
         )
     except Season.DoesNotExist:
-        # Skip TMDB calls for YouTube sources
+        # For YouTube sources, create Season automatically if it doesn't exist
         if source == Sources.YOUTUBE.value:
-            logger.debug("DEBUG: YouTube source detected, skipping Season creation")
-            logger.error(
-                "Season not found for YouTube video: media_id=%s, season_number=%s",
-                media_id,
-                season_number,
+            logger.debug("DEBUG: YouTube Season not found, creating it automatically")
+            
+            # Get or create the parent Item (YouTube channel)
+            parent_item, _ = Item.objects.get_or_create(
+                media_id=media_id,
+                source=source,
+                media_type=MediaTypes.YOUTUBE.value,
+                defaults={
+                    'title': f'YouTube Channel {media_id}',
+                    'season_number': None,
+                    'episode_number': None,
+                }
             )
-            return HttpResponseBadRequest("Season not found for YouTube video")
+            
+            # Create Season Item
+            season_item, _ = Item.objects.get_or_create(
+                media_id=media_id,
+                source=source,
+                media_type=MediaTypes.SEASON.value,
+                season_number=season_number,
+                episode_number=None,
+                defaults={
+                    'title': f'{parent_item.title} S{season_number}',
+                }
+            )
+            
+            # Create Season object
+            related_season, _ = Season.objects.get_or_create(
+                item=season_item,
+                user=request.user,
+                defaults={
+                    'status': 'watching',
+                }
+            )
+            logger.info("Created YouTube Season: %s", related_season)
 
         logger.debug(
             "DEBUG: Not YouTube source, proceeding with TMDB call. source=%s, expected=%s",
@@ -898,6 +926,7 @@ def episode_save(request):
         context = {
             'video': video,
             'today': timezone.now().date(),
+            'now': timezone.now(),
             'csrf_token': get_token(request),
         }
         return render(request, 'app/components/youtube_grid_items_card.html', context)

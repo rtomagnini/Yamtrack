@@ -24,12 +24,13 @@
         <div class="flex gap-2 items-center ml-2 mt-0">
           {# Mark as Watched Button #}
           <button
-            class="p-2.5 bg-blue-600 text-white rounded-full flex items-center justify-center hover:bg-blue-500 hover:scale-110 hover:shadow-[0_0_15px_rgba(37,99,235,0.5)] transition-all duration-200 cursor-pointer min-w-[44px] min-h-[44px]{% if video.end_date_sub %} opacity-50{% endif %}"
+            class="p-2.5 bg-blue-600 text-white rounded-full flex items-center justify-center transition-all duration-200 min-w-[44px] min-h-[44px]{% if video.end_date_sub %} opacity-50 cursor-not-allowed{% else %} hover:bg-blue-500 hover:scale-110 hover:shadow-[0_0_15px_rgba(37,99,235,0.5)] cursor-pointer{% endif %}"
             style="background-color: #2563eb; border-radius: 9999px;"
             title="{% if not video.end_date_sub %}Mark as watched{% else %}Watched{% endif %}"
+            {% if video.end_date_sub %}disabled{% endif %}
             {% if not video.end_date_sub %}
               hx-post="{% url 'episode_save' %}"
-              hx-vals='{"media_id": "{{ video.media_id }}", "source": "{{ video.source }}", "season_number": "{{ video.season_number }}", "episode_number": "{{ video.episode_number }}", "end_date": "{{ today|date:'Y-m-d' }}"}'
+              hx-vals='{"media_id": "{{ video.media_id }}", "source": "{{ video.source }}", "season_number": "{{ video.season_number }}", "episode_number": "{{ video.episode_number }}", "end_date": "{{ now|date:'Y-m-d H:i' }}"}'
               hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
               hx-target="closest [data-video-card]"
               hx-swap="outerHTML swap:0.5s"
