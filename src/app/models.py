@@ -1833,6 +1833,11 @@ class Game(Media):
         default=0,
         help_text="Total accumulated play time in minutes for all gaming sessions",
     )
+    percentage_progress = models.PositiveSmallIntegerField(
+        default=0,
+        validators=[MaxValueValidator(100)],
+        help_text="Optional percentage progress (0-100) for tracking game completion",
+    )
     
     tracker = FieldTracker()
 

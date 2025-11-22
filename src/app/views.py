@@ -100,6 +100,7 @@ def progress_edit(request, media_type, instance_id):
     confirm_completion = request.POST.get("confirm_completion")
     reading_time = request.POST.get("reading_time", 0)  # For comics
     play_time = request.POST.get("play_time", 0)  # For games
+    percentage_progress = request.POST.get("percentage_progress", None)  # For games
 
     media = BasicMedia.objects.get_media_prefetch(
         request.user,
@@ -167,7 +168,19 @@ def progress_edit(request, media_type, instance_id):
                 if time_to_add > 0:
                     media.play_time = (media.play_time or 0) + time_to_add
                     media.progress = (media.progress or 0) + time_to_add
-                    media.save(update_fields=['play_time', 'progress'])
+                    
+                    # Update percentage_progress if provided
+                    if percentage_progress:
+                        try:
+                            new_percentage = int(percentage_progress)
+                            # Validate range 0-100
+                            if 0 <= new_percentage <= 100:
+                                media.percentage_progress = new_percentage
+                        except (ValueError, TypeError):
+                            pass
+                    
+                    fields_to_update = ['play_time', 'progress', 'percentage_progress']
+                    media.save(update_fields=fields_to_update)
             except (ValueError, TypeError):
                 pass
         media.increase_progress()
@@ -1652,7 +1665,7 @@ def game_sessions(request, game_id):
     # Get all historical records for this game, ordered by date (oldest first)
     sessions = game.history.all().order_by('history_date')
     
-    # Calculate play_time for each session (difference from previous record)
+    # Calculate play_time and percentage_progress for each session
     session_list = []
     prev_play_time = 0
     
@@ -1666,6 +1679,7 @@ def game_sessions(request, game_id):
                 'play_time_formatted': helpers.minutes_to_hhmm(session_time),
                 'total_play_time': record.play_time,
                 'total_play_time_formatted': helpers.minutes_to_hhmm(record.play_time),
+                'percentage_progress': record.percentage_progress,
                 'date': record.history_date,
             })
         prev_play_time = record.play_time or 0
@@ -1697,7 +1711,7 @@ def delete_game_session(request, game_id, history_id):
         if not historical_record:
             return HttpResponseBadRequest("Session not found")
         
-        # Get the play_time of this session and all sessions
+        # Get the play_time and percentage_progress of this session and all sessions
         sessions = list(game.history.all().order_by('history_date'))
         
         # Find the session to delete and calculate its time
@@ -1717,10 +1731,22 @@ def delete_game_session(request, game_id, history_id):
         # Delete the historical record
         historical_record.delete()
         
-        # Update the current game's play_time and progress
-        game.play_time = max(0, (game.play_time or 0) - session_time)
-        game.progress = max(0, (game.progress or 0) - session_time)
-        game.save(update_fields=['play_time', 'progress'])
+        # Recalculate game's current state from remaining history
+        # Get the most recent history record after deletion
+        latest_history = game.history.order_by('-history_date').first()
+        
+        if latest_history:
+            # Set current values to match the latest remaining session
+            game.play_time = latest_history.play_time or 0
+            game.progress = latest_history.progress or 0
+            game.percentage_progress = latest_history.percentage_progress or 0
+        else:
+            # No history left, reset to zero
+            game.play_time = 0
+            game.progress = 0
+            game.percentage_progress = 0
+        
+        game.save(update_fields=['play_time', 'progress', 'percentage_progress'])
         
         logger.info(f"Deleted game session {history_id} for {game.item.title}, removed {session_time} minutes")
         
