@@ -95,4 +95,6 @@ urlpatterns = [
         name="get_next_episode_number",
     ),
     path("statistics", views.statistics, name="statistics"),
+    path("game-sessions/<int:game_id>", views.game_sessions, name="game_sessions"),
+    path("game-sessions/<int:game_id>/delete/<int:history_id>", views.delete_game_session, name="delete_game_session"),
 ]

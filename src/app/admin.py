@@ -9,6 +9,7 @@ from app.models import (
     ExternalIdMapping,
     Item,
     YouTubeChannelFilter,
+    Game,
 )
 
 
@@ -84,6 +85,67 @@ try:
 except Exception:
     pass
 admin.site.register(Season, SeasonAdmin)
+
+
+# Custom admin for HistoricalGame to manage game sessions
+class HistoricalGameAdmin(admin.ModelAdmin):
+    list_display = ["history_id", "get_game_title", "get_username", "play_time", "progress", "history_date", "history_type"]
+    list_filter = ["history_type", "history_date", "history_user"]
+    search_fields = ["history_id"]
+    ordering = ["-history_date"]
+    list_select_related = False
+    actions = ['delete_selected']
+    
+    def get_actions(self, request):
+        """Ensure delete action is available."""
+        actions = super().get_actions(request)
+        return actions
+    
+    def get_game_title(self, obj):
+        """Get title from the Game id."""
+        try:
+            if obj.id:
+                game = Game.objects.filter(id=obj.id).select_related('item').first()
+                return game.item.title if game else f"Game ID: {obj.id} (deleted)"
+            return "N/A"
+        except Exception as e:
+            return f"Error: {str(e)}"
+    get_game_title.short_description = "Game Title"
+    
+    def get_username(self, obj):
+        """Get username from history_user."""
+        try:
+            if obj.history_user:
+                return obj.history_user.username
+            return "N/A"
+        except Exception as e:
+            return f"Error: {str(e)}"
+    get_username.short_description = "User"
+    
+    def has_add_permission(self, request):
+        """Prevent adding historical records manually."""
+        return False
+    
+    def has_change_permission(self, request, obj=None):
+        """Allow viewing but not changing - required for checkboxes to show."""
+        if obj is None:
+            # Allow list view with checkboxes
+            return True
+        # But don't allow editing individual objects
+        return False
+    
+    def has_delete_permission(self, request, obj=None):
+        """Allow deleting historical records."""
+        return True
+    
+    def change_view(self, request, object_id, form_url='', extra_context=None):
+        """Redirect change view to list view to prevent editing."""
+        from django.http import HttpResponseRedirect
+        from django.urls import reverse
+        return HttpResponseRedirect(reverse('admin:app_historicalgame_changelist'))
+
+# Register HistoricalGame
+admin.site.register(Game.history.model, HistoricalGameAdmin)
 
 
 # Auto-register remaining models

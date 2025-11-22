@@ -1635,3 +1635,100 @@ def delete_youtube_video(request, video_id):
     except Exception as e:
         logger.error(f"Error deleting video ID {video_id}: {str(e)}")
         return HttpResponseBadRequest(f"Error deleting video: {str(e)}")
+
+
+@login_required
+@require_GET
+def game_sessions(request, game_id):
+    """View game play sessions from history."""
+    from app.models import Game
+    
+    try:
+        game = Game.objects.select_related('item', 'user').get(id=game_id, user=request.user)
+    except Game.DoesNotExist:
+        messages.error(request, "Game not found")
+        return redirect('home')
+    
+    # Get all historical records for this game, ordered by date (oldest first)
+    sessions = game.history.all().order_by('history_date')
+    
+    # Calculate play_time for each session (difference from previous record)
+    session_list = []
+    prev_play_time = 0
+    
+    for record in sessions:
+        session_time = (record.play_time or 0) - prev_play_time
+        if session_time > 0:  # Only show sessions where time was added
+            session_list.append({
+                'history_id': record.history_id,
+                'session_number': len(session_list) + 1,
+                'play_time': session_time,
+                'play_time_formatted': helpers.minutes_to_hhmm(session_time),
+                'total_play_time': record.play_time,
+                'total_play_time_formatted': helpers.minutes_to_hhmm(record.play_time),
+                'date': record.history_date,
+            })
+        prev_play_time = record.play_time or 0
+    
+    # Reverse to show most recent first
+    session_list.reverse()
+    
+    context = {
+        'game': game,
+        'sessions': session_list,
+        'total_sessions': len(session_list),
+    }
+    
+    return render(request, 'app/game_sessions.html', context)
+
+
+@login_required
+@require_POST
+def delete_game_session(request, game_id, history_id):
+    """Delete a specific game session from history."""
+    from app.models import Game
+    
+    try:
+        game = Game.objects.get(id=game_id, user=request.user)
+        
+        # Find the historical record
+        historical_record = game.history.filter(history_id=history_id).first()
+        
+        if not historical_record:
+            return HttpResponseBadRequest("Session not found")
+        
+        # Get the play_time of this session and all sessions
+        sessions = list(game.history.all().order_by('history_date'))
+        
+        # Find the session to delete and calculate its time
+        session_index = None
+        session_time = 0
+        
+        for i, record in enumerate(sessions):
+            if record.history_id == history_id:
+                session_index = i
+                prev_time = sessions[i-1].play_time if i > 0 else 0
+                session_time = record.play_time - prev_time
+                break
+        
+        if session_index is None:
+            return HttpResponseBadRequest("Session not found")
+        
+        # Delete the historical record
+        historical_record.delete()
+        
+        # Update the current game's play_time and progress
+        game.play_time = max(0, (game.play_time or 0) - session_time)
+        game.progress = max(0, (game.progress or 0) - session_time)
+        game.save(update_fields=['play_time', 'progress'])
+        
+        logger.info(f"Deleted game session {history_id} for {game.item.title}, removed {session_time} minutes")
+        
+        # Return success - HTMX will handle the removal
+        return HttpResponse(status=200)
+        
+    except Game.DoesNotExist:
+        return HttpResponseBadRequest("Game not found")
+    except Exception as e:
+        logger.error(f"Error deleting game session: {str(e)}")
+        return HttpResponseBadRequest(f"Error: {str(e)}")
