@@ -1866,7 +1866,32 @@ class Game(Media):
 class Book(Media):
     """Model for books."""
 
+    reading_time = models.PositiveIntegerField(
+        default=0,
+        help_text="Total accumulated reading time in minutes for all reading sessions",
+    )
+    
     tracker = FieldTracker()
+    
+    @property
+    def formatted_progress(self):
+        """Return progress as percentage."""
+        return f"{self.progress}%"
+    
+    def increase_progress(self):
+        """Increase the progress of the book.
+        
+        Note: Progress is now tracked as percentage (0-100) via reading_time sessions from the modal.
+        This method is called by views.py after reading_time is accumulated.
+        """
+        # Progress is handled by percentage and reading_time accumulation in views.py
+        logger.info("Reading session recorded for %s, progress: %s%%", self, self.progress)
+    
+    def decrease_progress(self):
+        """Decrease the progress of the book by 5%."""
+        self.progress = max(0, self.progress - 5)
+        self.save()
+        logger.info("Changed progress of %s to %s%%", self, self.progress)
 
 
 class Comic(Media):

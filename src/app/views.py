@@ -160,6 +160,28 @@ def progress_edit(request, media_type, instance_id):
                 media.save(update_fields=['reading_time'])
             except (ValueError, TypeError):
                 pass
+        # For books, accumulate reading_time and update progress percentage
+        elif media_type == MediaTypes.BOOK.value:
+            try:
+                # reading_time is optional from the modal
+                time_to_add = int(reading_time) if reading_time else 0
+                if time_to_add > 0:
+                    media.reading_time = (media.reading_time or 0) + time_to_add
+                
+                # Update percentage progress if provided
+                if percentage_progress:
+                    try:
+                        new_percentage = int(percentage_progress)
+                        # Validate range 0-100
+                        if 0 <= new_percentage <= 100:
+                            media.progress = new_percentage
+                    except (ValueError, TypeError):
+                        pass
+                
+                fields_to_update = ['reading_time', 'progress']
+                media.save(update_fields=fields_to_update)
+            except (ValueError, TypeError):
+                pass
         # For games, accumulate play_time (required from modal) and update progress
         elif media_type == MediaTypes.GAME.value:
             try:

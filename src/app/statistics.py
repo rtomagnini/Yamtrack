@@ -12,8 +12,8 @@ def get_watch_time_distribution_pie_chart_data(user_media):
             },
         ],
     }
-    # Include TV SHOW (tmdb/manual), YouTube, Movies, Comics, and Games
-    media_types = [MediaTypes.TV.value, MediaTypes.YOUTUBE.value, MediaTypes.MOVIE.value, MediaTypes.COMIC.value, MediaTypes.GAME.value]
+    # Include TV SHOW (tmdb/manual), YouTube, Movies, Comics, Games, and Books
+    media_types = [MediaTypes.TV.value, MediaTypes.YOUTUBE.value, MediaTypes.MOVIE.value, MediaTypes.COMIC.value, MediaTypes.GAME.value, MediaTypes.BOOK.value]
     total_minutes = 0
     media_type_minutes = {}
     for media_type in media_types:
@@ -28,6 +28,9 @@ def get_watch_time_distribution_pie_chart_data(user_media):
             elif media_type == MediaTypes.GAME.value:
                 # For games, sum accumulated play_time for all games with progress > 0
                 minutes = queryset.aggregate(total=models.Sum("play_time"))["total"] or 0
+            elif media_type == MediaTypes.BOOK.value:
+                # For books, sum accumulated reading_time for all books with progress > 0
+                minutes = queryset.aggregate(total=models.Sum("reading_time"))["total"] or 0
             else:
                 # For TV/YouTube, sum item__runtime for all watched episodes
                 minutes = queryset.select_related("item").aggregate(total=models.Sum("item__runtime"))["total"] or 0
@@ -348,6 +351,12 @@ def get_user_media(user, start_date, end_date):
                 queryset = model.objects.filter(user=user, progress__gt=0)
             else:
                 queryset = model.objects.filter(user=user, progress__gt=0, progressed_at__range=(start_date, end_date))
+        elif media_type == MediaTypes.BOOK.value:
+            # For books, include all with progress > 0 (reading progress)
+            if start_date is None and end_date is None:
+                queryset = model.objects.filter(user=user, progress__gt=0)
+            else:
+                queryset = model.objects.filter(user=user, progress__gt=0, progressed_at__range=(start_date, end_date))
         else:
             # For other media types, use end_date
             if start_date is None and end_date is None:
@@ -377,6 +386,9 @@ def get_user_media(user, start_date, end_date):
             media_count[media_type] = queryset.aggregate(total=models.Sum("progress"))["total"] or 0
         elif media_type == MediaTypes.GAME.value:
             # For games, count number of games played (with progress > 0)
+            media_count[media_type] = queryset.count()
+        elif media_type == MediaTypes.BOOK.value:
+            # For books, count number of books being read (with progress > 0)
             media_count[media_type] = queryset.count()
         else:
             media_count[media_type] = queryset.count()
@@ -749,6 +761,39 @@ def get_timeline(user_media):
                         timeline[month_year].append(session_entry)
                         
                         previous_play_time = record.play_time
+        elif media_type == MediaTypes.BOOK.value:
+            # For books, expand into individual reading sessions from history
+            for book in queryset:
+                # Get historical records to see reading_time changes
+                history = book.history.all().order_by('history_date')
+                previous_reading_time = 0
+                session_count = 0
+                
+                for record in history:
+                    if hasattr(record, 'reading_time') and record.reading_time and record.reading_time > previous_reading_time:
+                        # A reading session occurred
+                        session_count += 1
+                        session_time = record.reading_time - previous_reading_time
+                        
+                        # Create a pseudo-object for the session
+                        session_entry = type('BookSession', (), {})()
+                        session_entry.item = book.item
+                        session_entry.media_type = 'book_session'
+                        session_entry.session_number = session_count
+                        session_entry.end_date = record.history_date
+                        session_entry.progressed_at = record.history_date
+                        session_entry.runtime = session_time
+                        session_entry.book_id = book.id
+                        session_entry.user = book.user
+                        
+                        local_end_date = timezone.localdate(record.history_date)
+                        year = local_end_date.year
+                        month = local_end_date.month
+                        month_name = calendar.month_name[month]
+                        month_year = f"{month_name} {year}"
+                        timeline[month_year].append(session_entry)
+                        
+                        previous_reading_time = record.reading_time
         else:
             # For other media types, use existing logic
             for media in queryset:
