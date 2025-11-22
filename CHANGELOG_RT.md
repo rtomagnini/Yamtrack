@@ -1,4 +1,14 @@
 
+## [0.25.28.RT] - 2025-11-22
+
+### 📚 Books: % Progress, Reading Time & Timeline
+- Ahora los libros usan progreso en porcentaje (%) en vez de páginas leídas.
+- Puedes registrar el tiempo de lectura (minutos) en cada sesión de libro, igual que en juegos y cómics.
+- Las sesiones de lectura de libros aparecen en el timeline de estadísticas, con miniatura vertical (2:3) y "Session #" en azul.
+- El tiempo total de lectura de libros se incluye en todos los gráficos de estadísticas (total, distribución, timeline).
+- El modal de progreso de libros permite introducir % leído y tiempo de lectura en cada sesión.
+- Correcciones para que los libros se integren correctamente en todas las vistas y estadísticas.
+
 ## [0.25.27.RT] - 2025-11-22
 
 ### 🟢 Game Progress % and Total Time
