@@ -1,3 +1,16 @@
+
+## [0.25.27.RT] - 2025-11-22
+
+### 🟢 Game Progress % and Total Time
+- Ahora puedes registrar y visualizar el progreso en porcentaje (%) para juegos, junto al tiempo total jugado.
+- El modal de sesiones de juego permite introducir el % de progreso opcionalmente en cada sesión.
+- El progreso en % y el tiempo total aparecen en:
+  - La vista de detalles del juego ("Your History" y repeticiones)
+  - La lista de sesiones de juego
+  - El área de progreso principal de juegos
+- Al eliminar una sesión, el % y el tiempo se recalculan correctamente.
+- Mejora visual: el % aparece en verde y el tiempo total en formato hh:mm.
+
 ## [0.25.26.RT] - 2025-11-17
 
 ### 🎮 Game Session Time Tracking
