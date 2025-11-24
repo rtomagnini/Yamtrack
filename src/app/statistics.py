@@ -1,4 +1,4 @@
-def get_watch_time_distribution_pie_chart_data(user_media):
+﻿def get_watch_time_distribution_pie_chart_data(user_media):
     """Aggregate total watch time (in minutes) by media type for pie chart."""
     from . import media_type_config
     from .templatetags import app_tags
@@ -56,7 +56,7 @@ def get_watch_time_distribution_pie_chart_data(user_media):
     return chart_data
 def get_top_tv_shows(user, start_date, end_date, limit=6):
     """
-    Devuelve los TV Shows con más episodios vistos por el usuario en el periodo filtrado.
+    Devuelve los TV Shows con mÃ¡s episodios vistos por el usuario en el periodo filtrado.
     Agrupa por TV (Season.related_tv) donde source=manual o tmdb, suma episodios vistos.
     Retorna lista: { 'title': ..., 'count': ..., 'item': ... }
     """
@@ -94,7 +94,7 @@ def get_top_tv_shows(user, start_date, end_date, limit=6):
 
 def get_top_youtube_channels(user, start_date, end_date, limit=6):
     """
-    Devuelve los canales de YouTube con más episodios vistos por el usuario en el periodo filtrado.
+    Devuelve los canales de YouTube con mÃ¡s episodios vistos por el usuario en el periodo filtrado.
     Agrupa por TV (Season.related_tv) donde source=youtube, suma episodios vistos.
     Retorna lista: { 'channel_name': ..., 'count': ..., 'item': ... }
     """
@@ -131,10 +131,10 @@ def get_top_youtube_channels(user, start_date, end_date, limit=6):
     return result
 def get_watch_time_timeseries(user, start_date, end_date):
     """
-    Devuelve el tiempo de visionado (runtime de episodios vistos) agrupado por día, semana o mes.
-    - Hasta 30 días: por día
-    - Entre 31 y 180 días: por semana
-    - Más de 180 días: por mes
+    Devuelve el tiempo de visionado (runtime de episodios vistos) agrupado por dÃ­a, semana o mes.
+    - Hasta 30 dÃ­as: por dÃ­a
+    - Entre 31 y 180 dÃ­as: por semana
+    - MÃ¡s de 180 dÃ­as: por mes
     """
     from app.models import Episode, Comic, Movie, Game
     from django.db.models import Sum, F
@@ -168,7 +168,7 @@ def get_watch_time_timeseries(user, start_date, end_date):
         episode_filters['end_date__lte'] = end_date
     episodes = Episode.objects.filter(**episode_filters)
 
-    # Query de películas vistas por el usuario en el rango
+    # Query de pelÃ­culas vistas por el usuario en el rango
     movie_filters = {
         'end_date__isnull': False,
         'item__runtime__isnull': False,
@@ -180,7 +180,7 @@ def get_watch_time_timeseries(user, start_date, end_date):
         movie_filters['end_date__lte'] = end_date
     movies = Movie.objects.filter(**movie_filters).select_related('item')
 
-    # Query de comics leídos por el usuario en el rango
+    # Query de comics leÃ­dos por el usuario en el rango
     comic_filters = {
         'progress__gt': 0,
         'reading_time__gt': 0,
@@ -213,11 +213,11 @@ def get_watch_time_timeseries(user, start_date, end_date):
         elif group == 'week':
             key = dt.date() - datetime.timedelta(days=dt.weekday())  # lunes de la semana
         else:
-            key = dt.date().replace(day=1)  # primer día del mes
+            key = dt.date().replace(day=1)  # primer dÃ­a del mes
         data.setdefault(key, 0)
         data[key] += ep.item.runtime or 0
 
-    # Agrupar y sumar runtime de películas
+    # Agrupar y sumar runtime de pelÃ­culas
     for movie in movies:
         dt = movie.end_date
         if group == 'day':
@@ -225,7 +225,7 @@ def get_watch_time_timeseries(user, start_date, end_date):
         elif group == 'week':
             key = dt.date() - datetime.timedelta(days=dt.weekday())  # lunes de la semana
         else:
-            key = dt.date().replace(day=1)  # primer día del mes
+            key = dt.date().replace(day=1)  # primer dÃ­a del mes
         data.setdefault(key, 0)
         data[key] += movie.item.runtime or 0
 
@@ -237,7 +237,7 @@ def get_watch_time_timeseries(user, start_date, end_date):
         elif group == 'week':
             key = dt.date() - datetime.timedelta(days=dt.weekday())  # lunes de la semana
         else:
-            key = dt.date().replace(day=1)  # primer día del mes
+            key = dt.date().replace(day=1)  # primer dÃ­a del mes
         data.setdefault(key, 0)
         data[key] += comic.reading_time or 0
 
@@ -249,7 +249,7 @@ def get_watch_time_timeseries(user, start_date, end_date):
         elif group == 'week':
             key = dt.date() - datetime.timedelta(days=dt.weekday())  # lunes de la semana
         else:
-            key = dt.date().replace(day=1)  # primer día del mes
+            key = dt.date().replace(day=1)  # primer dÃ­a del mes
         data.setdefault(key, 0)
         data[key] += game.play_time or 0
 
@@ -315,7 +315,7 @@ def get_user_media(user, start_date, end_date):
         for media_type in user.get_active_media_types()
     ]
 
-    # --- Nueva lógica para separar TV Show y YouTube correctamente ---
+    # --- Nueva lÃ³gica para separar TV Show y YouTube correctamente ---
     # 1. TV Show: Episodios con source TMDB o MANUAL
     tv_episodes = Episode.objects.filter(
         related_season__user=user,
@@ -501,7 +501,7 @@ def get_status_distribution(user_media):
     data = []
     labels = []
     colors = []
-    default_color = "#1976d2"  # Azul sólido (Material Design)
+    default_color = "#1976d2"  # Azul sÃ³lido (Material Design)
     for media_type in media_types:
         queryset = user_media.get(media_type)
         if queryset is None:
@@ -729,38 +729,31 @@ def get_timeline(user_media):
                         
                         previous_progress = record.progress
         elif media_type == MediaTypes.GAME.value:
-            # For games, expand into individual play sessions from history
+            # For games, get GameSession records directly
+            from app.models import GameSession
+            
             for game in queryset:
-                # Get historical records to see play_time changes
-                history = game.history.all().order_by('history_date')
-                previous_play_time = 0
-                session_count = 0
+                # Get GameSession records for this game
+                sessions = GameSession.objects.filter(game=game).order_by('session_date')
                 
-                for record in history:
-                    if hasattr(record, 'play_time') and record.play_time and record.play_time > previous_play_time:
-                        # A play session occurred
-                        session_count += 1
-                        session_time = record.play_time - previous_play_time
-                        
-                        # Create a pseudo-object for the session
-                        session_entry = type('GameSession', (), {})()
-                        session_entry.item = game.item
-                        session_entry.media_type = 'game_session'
-                        session_entry.session_number = session_count
-                        session_entry.end_date = record.history_date
-                        session_entry.progressed_at = record.history_date
-                        session_entry.runtime = session_time
-                        session_entry.game_id = game.id
-                        session_entry.user = game.user
-                        
-                        local_end_date = timezone.localdate(record.history_date)
-                        year = local_end_date.year
-                        month = local_end_date.month
-                        month_name = calendar.month_name[month]
-                        month_year = f"{month_name} {year}"
-                        timeline[month_year].append(session_entry)
-                        
-                        previous_play_time = record.play_time
+                for session in sessions:
+                    # Create entry for this session
+                    session_entry = type('GameSessionEntry', (), {})()
+                    session_entry.item = game.item
+                    session_entry.media_type = 'game_session'
+                    session_entry.session_number = sessions.filter(session_date__lte=session.session_date).count()
+                    session_entry.end_date = session.session_date
+                    session_entry.progressed_at = session.session_date
+                    session_entry.runtime = session.minutes
+                    session_entry.game_id = game.id
+                    session_entry.user = game.user
+                    
+                    local_end_date = timezone.localdate(session.session_date)
+                    year = local_end_date.year
+                    month = local_end_date.month
+                    month_name = calendar.month_name[month]
+                    month_year = f"{month_name} {year}"
+                    timeline[month_year].append(session_entry)
         elif media_type == MediaTypes.BOOK.value:
             # For books, expand into individual reading sessions from history
             for book in queryset:
@@ -803,7 +796,7 @@ def get_timeline(user_media):
                     end_date = getattr(media.item, 'end_date', None)
                 if not end_date:
                     continue  # Solo mostrar consumidos (con end_date)
-                # --- Añadir runtime al objeto media si no existe ---
+                # --- AÃ±adir runtime al objeto media si no existe ---
                 if not hasattr(media, 'runtime') or media.runtime is None:
                     if hasattr(media, 'item') and hasattr(media.item, 'runtime'):
                         media.runtime = media.item.runtime
@@ -820,7 +813,7 @@ def get_timeline(user_media):
                 month_year = f"{month_name} {year}"
                 timeline[month_year].append(media)
 
-    # Convert to sorted dictionary with media sorted by end_date (más reciente primero)
+    # Convert to sorted dictionary with media sorted by end_date (mÃ¡s reciente primero)
     sorted_items = []
     for month_year, media_list in timeline.items():
         month_name, year_str = month_year.split()

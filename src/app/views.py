@@ -1,4 +1,4 @@
-import logging
+﻿import logging
 
 from django.apps import apps
 from django.conf import settings
@@ -20,7 +20,7 @@ from django.contrib.auth.decorators import login_required
 from app import helpers, history_processor
 from app import statistics as stats
 from app.forms import EpisodeTrackingForm, ManualItemForm, get_form_class
-from app.models import TV, BasicMedia, Episode, Item, MediaTypes, Season, Sources, Status
+from app.models import TV, BasicMedia, Episode, Item, MediaTypes, Season, Sources, Status, GameSession, Game
 from app.providers import manual, services, tmdb, youtube
 from app.templatetags import app_tags
 from users.models import HomeSortChoices, MediaSortChoices, MediaStatusChoices
@@ -157,7 +157,8 @@ def progress_edit(request, media_type, instance_id):
             try:
                 time_to_add = int(reading_time)
                 media.reading_time = (media.reading_time or 0) + time_to_add
-                media.save(update_fields=['reading_time'])
+                media.progressed_at = timezone.now()
+                media.save(update_fields=['reading_time', 'progressed_at'])
             except (ValueError, TypeError):
                 pass
         # For books, accumulate reading_time and update progress percentage
@@ -178,7 +179,8 @@ def progress_edit(request, media_type, instance_id):
                     except (ValueError, TypeError):
                         pass
                 
-                fields_to_update = ['reading_time', 'progress']
+                media.progressed_at = timezone.now()
+                fields_to_update = ['reading_time', 'progress', 'progressed_at']
                 media.save(update_fields=fields_to_update)
             except (ValueError, TypeError):
                 pass
@@ -201,8 +203,18 @@ def progress_edit(request, media_type, instance_id):
                         except (ValueError, TypeError):
                             pass
                     
-                    fields_to_update = ['play_time', 'progress', 'percentage_progress']
+                    now = timezone.now()
+                    media.progressed_at = now
+                    fields_to_update = ['play_time', 'progress', 'percentage_progress', 'progressed_at']
                     media.save(update_fields=fields_to_update)
+
+                    GameSession.objects.create(
+                        game=media,
+                        minutes=time_to_add,
+                        percentage_progress=media.percentage_progress,
+                        session_date=now,
+                        source=GameSession.SessionSource.MANUAL,
+                    )
             except (ValueError, TypeError):
                 pass
         media.increase_progress()
@@ -717,7 +729,7 @@ def media_delete(request):
 @require_POST
 def episode_save(request):
     """Handle the creation, deletion, and updating of episodes for a season."""
-    from app.models import Season, Item, Episode, MediaTypes, Sources, Status
+    from app.models import TV, BasicMedia, Episode, Item, MediaTypes, Season, Sources, Status, GameSession, Game
     media_id = request.POST["media_id"]
     source = request.POST["source"]
     
@@ -900,7 +912,7 @@ def episode_save(request):
         )
         # Annotate with channel info and watched status for template
         from django.db.models import OuterRef, Exists, Subquery, CharField
-        from app.models import Season
+        from app.models import TV, BasicMedia, Episode, Item, MediaTypes, Season, Sources, Status, GameSession, Game
         item_qs = Item.objects.filter(pk=item.pk)
         item_qs = item_qs.annotate(
             is_watched=Exists(
@@ -937,7 +949,7 @@ def handle_youtube_video_creation(request, form):
     """Handle creation of YouTube video with automatic channel/season detection and creation."""
     from datetime import datetime
     from app.providers import youtube
-    from app.models import Season, TV, Episode, Status
+    from app.models import TV, BasicMedia, Episode, Item, MediaTypes, Season, Sources, Status, GameSession, Game
     
     youtube_url = form.cleaned_data.get("youtube_url")
     if not youtube_url:
@@ -1161,7 +1173,7 @@ def create_entry(request):
             )
             
             # Create Season instance
-            from app.models import Season
+            from app.models import TV, BasicMedia, Episode, Item, MediaTypes, Season, Sources, Status, GameSession, Game
             Season.objects.create(
                 user=request.user,
                 item=season_item,
@@ -1560,7 +1572,7 @@ def youtube_channel_details(request, source, media_id, title):  # noqa: ARG001 t
     episode_items = []
     if current_instance:
         # Get all episode Items from all seasons of this YouTube channel
-        from app.models import Episode, Item, MediaTypes
+        from app.models import TV, BasicMedia, Episode, Item, MediaTypes, Season, Sources, Status, GameSession, Game
         episode_items = Item.objects.filter(
             media_type=MediaTypes.EPISODE.value,
             source=Sources.YOUTUBE.value,
@@ -1626,8 +1638,8 @@ def youtube_channel_details(request, source, media_id, title):  # noqa: ARG001 t
             if episode.get("history")
         ]
     
-    # Ordenar episodios por número de episodio
-    sort_order = request.GET.get("sort", "asc")  # Por defecto ascendente por número de episodio
+    # Ordenar episodios por nÃºmero de episodio
+    sort_order = request.GET.get("sort", "asc")  # Por defecto ascendente por nÃºmero de episodio
     if sort_order == "desc":
         episodes = sorted(
             episodes,
@@ -1705,7 +1717,7 @@ def delete_youtube_video(request, video_id):
 @require_GET
 def game_sessions(request, game_id):
     """View game play sessions from history."""
-    from app.models import Game
+    from app.models import TV, BasicMedia, Episode, Item, MediaTypes, Season, Sources, Status, GameSession, Game
     
     try:
         game = Game.objects.select_related('item', 'user').get(id=game_id, user=request.user)
@@ -1751,7 +1763,7 @@ def game_sessions(request, game_id):
 @require_POST
 def delete_game_session(request, game_id, history_id):
     """Delete a specific game session from history."""
-    from app.models import Game
+    from app.models import TV, BasicMedia, Episode, Item, MediaTypes, Season, Sources, Status, GameSession, Game
     
     try:
         game = Game.objects.get(id=game_id, user=request.user)
@@ -1809,3 +1821,5 @@ def delete_game_session(request, game_id, history_id):
     except Exception as e:
         logger.error(f"Error deleting game session: {str(e)}")
         return HttpResponseBadRequest(f"Error: {str(e)}")
+
+
