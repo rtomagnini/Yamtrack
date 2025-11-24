@@ -206,50 +206,52 @@ def get_watch_time_timeseries(user, start_date, end_date):
 
     # Agrupar y sumar runtime
     data = {}
+    from django.utils import timezone
+
     for ep in episodes.select_related('item'):
-        dt = ep.end_date
+        dt = timezone.localtime(ep.end_date)
         if group == 'day':
             key = dt.date()
         elif group == 'week':
             key = dt.date() - datetime.timedelta(days=dt.weekday())  # lunes de la semana
         else:
-            key = dt.date().replace(day=1)  # primer dÃ­a del mes
+            key = dt.date().replace(day=1)  # primer día del mes
         data.setdefault(key, 0)
         data[key] += ep.item.runtime or 0
 
-    # Agrupar y sumar runtime de pelÃ­culas
+    # Agrupar y sumar runtime de películas
     for movie in movies:
-        dt = movie.end_date
+        dt = timezone.localtime(movie.end_date)
         if group == 'day':
             key = dt.date()
         elif group == 'week':
             key = dt.date() - datetime.timedelta(days=dt.weekday())  # lunes de la semana
         else:
-            key = dt.date().replace(day=1)  # primer dÃ­a del mes
+            key = dt.date().replace(day=1)  # primer día del mes
         data.setdefault(key, 0)
         data[key] += movie.item.runtime or 0
 
     # Agrupar y sumar reading_time de comics (accumulated total, not per issue)
     for comic in comics:
-        dt = comic.progressed_at
+        dt = timezone.localtime(comic.progressed_at)
         if group == 'day':
             key = dt.date()
         elif group == 'week':
             key = dt.date() - datetime.timedelta(days=dt.weekday())  # lunes de la semana
         else:
-            key = dt.date().replace(day=1)  # primer dÃ­a del mes
+            key = dt.date().replace(day=1)  # primer día del mes
         data.setdefault(key, 0)
         data[key] += comic.reading_time or 0
 
     # Agrupar y sumar play_time de games (accumulated total)
     for game in games:
-        dt = game.progressed_at
+        dt = timezone.localtime(game.progressed_at)
         if group == 'day':
             key = dt.date()
         elif group == 'week':
             key = dt.date() - datetime.timedelta(days=dt.weekday())  # lunes de la semana
         else:
-            key = dt.date().replace(day=1)  # primer dÃ­a del mes
+            key = dt.date().replace(day=1)  # primer día del mes
         data.setdefault(key, 0)
         data[key] += game.play_time or 0
 
