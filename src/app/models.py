@@ -1,4 +1,4 @@
-import logging
+﻿import logging
 
 from django.apps import apps
 from django.conf import settings
@@ -88,7 +88,7 @@ class ExternalIdMapping(models.Model):
         verbose_name_plural = "External ID Mappings"
         
     def __str__(self):
-        return f"{self.external_source} {self.tmdb_id_plex} → TMDB {self.real_tmdb_id} ({self.title})"
+        return f"{self.external_source} {self.tmdb_id_plex} â†’ TMDB {self.real_tmdb_id} ({self.title})"
 
 
 class Item(CalendarTriggerMixin, models.Model):
@@ -1363,7 +1363,7 @@ class Season(Media):
     broadcast_time = models.TimeField(
         null=True,
         blank=True,
-        help_text="Hora de emisión local (opcional, solo para filtrar pendientes en Home)."
+        help_text="Hora de emisiÃ³n local (opcional, solo para filtrar pendientes en Home)."
     )
 
     class Meta:
@@ -1983,3 +1983,77 @@ class GameSession(models.Model):
 
     def __str__(self):
         return f"{self.game} session ({self.minutes}m on {self.session_date:%Y-%m-%d %H:%M})"
+
+
+class ComicSession(models.Model):
+    """Individual reading session for a comic."""
+
+    class SessionSource(models.TextChoices):
+        MANUAL = "manual", "Manual"
+        IMPORT = "import", "Import"
+        HISTORY = "history", "Migrated from History"
+
+    comic = models.ForeignKey(
+        Comic,
+        on_delete=models.CASCADE,
+        related_name="sessions",
+    )
+    minutes = models.PositiveIntegerField(help_text="Reading time in minutes for this session")
+    issues_read = models.PositiveIntegerField(
+        default=1,
+        help_text="Number of issues read in this session",
+    )
+    session_date = models.DateTimeField(
+        default=timezone.now,
+        help_text="Timestamp when the session occurred",
+    )
+    source = models.CharField(
+        max_length=20,
+        choices=SessionSource.choices,
+        default=SessionSource.MANUAL,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-session_date", "-id"]
+
+    def __str__(self):
+        return f"{self.comic} session ({self.issues_read} issues, {self.minutes}m on {self.session_date:%Y-%m-%d %H:%M})"
+
+
+class BookSession(models.Model):
+    """Individual reading session for a book."""
+
+    class SessionSource(models.TextChoices):
+        MANUAL = "manual", "Manual"
+        IMPORT = "import", "Import"
+        HISTORY = "history", "Migrated from History"
+
+    book = models.ForeignKey(
+        Book,
+        on_delete=models.CASCADE,
+        related_name="sessions",
+    )
+    minutes = models.PositiveIntegerField(help_text="Reading time in minutes for this session")
+    percentage_progress = models.PositiveSmallIntegerField(
+        null=True,
+        blank=True,
+        validators=[MaxValueValidator(100)],
+        help_text="Optional reading percentage captured during the session",
+    )
+    session_date = models.DateTimeField(
+        default=timezone.now,
+        help_text="Timestamp when the session occurred",
+    )
+    source = models.CharField(
+        max_length=20,
+        choices=SessionSource.choices,
+        default=SessionSource.MANUAL,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-session_date", "-id"]
+
+    def __str__(self):
+        return f"{self.book} session ({self.minutes}m on {self.session_date:%Y-%m-%d %H:%M})"

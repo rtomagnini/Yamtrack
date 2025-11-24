@@ -155,33 +155,60 @@ def progress_edit(request, media_type, instance_id):
         # For comics, accumulate reading_time if provided
         if media_type == MediaTypes.COMIC.value and reading_time:
             try:
+                from app.models import ComicSession
+                
                 time_to_add = int(reading_time)
                 media.reading_time = (media.reading_time or 0) + time_to_add
-                media.progressed_at = timezone.now()
+                now = timezone.now()
+                media.progressed_at = now
                 media.save(update_fields=['reading_time', 'progressed_at'])
+                
+                # Create ComicSession record
+                ComicSession.objects.create(
+                    comic=media,
+                    minutes=time_to_add,
+                    issues_read=1,
+                    session_date=now,
+                    source=ComicSession.SessionSource.MANUAL,
+                )
             except (ValueError, TypeError):
                 pass
         # For books, accumulate reading_time and update progress percentage
         elif media_type == MediaTypes.BOOK.value:
             try:
+                from app.models import BookSession
+                
                 # reading_time is optional from the modal
                 time_to_add = int(reading_time) if reading_time else 0
                 if time_to_add > 0:
                     media.reading_time = (media.reading_time or 0) + time_to_add
                 
                 # Update percentage progress if provided
+                percentage_for_session = None
                 if percentage_progress:
                     try:
                         new_percentage = int(percentage_progress)
                         # Validate range 0-100
                         if 0 <= new_percentage <= 100:
                             media.progress = new_percentage
+                            percentage_for_session = new_percentage
                     except (ValueError, TypeError):
                         pass
                 
-                media.progressed_at = timezone.now()
+                now = timezone.now()
+                media.progressed_at = now
                 fields_to_update = ['reading_time', 'progress', 'progressed_at']
                 media.save(update_fields=fields_to_update)
+                
+                # Create BookSession record if time was added
+                if time_to_add > 0:
+                    BookSession.objects.create(
+                        book=media,
+                        minutes=time_to_add,
+                        percentage_progress=percentage_for_session,
+                        session_date=now,
+                        source=BookSession.SessionSource.MANUAL,
+                    )
             except (ValueError, TypeError):
                 pass
         # For games, accumulate play_time (required from modal) and update progress
@@ -217,7 +244,10 @@ def progress_edit(request, media_type, instance_id):
                     )
             except (ValueError, TypeError):
                 pass
-        media.increase_progress()
+        
+        # Only call increase_progress for non-game/comic/book media types
+        if media_type not in [MediaTypes.GAME.value, MediaTypes.COMIC.value, MediaTypes.BOOK.value]:
+            media.increase_progress()
     elif operation == "decrease":
         media.decrease_progress()
 

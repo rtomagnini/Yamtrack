@@ -399,52 +399,36 @@ def get_user_media(user, start_date, end_date):
         user,
         "for all time" if start_date is None else f"from {start_date} to {end_date}",
     )
-    # Calculate total episodes watched and comic issues read
+    # Calculate total items watched/read/played (count sessions in timeline, not accumulated progress)
+    from app.models import ComicSession, GameSession, BookSession
+    
     if start_date is None and end_date is None:
         watched_episodes = Episode.objects.filter(related_season__user=user, end_date__isnull=False)
-        watched_movies = TV.objects.none()  # placeholder
         watched_movies_qs = apps.get_model("app", "movie").objects.filter(user=user, end_date__isnull=False)
-        # For comics, count issues read (sum of progress) instead of completed series
-        read_comics_qs = apps.get_model("app", "comic").objects.filter(user=user, progress__gt=0)
+        comic_sessions = ComicSession.objects.filter(comic__user=user)
+        game_sessions = GameSession.objects.filter(game__user=user)
+        book_sessions = BookSession.objects.filter(book__user=user)
     else:
         watched_episodes = Episode.objects.filter(related_season__user=user, end_date__isnull=False, end_date__range=(start_date, end_date))
-        watched_movies = TV.objects.none()  # placeholder
         watched_movies_qs = apps.get_model("app", "movie").objects.filter(user=user, end_date__isnull=False, end_date__range=(start_date, end_date))
-        # For comics with date range, we need comics that have been updated in that range
-        read_comics_qs = apps.get_model("app", "comic").objects.filter(user=user, progress__gt=0, progressed_at__range=(start_date, end_date))
+        comic_sessions = ComicSession.objects.filter(comic__user=user, session_date__range=(start_date, end_date))
+        game_sessions = GameSession.objects.filter(game__user=user, session_date__range=(start_date, end_date))
+        book_sessions = BookSession.objects.filter(book__user=user, session_date__range=(start_date, end_date))
 
     episodes_watched = watched_episodes.count()
-    # For comics, sum the progress (number of issues read)
-    comics_read = read_comics_qs.aggregate(total=models.Sum("progress"))["total"] or 0
-    # For games, count number of games played
-    if start_date is None and end_date is None:
-        played_games_qs = apps.get_model("app", "game").objects.filter(user=user, progress__gt=0)
-    else:
-        played_games_qs = apps.get_model("app", "game").objects.filter(user=user, progress__gt=0, progressed_at__range=(start_date, end_date))
-    games_played = played_games_qs.count()
-    items_watched = episodes_watched + comics_read + games_played
+    movies_watched = watched_movies_qs.count()
+    comics_read = comic_sessions.count()
+    games_played = game_sessions.count()
+    books_read = book_sessions.count()
+    items_watched = episodes_watched + movies_watched + comics_read + games_played + books_read
 
-    # Sum runtime for watched episodes (from related Item)
-    episode_minutes = watched_episodes.select_related("item").aggregate(
-        total=models.Sum("item__runtime")
-    )["total"] or 0
+    episode_minutes = watched_episodes.select_related("item").aggregate(total=models.Sum("item__runtime"))["total"] or 0
+    movie_minutes = watched_movies_qs.select_related("item").aggregate(total=models.Sum("item__runtime"))["total"] or 0
+    comic_minutes = comic_sessions.aggregate(total=models.Sum("minutes"))["total"] or 0
+    game_minutes = game_sessions.aggregate(total=models.Sum("minutes"))["total"] or 0
+    book_minutes = book_sessions.aggregate(total=models.Sum("minutes"))["total"] or 0
 
-    # Sum runtime for watched movies
-    movie_minutes = watched_movies_qs.select_related("item").aggregate(
-        total=models.Sum("item__runtime")
-    )["total"] or 0
-
-    # Sum reading time for comic issues (reading_time is already accumulated per comic)
-    comic_minutes = read_comics_qs.aggregate(
-        total=models.Sum("reading_time")
-    )["total"] or 0
-
-    # Sum play time for games (play_time is already accumulated per game)
-    game_minutes = played_games_qs.aggregate(
-        total=models.Sum("play_time")
-    )["total"] or 0
-
-    total_watch_minutes = episode_minutes + movie_minutes + comic_minutes + game_minutes
+    total_watch_minutes = episode_minutes + movie_minutes + comic_minutes + game_minutes + book_minutes
 
     return user_media, media_count, items_watched, total_watch_minutes
 
