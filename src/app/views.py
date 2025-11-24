@@ -152,25 +152,33 @@ def progress_edit(request, media_type, instance_id):
         else:
             media.increase_progress()
     elif operation == "increase":
-        # For comics, accumulate reading_time if provided
-        if media_type == MediaTypes.COMIC.value and reading_time:
+        # For comics, always increment progress (issues read)
+        if media_type == MediaTypes.COMIC.value:
             try:
                 from app.models import ComicSession
                 
-                time_to_add = int(reading_time)
-                media.reading_time = (media.reading_time or 0) + time_to_add
+                # Increment progress (number of issues read)
+                media.progress = (media.progress or 0) + 1
                 now = timezone.now()
                 media.progressed_at = now
-                media.save(update_fields=['reading_time', 'progressed_at'])
                 
-                # Create ComicSession record
-                ComicSession.objects.create(
-                    comic=media,
-                    minutes=time_to_add,
-                    issues_read=1,
-                    session_date=now,
-                    source=ComicSession.SessionSource.MANUAL,
-                )
+                # If reading_time is provided, accumulate it and create session
+                if reading_time:
+                    time_to_add = int(reading_time)
+                    media.reading_time = (media.reading_time or 0) + time_to_add
+                    media.save(update_fields=['reading_time', 'progress', 'progressed_at'])
+                    
+                    # Create ComicSession record
+                    ComicSession.objects.create(
+                        comic=media,
+                        minutes=time_to_add,
+                        issues_read=1,
+                        session_date=now,
+                        source=ComicSession.SessionSource.MANUAL,
+                    )
+                else:
+                    # No reading_time provided (clicked + from home), just save progress
+                    media.save(update_fields=['progress', 'progressed_at'])
             except (ValueError, TypeError):
                 pass
         # For books, accumulate reading_time and update progress percentage
