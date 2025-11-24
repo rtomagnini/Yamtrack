@@ -961,7 +961,6 @@ class Media(models.Model):
         inherit=True,
         excluded_fields=[
             "item",
-            "progressed_at",
             "user",
             "related_tv",
             "created_at",
@@ -1942,3 +1941,45 @@ class YouTubeChannelFilter(models.Model):
         if self.channel_name:
             return f"{self.channel_name} ({self.channel_id})"
         return self.channel_id
+
+
+
+
+
+
+class GameSession(models.Model):
+    """Individual play session for a game."""
+
+    class SessionSource(models.TextChoices):
+        MANUAL = "manual", "Manual"
+        IMPORT = "import", "Import"
+        HISTORY = "history", "Migrated from History"
+
+    game = models.ForeignKey(
+        Game,
+        on_delete=models.CASCADE,
+        related_name="sessions",
+    )
+    minutes = models.PositiveIntegerField(help_text="Playtime in minutes for this session")
+    percentage_progress = models.PositiveSmallIntegerField(
+        null=True,
+        blank=True,
+        validators=[MaxValueValidator(100)],
+        help_text="Optional completion percentage captured during the session",
+    )
+    session_date = models.DateTimeField(
+        default=timezone.now,
+        help_text="Timestamp when the session occurred",
+    )
+    source = models.CharField(
+        max_length=20,
+        choices=SessionSource.choices,
+        default=SessionSource.MANUAL,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-session_date", "-id"]
+
+    def __str__(self):
+        return f"{self.game} session ({self.minutes}m on {self.session_date:%Y-%m-%d %H:%M})"

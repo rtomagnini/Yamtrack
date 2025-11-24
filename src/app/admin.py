@@ -10,6 +10,7 @@ from app.models import (
     Item,
     YouTubeChannelFilter,
     Game,
+    GameSession,
 )
 
 
@@ -148,9 +149,38 @@ class HistoricalGameAdmin(admin.ModelAdmin):
 admin.site.register(Game.history.model, HistoricalGameAdmin)
 
 
+# Custom admin for GameSession
+class GameSessionAdmin(admin.ModelAdmin):
+    """Custom admin for GameSession model."""
+    
+    list_display = ["id", "get_game_title", "get_username", "minutes", "percentage_progress", "session_date", "source"]
+    list_filter = ["source", "session_date"]
+    search_fields = ["game__item__title", "game__user__username"]
+    ordering = ["-session_date"]
+    readonly_fields = ["session_date"]
+    
+    def get_game_title(self, obj):
+        """Get title from the related game."""
+        try:
+            return obj.game.item.title if obj.game and obj.game.item else "N/A"
+        except Exception:
+            return "N/A"
+    get_game_title.short_description = "Game"
+    
+    def get_username(self, obj):
+        """Get username from the related game's user."""
+        try:
+            return obj.game.user.username if obj.game and obj.game.user else "N/A"
+        except Exception:
+            return "N/A"
+    get_username.short_description = "User"
+
+admin.site.register(GameSession, GameSessionAdmin)
+
+
 # Auto-register remaining models
 app_models = apps.get_app_config("app").get_models()
-SpecialModels = ["Item", "Episode", "BasicMedia", "ExternalIdMapping", "YouTubeChannelFilter"]
+SpecialModels = ["Item", "Episode", "BasicMedia", "ExternalIdMapping", "YouTubeChannelFilter", "GameSession"]
 for model in app_models:
     if (
         not model.__name__.startswith("Historical")
