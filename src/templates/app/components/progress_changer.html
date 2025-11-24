@@ -56,6 +56,11 @@
            if (response.ok) {
              const html = await response.text();
              document.getElementById('progress-{{ media.item.media_type }}-{{ media.id }}').innerHTML = html;
+             
+             // For seasons (TV Shows), reload the entire page to handle status changes
+             if ('{{ media.item.media_type }}' === 'season') {
+               window.location.reload();
+             }
            }
          } catch (error) {
            console.error('Error:', error);
@@ -167,6 +172,15 @@
            if (response.ok) {
              const html = await response.text();
              document.getElementById('progress-{{ media.item.media_type }}-{{ media.id }}').innerHTML = html;
+             
+             // Close the confirmation modal
+             this.showConfirmation = false;
+             this.confirmationData = null;
+             
+             // For seasons (TV Shows), reload the entire page to handle status changes
+             if ('{{ media.item.media_type }}' === 'season') {
+               window.location.reload();
+             }
            }
          } catch (error) {
            console.error('Error:', error);
