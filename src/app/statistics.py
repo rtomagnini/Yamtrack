@@ -677,41 +677,31 @@ def get_timeline(user_media):
     # Incluir todos los tipos, incluyendo episodios de TV
     for media_type, queryset in user_media.items():
         if media_type == MediaTypes.COMIC.value:
-            # For comics, expand into individual issue entries from history
+            # For comics, get ComicSession records directly
+            from app.models import ComicSession
+            
             for comic in queryset:
-                # Get historical records to see progress changes
-                history = comic.history.all().order_by('history_date')
-                previous_progress = 0
+                # Get ComicSession records for this comic
+                sessions = ComicSession.objects.filter(comic=comic).order_by('session_date')
                 
-                for record in history:
-                    if record.progress > previous_progress:
-                        # Issues were read
-                        issues_read = record.progress - previous_progress
-                        for i in range(issues_read):
-                            issue_number = previous_progress + i + 1
-                            # Create a pseudo-object for the issue
-                            issue_entry = type('ComicIssue', (), {})()
-                            issue_entry.item = comic.item
-                            issue_entry.media_type = 'comic_issue'
-                            issue_entry.issue_number = issue_number
-                            issue_entry.end_date = record.history_date
-                            issue_entry.progressed_at = record.history_date
-                            # Estimate reading time per issue
-                            if comic.progress > 0:
-                                issue_entry.runtime = (comic.reading_time or 0) // comic.progress
-                            else:
-                                issue_entry.runtime = 0
-                            issue_entry.comic_id = comic.id
-                            issue_entry.user = comic.user
-                            
-                            local_end_date = timezone.localdate(record.history_date)
-                            year = local_end_date.year
-                            month = local_end_date.month
-                            month_name = calendar.month_name[month]
-                            month_year = f"{month_name} {year}"
-                            timeline[month_year].append(issue_entry)
-                        
-                        previous_progress = record.progress
+                for session in sessions:
+                    # Create entry for this session
+                    issue_entry = type('ComicIssue', (), {})()
+                    issue_entry.item = comic.item
+                    issue_entry.media_type = 'comic_issue'
+                    issue_entry.issue_number = session.issues_read
+                    issue_entry.end_date = session.session_date
+                    issue_entry.progressed_at = session.session_date
+                    issue_entry.runtime = session.minutes
+                    issue_entry.comic_id = comic.id
+                    issue_entry.user = comic.user
+                    
+                    local_end_date = timezone.localdate(session.session_date)
+                    year = local_end_date.year
+                    month = local_end_date.month
+                    month_name = calendar.month_name[month]
+                    month_year = f"{month_name} {year}"
+                    timeline[month_year].append(issue_entry)
         elif media_type == MediaTypes.GAME.value:
             # For games, get GameSession records directly
             from app.models import GameSession
