@@ -1532,11 +1532,11 @@ def statistics(request):
     )
     score_distribution, _ = stats.get_score_distribution(user_media)
     watch_time_timeseries = stats.get_watch_time_timeseries(request.user, start_date, end_date)
-    status_distribution = stats.get_status_distribution(user_media)
+    status_distribution = stats.get_status_distribution(user_media, request.user, start_date, end_date)
     watch_time_distribution_pie_chart_data = stats.get_watch_time_distribution_pie_chart_data(
-        user_media
+        user_media, request.user, start_date, end_date
     )
-    timeline = stats.get_timeline(user_media)
+    timeline = stats.get_timeline(user_media, start_date, end_date)
 
     activity_data = stats.get_activity_data(request.user, start_date, end_date)
 
