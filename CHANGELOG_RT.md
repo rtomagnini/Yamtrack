@@ -1,4 +1,11 @@
 
+## [0.25.29.RT] - 2025-11-27
+
+### 🛠️ Robust Statistics & Error Handling
+- Todas las estadísticas y timeline ahora usan sesiones para libros, cómics y juegos, respetando los filtros de fecha.
+- Se corrigieron errores de importación en vistas (BasicMedia, MediaTypes, Status, Sources) que causaban UnboundLocalError.
+- El filtro de template para status ahora es robusto ante valores inválidos o legacy, evitando ValueError y mostrando el valor original si es desconocido.
+- Mejoras generales de robustez y limpieza en backend y templates.
 ## [0.25.28.RT] - 2025-11-22
 
 ### 📚 Books: % Progress, Reading Time & Timeline
