@@ -103,7 +103,11 @@ def media_type_readable_plural(media_type):
 @register.filter
 def media_status_readable(media_status):
     """Return the readable media status."""
-    return Status(media_status).label
+    try:
+        return Status(media_status).label
+    except ValueError:
+        # Handle legacy or invalid status values
+        return media_status.replace('_', ' ').title() if media_status else '-'
 
 
 @register.filter

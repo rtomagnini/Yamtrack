@@ -1133,6 +1133,7 @@ def handle_youtube_video_creation(request, form):
 @require_http_methods(["GET", "POST"])
 def create_entry(request):
     """Return the form for manually adding media items."""
+    from app.models import MediaTypes, Status
     if request.method == "GET":
         media_types = MediaTypes.values
         initial_media_type = request.GET.get("media_type")
@@ -1572,6 +1573,7 @@ def statistics(request):
 @require_GET
 def youtube_channel_details(request, source, media_id, title):  # noqa: ARG001 title for URL
     """Return the details page for a YouTube channel with year-based video filtering."""
+    from app.models import BasicMedia, Sources
     user_medias = BasicMedia.objects.filter_media_prefetch(
         request.user,
         media_id,
