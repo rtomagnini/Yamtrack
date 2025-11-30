@@ -373,6 +373,24 @@ class BaseWebhookProcessor:
             },
         )
 
+        # Check if TV instance already exists and has a status that should block updates
+        existing_tv_instance = app.models.TV.objects.filter(
+            item=tv_item,
+            user=user,
+        ).first()
+
+        # If the user has this TV show with DROPPED or PAUSED status, skip processing
+        if existing_tv_instance and existing_tv_instance.status in (
+            Status.DROPPED.value,
+            Status.PAUSED.value,
+        ):
+            logger.info(
+                "Skipping TV episode update for '%s' - status is %s",
+                tv_metadata["title"],
+                existing_tv_instance.status,
+            )
+            return
+
         tv_instance, tv_created = app.models.TV.objects.get_or_create(
             item=tv_item,
             user=user,

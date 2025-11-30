@@ -1,4 +1,8 @@
+## [UNVERSIONED]
 
+### 🛠️ Plex Webhook: Restringe marcado automático de episodios
+- Ahora la integración con Plex solo marca episodios TMDB o Manual como vistos si el status de la serie es IN_PROGRESS o PLANNING.
+- Si la serie está en estado DROPPED o PAUSED, el episodio no se marca automáticamente como visto.
 ## [0.25.29.RT] - 2025-11-27
 
 ### 🛠️ Robust Statistics & Error Handling

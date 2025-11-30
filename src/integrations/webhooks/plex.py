@@ -228,6 +228,18 @@ class PlexWebhookProcessor(BaseWebhookProcessor):
             logger.info("User %s does not track the season for item %s (source=%s, year=%s)", user, episode_item.media_id, episode_item.source, episode_item.season_number)
             return False
 
+        # Check if the related TV show has DROPPED or PAUSED status - skip if so
+        if season_instance.related_tv and season_instance.related_tv.status in (
+            app.models.Status.DROPPED.value,
+            app.models.Status.PAUSED.value,
+        ):
+            logger.info(
+                "Skipping YouTube episode update for '%s' - TV status is %s",
+                episode_item.title,
+                season_instance.related_tv.status,
+            )
+            return False
+
         # Create Episode directly with the specific Item we found
         # Don't use season_instance.watch() which searches by episode_number
         # and could match the wrong video
