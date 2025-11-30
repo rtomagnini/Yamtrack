@@ -12,6 +12,13 @@
 ### 🐛 Fix: Botones de progreso en Home
 - Corregido error de sintaxis JavaScript en `progress_changer.html` que impedía mostrar los botones de progreso en la página de inicio.
 
+### ✨ Create Custom: Extracción unificada de metadatos
+- Nuevo campo unificado "Media URL" en Create Custom que detecta automáticamente el servicio (YouTube, Atresplayer, Globoplay).
+- Añadido soporte para Globoplay: extrae título, thumbnail, duración y fecha de emisión.
+- Un solo botón "Extract Info" para todos los servicios soportados.
+- Indicador visual del servicio detectado tras la extracción.
+- Fácil de extender para añadir nuevos servicios en el futuro.
+
 ## [0.25.29.RT] - 2025-11-27
 
 ### 🛠️ Robust Statistics & Error Handling

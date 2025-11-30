@@ -14,15 +14,17 @@
     {# djlint:off #}
     <form method="post" class="space-y-6" x-data="{
   mediaType: '{{ initial_media_type|default:'youtube_video' }}',
-  atresplayerLoading: false,
+  mediaUrlLoading: false,
+  detectedService: null,
   
-  async extractAtresplayerMetadata() {
-    const input = document.querySelector('input[name=atresplayer_url]');
+  async extractMediaMetadata() {
+    const input = document.querySelector('input[name=media_url]');
     const url = input?.value.trim();
     if (!url) return;
-    this.atresplayerLoading = true;
+    this.mediaUrlLoading = true;
+    this.detectedService = null;
     try {
-      const response = await fetch('{% url "atresplayer_metadata" %}', {
+      const response = await fetch('{% url "extract_url_metadata" %}', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -31,8 +33,9 @@
         body: JSON.stringify({ url: url })
       });
       const data = await response.json();
-      this.atresplayerLoading = false;
+      this.mediaUrlLoading = false;
       if (data.success) {
+        this.detectedService = data.service;
         const metadata = data.metadata;
         if (metadata.title) {
           document.querySelector('input[name=title]').value = metadata.title;
@@ -49,14 +52,21 @@
         if (metadata.duration_minutes) {
           document.querySelector('input[name=runtime]').value = metadata.duration_minutes;
         }
-        console.log('Atresplayer metadata extracted successfully:', metadata);
+        // For YouTube, also set the youtube_url hidden field
+        if (data.service === 'youtube' && metadata.youtube_video_id) {
+          const youtubeInput = document.querySelector('input[name=youtube_url]');
+          if (youtubeInput) {
+            youtubeInput.value = url;
+          }
+        }
+        console.log(`${data.service} metadata extracted successfully:`, metadata);
       } else {
         alert('Error: ' + data.error);
       }
     } catch (error) {
-      this.atresplayerLoading = false;
-      console.error('Error extracting Atresplayer metadata:', error);
-      alert('Error extracting Atresplayer metadata. Please try again.');
+      this.mediaUrlLoading = false;
+      console.error('Error extracting metadata:', error);
+      alert('Error extracting metadata. Please try again.');
     }
   },
     
@@ -418,79 +428,61 @@
           </div>
         </div>
 
-        <!-- YouTube URL field (Episode) -->
+        <!-- Unified Media URL field (Episode and YouTube Video) -->
         <div x-show="showField('youtubeUrl')"
-             x-data="youtubeExtractor()"
-             class="youtube-url-container">
+             class="media-url-container">
           <label class="block text-sm font-medium mb-2 text-gray-300">
-            YouTube URL 
-            <span class="text-xs text-gray-400">(optional - auto-fills episode info)</span>
-          </label>
-          <div class="flex gap-2">
-            <input x-ref="youtubeInput"
-                   class="flex-1 p-2 bg-[#39404b] rounded-md text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-[#4a9eff] appearance-none"
-                   name="youtube_url"
-                   placeholder="https://www.youtube.com/watch?v=..."
-                   type="url"
-                   value="">
-            <button type="button"
-                    @click="extractMetadata()"
-                    :disabled="loading"
-                    class="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white rounded-md font-medium transition-colors flex items-center gap-2">
-              <svg x-show="loading" class="animate-spin w-4 h-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                <path class="opacity-75" fill="currentColor" d="m4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-              </svg>
-              <span x-text="loading ? 'Extracting...' : 'Extract Info'"></span>
-            </button>
-          </div>
-          <p class="text-xs text-gray-400 mt-1">
-            Paste a YouTube URL and click "Extract Info" to automatically fill episode title, thumbnail, air date, and duration.
-          </p>
-          
-          <!-- Channel info display -->
-          <div x-show="channelInfo" class="mt-3 p-3 bg-[#2a2f35] rounded-md border border-gray-600">
-            <div class="flex items-center gap-2">
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-red-500">
-                <polygon points="6 3 20 12 6 21 6 3"/>
-                <rect width="20" height="14" x="2" y="5" rx="2"/>
-              </svg>
-              <span class="text-sm font-medium text-gray-300">Detected Channel:</span>
-              <span class="text-sm text-white" x-text="channelInfo ? channelInfo.title : ''"></span>
-            </div>
-            <div x-show="channelInfo && channelInfo.id" class="mt-1 text-xs text-gray-400">
-              Channel ID: <span x-text="channelInfo ? channelInfo.id : ''"></span>
-            </div>
-          </div>
-        </div>
-
-        <!-- Atresplayer URL field (Episode) -->
-        <div x-show="mediaType === 'episode'"
-             class="atresplayer-url-container">
-          <label class="block text-sm font-medium mb-2 text-gray-300">
-            Atresplayer URL 
-            <span class="text-xs text-gray-400">(optional - auto-fills episode info)</span>
+            Media URL 
+            <span class="text-xs text-gray-400">(optional - auto-fills info from YouTube, Atresplayer, Globoplay)</span>
           </label>
           <div class="flex gap-2">
             <input class="flex-1 p-2 bg-[#39404b] rounded-md text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-[#4a9eff] appearance-none"
-                   name="atresplayer_url"
-                   placeholder="https://www.atresplayer.com/..."
+                   name="media_url"
+                   placeholder="Paste URL from YouTube, Atresplayer, Globoplay..."
                    type="url"
                    value="">
+            <input type="hidden" name="youtube_url" value="">
             <button type="button"
-                    @click="extractAtresplayerMetadata()"
-                    :disabled="atresplayerLoading"
-                    class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white rounded-md font-medium transition-colors flex items-center gap-2">
-              <svg x-show="atresplayerLoading" class="animate-spin w-4 h-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    @click="extractMediaMetadata()"
+                    :disabled="mediaUrlLoading"
+                    class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white rounded-md font-medium transition-colors flex items-center gap-2">
+              <svg x-show="mediaUrlLoading" class="animate-spin w-4 h-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                 <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                 <path class="opacity-75" fill="currentColor" d="m4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
               </svg>
-              <span x-text="atresplayerLoading ? 'Extracting...' : 'Extract Info'"></span>
+              <span x-text="mediaUrlLoading ? 'Extracting...' : 'Extract Info'"></span>
             </button>
           </div>
           <p class="text-xs text-gray-400 mt-1">
-            Paste an Atresplayer URL and click "Extract Info" to automatically fill episode title, thumbnail, air date, and duration.
+            Paste a URL and click "Extract Info" to automatically fill title, thumbnail, air date, and duration.
           </p>
+          
+          <!-- Detected service indicator -->
+          <div x-show="detectedService" class="mt-3 p-3 bg-[#2a2f35] rounded-md border border-gray-600">
+            <div class="flex items-center gap-2">
+              <template x-if="detectedService === 'youtube'">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-red-500">
+                  <path d="M2.5 17a24.12 24.12 0 0 1 0-10 2 2 0 0 1 1.4-1.4 49.56 49.56 0 0 1 16.2 0A2 2 0 0 1 21.5 7a24.12 24.12 0 0 1 0 10 2 2 0 0 1-1.4 1.4 49.55 49.55 0 0 1-16.2 0A2 2 0 0 1 2.5 17"/>
+                  <path d="m10 15 5-3-5-3z"/>
+                </svg>
+              </template>
+              <template x-if="detectedService === 'atresplayer'">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-indigo-500">
+                  <rect width="20" height="14" x="2" y="5" rx="2"/>
+                  <path d="m10 9 5 3-5 3z"/>
+                </svg>
+              </template>
+              <template x-if="detectedService === 'globoplay'">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-orange-500">
+                  <circle cx="12" cy="12" r="10"/>
+                  <path d="m10 8 6 4-6 4z"/>
+                </svg>
+              </template>
+              <span class="text-sm font-medium text-gray-300">Detected:</span>
+              <span class="text-sm text-white capitalize" x-text="detectedService"></span>
+              <span class="text-xs text-green-400">✓ Info extracted</span>
+            </div>
+          </div>
         </div>
 
         <!-- Image URL field (All types) -->

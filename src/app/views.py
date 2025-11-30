@@ -1335,6 +1335,89 @@ def atresplayer_metadata(request):
         }, status=500)
 
 
+@require_POST
+def extract_url_metadata(request):
+    """
+    Extract metadata from a URL by auto-detecting the service.
+    Supports: YouTube, Atresplayer, Globoplay.
+    """
+    import json
+    from app.providers import atresplayer, globoplay
+    
+    try:
+        data = json.loads(request.body)
+        url = data.get('url', '').strip()
+        
+        if not url:
+            return JsonResponse({'success': False, 'error': 'No URL provided'}, status=400)
+        
+        # Detect service and extract metadata
+        service = None
+        metadata = None
+        
+        # YouTube detection
+        if 'youtube.com' in url or 'youtu.be' in url:
+            service = 'youtube'
+            # Extract video info using existing YouTube logic
+            from app.providers import youtube
+            video_id = youtube.extract_video_id(url)
+            if video_id:
+                video_info = youtube.fetch_video_metadata(video_id)
+                if video_info:
+                    metadata = {
+                        'title': video_info.get('title'),
+                        'thumbnail': video_info.get('thumbnail'),
+                        'duration_minutes': video_info.get('duration_minutes'),
+                        'air_date': video_info.get('published_date'),
+                        'youtube_video_id': video_id,
+                        'channel_info': {
+                            'id': video_info.get('channel_id'),
+                            'title': video_info.get('channel_title'),
+                        },
+                    }
+        
+        # Atresplayer detection
+        elif 'atresplayer.com' in url:
+            service = 'atresplayer'
+            episode_id = atresplayer.extract_episode_id(url)
+            if episode_id:
+                metadata = atresplayer.fetch_video_metadata(episode_id)
+        
+        # Globoplay detection
+        elif 'globoplay.globo.com' in url or 'globo.com/v/' in url:
+            service = 'globoplay'
+            video_id = globoplay.extract_video_id(url)
+            if video_id:
+                metadata = globoplay.fetch_video_metadata(video_id)
+        
+        else:
+            return JsonResponse({
+                'success': False, 
+                'error': 'URL not recognized. Supported services: YouTube, Atresplayer, Globoplay'
+            }, status=400)
+        
+        if not metadata:
+            return JsonResponse({
+                'success': False, 
+                'error': f'Could not fetch metadata from {service}'
+            }, status=404)
+        
+        return JsonResponse({
+            'success': True,
+            'service': service,
+            'metadata': metadata
+        })
+        
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'error': 'Invalid JSON'}, status=400)
+    except Exception as e:
+        logger.error(f"Error extracting URL metadata: {e}")
+        return JsonResponse({
+            'success': False, 
+            'error': 'Internal server error'
+        }, status=500)
+
+
 @require_GET
 def search_parent_tv(request):
     """Return the search results for parent TV shows."""
