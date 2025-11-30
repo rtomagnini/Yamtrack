@@ -926,7 +926,20 @@ def get_activity_data(user, start_date, end_date):
         start_date,
         end_date,
     )
-    current_streak, longest_streak = calculate_streaks(
+
+    # Calculate current_streak globally (without date filters)
+    global_data = get_filtered_historical_data(None, timezone.localtime(), user)
+    global_date_counts = {}
+    for item in global_data:
+        date = item["date"]
+        global_date_counts[date] = global_date_counts.get(date, 0) + item["count"]
+    current_streak, _ = calculate_streaks(
+        global_date_counts,
+        timezone.localdate(),
+    )
+
+    # Calculate longest_streak from filtered data
+    _, longest_streak = calculate_streaks(
         date_counts,
         end_date.date(),
     )

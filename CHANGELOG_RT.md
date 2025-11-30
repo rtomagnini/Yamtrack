@@ -3,6 +3,12 @@
 ### 🛠️ Plex Webhook: Restringe marcado automático de episodios
 - Ahora la integración con Plex solo marca episodios TMDB o Manual como vistos si el status de la serie es IN_PROGRESS o PLANNING.
 - Si la serie está en estado DROPPED o PAUSED, el episodio no se marca automáticamente como visto.
+
+### 📊 Statistics: Current Streak global
+- El "Current Streak" en estadísticas ahora se calcula de forma global, independiente del filtro de fechas seleccionado.
+- Muestra los días consecutivos con actividad hasta hoy, sin importar el rango de fechas del filtro.
+- El "Longest Streak" sigue respetando el filtro de fechas.
+
 ## [0.25.29.RT] - 2025-11-27
 
 ### 🛠️ Robust Statistics & Error Handling
