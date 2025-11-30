@@ -9,6 +9,9 @@
 - Muestra los días consecutivos con actividad hasta hoy, sin importar el rango de fechas del filtro.
 - El "Longest Streak" sigue respetando el filtro de fechas.
 
+### 🐛 Fix: Botones de progreso en Home
+- Corregido error de sintaxis JavaScript en `progress_changer.html` que impedía mostrar los botones de progreso en la página de inicio.
+
 ## [0.25.29.RT] - 2025-11-27
 
 ### 🛠️ Robust Statistics & Error Handling
