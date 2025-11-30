@@ -1,4 +1,4 @@
-## [UNVERSIONED]
+## [0.25.30.RT] - 2025-11-30
 
 ### 🛠️ Plex Webhook: Restringe marcado automático de episodios
 - Ahora la integración con Plex solo marca episodios TMDB o Manual como vistos si el status de la serie es IN_PROGRESS o PLANNING.
