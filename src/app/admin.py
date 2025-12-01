@@ -18,7 +18,7 @@ from app.models import (
 class ItemAdmin(admin.ModelAdmin):
     """Custom admin for Item model with search and filter options."""
 
-    search_fields = ["title", "media_id", "source"]
+    search_fields = ["title", "media_id", "source", "tmdb_id"]
     list_display = [
         "title",
         "media_id",
@@ -26,6 +26,7 @@ class ItemAdmin(admin.ModelAdmin):
         "episode_number",
         "media_type",
         "source",
+        "tmdb_id",
     ]
     list_filter = ["media_type", "source"]
 

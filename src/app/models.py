@@ -112,6 +112,13 @@ class Item(CalendarTriggerMixin, models.Model):
     runtime = models.PositiveIntegerField(null=True, blank=True)  # Duration in minutes
     # Optional field to store YouTube video id for Episode items coming from YouTube
     youtube_video_id = models.CharField(max_length=50, null=True, blank=True)
+    # Optional field to store TMDB ID for MANUAL TV Shows (for Plex integration)
+    tmdb_id = models.CharField(
+        max_length=20,
+        null=True,
+        blank=True,
+        help_text="TMDB ID for manual TV shows (used for Plex webhook integration)"
+    )
 
     class Meta:
         """Meta options for the model."""

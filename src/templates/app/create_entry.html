@@ -129,7 +129,7 @@
       showField(field) {
         // TV Show fields
         if (this.mediaType === 'tv') {
-          return ['title', 'image', 'score', 'status', 'notes'].includes(field);
+          return ['title', 'image', 'tmdbId', 'score', 'status', 'notes'].includes(field);
         }
     
         // Season fields
@@ -514,6 +514,22 @@
               </svg>
             </div>
           </div>
+        </div>
+
+        <!-- TMDB ID field (TV Shows only - for Plex integration) -->
+        <div x-show="showField('tmdbId')">
+          <label class="block text-sm font-medium mb-2 text-gray-300">
+            TMDB ID 
+            <span class="text-xs text-gray-400">(optional - for Plex webhook integration)</span>
+          </label>
+          <input class="w-full p-2 bg-[#39404b] rounded-md text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-[#4a9eff] appearance-none"
+                 name="tmdb_id"
+                 placeholder="e.g., 19538"
+                 type="text"
+                 value="">
+          <p class="text-xs text-gray-400 mt-1">
+            Enter the TMDB series ID to enable automatic episode marking from Plex webhooks.
+          </p>
         </div>
 
         <!-- Score field (TV, Movie, Anime, Manga, Game, Book, Season) -->

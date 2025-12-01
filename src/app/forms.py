@@ -121,6 +121,16 @@ class ManualItemForm(forms.ModelForm):
         }),
     )
 
+    tmdb_id = forms.CharField(
+        required=False,
+        label="TMDB ID",
+        help_text="Optional: Enter TMDB ID for Plex webhook integration",
+        widget=forms.TextInput(attrs={
+            "placeholder": "e.g., 19538",
+            "class": "tmdb-id-input",
+        }),
+    )
+
     class Meta:
         """Bind form to model."""
 
@@ -133,6 +143,7 @@ class ManualItemForm(forms.ModelForm):
             "episode_number",
             "air_date",
             "runtime",
+            "tmdb_id",
         ]
         widgets = {
             "air_date": forms.DateInput(attrs={"type": "date"}),

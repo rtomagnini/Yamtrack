@@ -62,6 +62,10 @@ class BaseWebhookProcessor:
             logger.warning("No matching TMDB ID found for TV show")
             return
 
+        # First, check if there's a MANUAL TV show with this tmdb_id that the user is tracking
+        if self._try_handle_manual_tv_episode(media_id, season_number, episode_number, payload, user):
+            return
+
         tvdb_id = app.providers.tmdb.tv_with_seasons(media_id, [season_number])[
             "tvdb_id"
         ]
@@ -94,6 +98,162 @@ class BaseWebhookProcessor:
             episode_number,
         )
         self._handle_tv_episode(media_id, season_number, episode_number, payload, user)
+
+    def _try_handle_manual_tv_episode(self, tmdb_id, season_number, episode_number, payload, user):
+        """Try to handle TV episode for a MANUAL TV show with matching tmdb_id.
+        
+        Returns True if handled successfully, False otherwise.
+        """
+        # Find MANUAL TV Item with this tmdb_id
+        manual_tv_item = app.models.Item.objects.filter(
+            source=Sources.MANUAL.value,
+            media_type=MediaTypes.TV.value,
+            tmdb_id=str(tmdb_id),
+        ).first()
+
+        if not manual_tv_item:
+            logger.debug("No MANUAL TV show found with tmdb_id=%s", tmdb_id)
+            return False
+
+        logger.info(
+            "Found MANUAL TV show '%s' with tmdb_id=%s",
+            manual_tv_item.title,
+            tmdb_id,
+        )
+
+        # Check if user is tracking this TV show
+        tv_instance = app.models.TV.objects.filter(
+            item=manual_tv_item,
+            user=user,
+        ).first()
+
+        if not tv_instance:
+            logger.info(
+                "User %s is not tracking MANUAL TV show '%s'",
+                user,
+                manual_tv_item.title,
+            )
+            return False
+
+        # Check status - skip if DROPPED or PAUSED
+        if tv_instance.status in (Status.DROPPED.value, Status.PAUSED.value):
+            logger.info(
+                "Skipping MANUAL TV episode update for '%s' - status is %s",
+                manual_tv_item.title,
+                tv_instance.status,
+            )
+            return True  # Return True to indicate we handled it (by skipping)
+
+        # Find the season for this TV show
+        season_item = app.models.Item.objects.filter(
+            media_id=manual_tv_item.media_id,
+            source=Sources.MANUAL.value,
+            media_type=MediaTypes.SEASON.value,
+            season_number=season_number,
+        ).first()
+
+        if not season_item:
+            logger.info(
+                "No MANUAL season %d found for TV show '%s'",
+                season_number,
+                manual_tv_item.title,
+            )
+            return False
+
+        season_instance = app.models.Season.objects.filter(
+            item=season_item,
+            user=user,
+            related_tv=tv_instance,
+        ).first()
+
+        if not season_instance:
+            logger.info(
+                "User %s is not tracking MANUAL season %d of '%s'",
+                user,
+                season_number,
+                manual_tv_item.title,
+            )
+            return False
+
+        # Check season status - skip if DROPPED or PAUSED
+        if season_instance.status in (Status.DROPPED.value, Status.PAUSED.value):
+            logger.info(
+                "Skipping MANUAL season update for '%s' S%02d - status is %s",
+                manual_tv_item.title,
+                season_number,
+                season_instance.status,
+            )
+            return True
+
+        # Find the episode
+        episode_item = app.models.Item.objects.filter(
+            media_id=manual_tv_item.media_id,
+            source=Sources.MANUAL.value,
+            media_type=MediaTypes.EPISODE.value,
+            season_number=season_number,
+            episode_number=episode_number,
+        ).first()
+
+        if not episode_item:
+            logger.info(
+                "No MANUAL episode S%02dE%02d found for TV show '%s'",
+                season_number,
+                episode_number,
+                manual_tv_item.title,
+            )
+            return False
+
+        # Mark episode as watched if this is a scrobble event
+        if self._is_played(payload):
+            now = timezone.now().replace(second=0, microsecond=0)
+            
+            # Check for duplicate episode records
+            latest_episode = (
+                app.models.Episode.objects.filter(
+                    item=episode_item,
+                    related_season=season_instance,
+                )
+                .order_by("-end_date")
+                .first()
+            )
+
+            should_create = True
+            if latest_episode and latest_episode.end_date:
+                time_diff = abs((now - latest_episode.end_date).total_seconds())
+                threshold = 5
+                if time_diff < threshold:
+                    should_create = False
+                    logger.debug(
+                        "Skipping duplicate MANUAL episode record "
+                        "(time difference: %d seconds): %s S%02dE%02d",
+                        time_diff,
+                        manual_tv_item.title,
+                        season_number,
+                        episode_number,
+                    )
+
+            if should_create:
+                # Create episode entry directly with the MANUAL item
+                app.models.Episode.objects.create(
+                    related_season=season_instance,
+                    item=episode_item,
+                    end_date=now,
+                )
+                logger.info(
+                    "Marked MANUAL episode as played: %s S%02dE%02d",
+                    manual_tv_item.title,
+                    season_number,
+                    episode_number,
+                )
+        else:
+            logger.debug(
+                "MANUAL episode not marked as played (not scrobble): %s S%02dE%02d",
+                manual_tv_item.title,
+                season_number,
+                episode_number,
+            )
+
+        return True
 
     def _process_movie(self, payload, user, ids):
         if ids["tmdb_id"]:
