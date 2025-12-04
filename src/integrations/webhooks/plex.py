@@ -400,20 +400,26 @@ class PlexWebhookProcessor(BaseWebhookProcessor):
         
         logger.info("Extracting series TMDB ID...")
         
-        # Method 0: Use Plex API to get series TMDB ID from episode TMDB ID
+        # Method 0: Try to extract TMDB ID from file path (e.g., {tmdb-6809} in folder name)
+        tmdb_id_from_path = self._extract_tmdb_id_from_file_path(payload)
+        if tmdb_id_from_path:
+            logger.info("Found series TMDB ID from file path: %s", tmdb_id_from_path)
+            return tmdb_id_from_path
+        
+        # Method 1: Use Plex API to get series TMDB ID from grandparentRatingKey
         episode_guids = payload["Metadata"].get("Guid", [])
         episode_tmdb_id = self._get_id_from_guids(episode_guids, "tmdb")
         
-        if episode_tmdb_id:
-            logger.info("Found episode TMDB ID: %s, querying Plex API for series", episode_tmdb_id)
-            series_tmdb_id = self._get_series_tmdb_from_plex_api(episode_tmdb_id, payload)
-            if series_tmdb_id:
-                logger.info("Successfully got series TMDB ID from Plex API: %s", series_tmdb_id)
-                return series_tmdb_id
-            else:
-                logger.warning("Plex API method failed, trying payload analysis...")
+        # Always try Plex API if we have grandparentRatingKey, even without episode TMDB ID
+        series_tmdb_id = self._get_series_tmdb_from_plex_api(episode_tmdb_id, payload)
+        if series_tmdb_id:
+            logger.info("Successfully got series TMDB ID from Plex API: %s", series_tmdb_id)
+            return series_tmdb_id
         
-        # Method 1: Check if there's a grandparent section with GUIDs
+        if episode_tmdb_id:
+            logger.warning("Plex API method failed, trying payload analysis...")
+        
+        # Method 2: Check if there's a grandparent section with GUIDs
         grandparent = payload["Metadata"].get("Grandparent", {})
         if grandparent and "Guid" in grandparent:
             tmdb_id = self._get_id_from_guids(grandparent["Guid"], "tmdb")
@@ -421,7 +427,7 @@ class PlexWebhookProcessor(BaseWebhookProcessor):
                 logger.info("Found series TMDB ID from grandparent: %s", tmdb_id)
                 return tmdb_id
         
-        # Method 2: Check parent section with GUIDs
+        # Method 3: Check parent section with GUIDs
         parent = payload["Metadata"].get("Parent", {})
         if parent and "Guid" in parent:
             tmdb_id = self._get_id_from_guids(parent["Guid"], "tmdb")
@@ -429,7 +435,7 @@ class PlexWebhookProcessor(BaseWebhookProcessor):
                 logger.info("Found series TMDB ID from parent: %s", tmdb_id)
                 return tmdb_id
         
-        # Method 3: Fallback to regular TMDB ID extraction
+        # Method 4: Fallback to regular TMDB ID extraction from episode
         guids = payload["Metadata"].get("Guid", [])
         tmdb_id = self._get_id_from_guids(guids, "tmdb")
         if tmdb_id:
@@ -438,6 +444,75 @@ class PlexWebhookProcessor(BaseWebhookProcessor):
         
         logger.warning("No TMDB ID found for series")
         return None
+    
+    def _extract_tmdb_id_from_file_path(self, payload):
+        """Extract TMDB ID from file path folder name (e.g., {tmdb-6809})."""
+        import re
+        
+        metadata = payload.get("Metadata", {})
+        media_list = metadata.get("Media", [])
+        
+        # First, try to get file path from payload
+        file_path = None
+        if media_list and isinstance(media_list, list):
+            for media in media_list:
+                parts = media.get("Part", [])
+                if parts and isinstance(parts, list):
+                    for part in parts:
+                        file_path = part.get("file")
+                        if file_path:
+                            break
+                if file_path:
+                    break
+        
+        # If no file path in payload, query Plex API
+        if not file_path:
+            rating_key = metadata.get("ratingKey")
+            if rating_key:
+                file_path = self._get_file_path_from_plex_api(rating_key)
+        
+        if file_path:
+            # Look for {tmdb-XXXX} pattern in the file path
+            match = re.search(r'\{tmdb-(\d+)\}', file_path, re.IGNORECASE)
+            if match:
+                tmdb_id = match.group(1)
+                logger.info("Extracted TMDB ID %s from file path: %s", tmdb_id, file_path)
+                return tmdb_id
+        
+        return None
+    
+    def _get_file_path_from_plex_api(self, rating_key):
+        """Get file path from Plex API using rating key."""
+        import xml.etree.ElementTree as ET
+        
+        plex_url = getattr(settings, 'PLEX_SERVER_URL', None)
+        plex_token = getattr(settings, 'PLEX_TOKEN', None)
+        
+        if not plex_url or not plex_token:
+            logger.debug("Plex API credentials not configured, cannot get file path")
+            return None
+        
+        try:
+            api_url = f"{plex_url}/library/metadata/{rating_key}"
+            params = {'X-Plex-Token': plex_token}
+            
+            response = requests.get(api_url, params=params, timeout=10)
+            response.raise_for_status()
+            
+            root = ET.fromstring(response.content)
+            
+            # Find file path in Part element
+            for part_elem in root.findall('.//Part'):
+                file_path = part_elem.get('file')
+                if file_path:
+                    logger.debug("Got file path from Plex API: %s", file_path)
+                    return file_path
+            
+            return None
+            
+        except Exception as e:
+            logger.debug("Error getting file path from Plex API: %s", str(e))
+            return None
     
     def _get_id_from_guids(self, guids, prefix):
         """Extract ID with given prefix from GUID array."""
