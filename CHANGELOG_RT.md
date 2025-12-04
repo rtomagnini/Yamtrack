@@ -1,3 +1,13 @@
+
+## [0.25.31.RT] - 2025-12-01
+
+### 🔗 TV Shows MANUAL: Soporte para TMDB ID en integración Plex
+- Nuevo campo opcional `tmdb_id` en TV Shows de tipo MANUAL para vincular con series de TMDB.
+- Permite que la integración con Plex marque episodios como vistos en series MANUAL que tengan un TMDB ID asociado.
+- El campo se puede añadir al crear un nuevo TV Show desde "Create Custom" o desde el panel de administración de Django.
+- La integración Plex ahora busca primero si existe una serie MANUAL con el TMDB ID antes de usar la serie TMDB directamente.
+- Respeta el estado de la serie: no marca episodios si el status es DROPPED o PAUSED.
+
 ## [0.25.30.RT] - 2025-11-30
 
 ### 🛠️ Plex Webhook: Restringe marcado automático de episodios
