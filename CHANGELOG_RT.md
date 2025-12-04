@@ -1,4 +1,12 @@
 
+## [UNVERSIONED]
+
+### 🛠️ Plex Webhook: Extracción avanzada de TMDB ID
+- Ahora Yamtrack intenta extraer el TMDB ID del nombre de la carpeta (patrón `{tmdb-XXXX}`) si Plex no lo proporciona.
+- Si el path del archivo no está en el payload, consulta la API de Plex usando el ratingKey para obtener la ruta y extraer el TMDB ID.
+- Esto permite que episodios con GUID `local://` o sin proveedor externo puedan ser reconocidos y marcados correctamente.
+
+
 ## [0.25.31.RT] - 2025-12-01
 
 ### 🔗 TV Shows MANUAL: Soporte para TMDB ID en integración Plex
@@ -7,6 +15,11 @@
 - El campo se puede añadir al crear un nuevo TV Show desde "Create Custom" o desde el panel de administración de Django.
 - La integración Plex ahora busca primero si existe una serie MANUAL con el TMDB ID antes de usar la serie TMDB directamente.
 - Respeta el estado de la serie: no marca episodios si el status es DROPPED o PAUSED.
+
+### 🛠️ Plex Webhook: Extracción mejorada de TMDB ID
+- Nuevo método para extraer TMDB ID del nombre de carpeta cuando Plex no identifica la serie (e.g., `{tmdb-6809}` en la ruta).
+- Consulta automática a la API de Plex para obtener el file path si no está en el payload del webhook.
+- Mejora la compatibilidad con series que Plex no puede identificar correctamente con proveedores externos.
 
 ## [0.25.30.RT] - 2025-11-30
 
