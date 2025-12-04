@@ -1,5 +1,6 @@
 
-## [UNVERSIONED]
+
+## [0.25.32.RT] - 2025-12-04
 
 ### 🛠️ Plex Webhook: Extracción avanzada de TMDB ID
 - Ahora Yamtrack intenta extraer el TMDB ID del nombre de la carpeta (patrón `{tmdb-XXXX}`) si Plex no lo proporciona.
