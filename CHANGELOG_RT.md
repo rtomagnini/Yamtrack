@@ -1,4 +1,10 @@
 
+
+## [0.25.35.RT] - 2026-03-12
+
+### 🔧 Mantenimiento: Actualización de dependencias
+- Se ha actualizado el archivo requirements.txt con nuevas versiones de dependencias.
+
 ## [0.25.34.RT] - 2026-03-12
 
 ### 🐛 Fix: Guardado de fecha/hora en episodios YouTube
