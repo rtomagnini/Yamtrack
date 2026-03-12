@@ -1,5 +1,11 @@
 
 
+
+## [0.25.36.RT] - 2026-03-12
+
+### 🐛 Fix: Error UnboundLocalError en YouTube episode_save
+- Corregido error UnboundLocalError al guardar como visto un video de YouTube (importación de timezone ahora es global).
+
 ## [0.25.35.RT] - 2026-03-12
 
 ### 🔧 Mantenimiento: Actualización de dependencias

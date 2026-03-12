@@ -979,7 +979,6 @@ def episode_save(request):
             channel_image=Subquery(tv_image_qs, output_field=CharField()),
         )
         video = item_qs.first()
-        from django.utils import timezone
         from django.middleware.csrf import get_token
         context = {
             'video': video,
