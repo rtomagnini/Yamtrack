@@ -798,18 +798,17 @@ def episode_save(request):
 
     # If season_number is None, try to get it from the episode
     if season_number is None:
-        try:
-            episode_item = Item.objects.get(
-                media_id=media_id,
-                source=source,
-                media_type=MediaTypes.EPISODE.value,
-                episode_number=episode_number,
-            )
-            season_number = episode_item.season_number
-        except Item.DoesNotExist:
+        episode_item = Item.objects.filter(
+            media_id=media_id,
+            source=source,
+            media_type=MediaTypes.EPISODE.value,
+            episode_number=episode_number,
+        ).first()
+        if episode_item is None:
             logger.error("Episode not found: media_id=%s, source=%s, episode_number=%s", 
                         media_id, source, episode_number)
             return HttpResponseBadRequest("Episode not found")
+        season_number = episode_item.season_number
 
     try:
         related_season = Season.objects.get(
@@ -941,13 +940,14 @@ def episode_save(request):
 
     # If HTMX request, return only the updated card HTML
     if request.headers.get('HX-Request'):
-        # Find the updated video item
-        item = Item.objects.get(
+        # Find the updated video item - include season_number to avoid MultipleObjectsReturned
+        item = Item.objects.filter(
             media_id=media_id,
             source=source,
             media_type=MediaTypes.EPISODE.value,
             episode_number=episode_number,
-        )
+            season_number=season_number,
+        ).first()
         # Annotate with channel info and watched status for template
         from django.db.models import OuterRef, Exists, Subquery, CharField
         from app.models import TV, BasicMedia, Episode, Item, MediaTypes, Season, Sources, Status, GameSession, Game
