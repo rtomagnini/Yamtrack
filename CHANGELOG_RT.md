@@ -1,4 +1,13 @@
 
+## [0.25.33.RT] - 2026-03-12
+
+### 🐛 Fix: YouTube MultipleObjectsReturned
+- Corregido error MultipleObjectsReturned al marcar un video de YouTube como visto (ahora filtra correctamente por season_number).
+- Mejora de robustez en la identificación de episodios para contenido YouTube multi-temporada.
+
+### 🔧 Mantenimiento y mejoras menores
+- Refactorizaciones y mejoras internas recientes.
+
 
 ## [0.25.32.RT] - 2025-12-04
 
