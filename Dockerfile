@@ -15,7 +15,7 @@ COPY ./nginx.conf /etc/nginx/nginx.conf
 WORKDIR /yamtrack
 
 RUN apk add --no-cache nginx shadow \
-    && pip install --no-cache-dir setuptools supervisor==4.2.5 \
+    && pip install --no-cache-dir setuptools wheel supervisor==4.2.5 \
     && pip install --no-cache-dir -r /requirements.txt \
     && rm -rf /root/.cache /tmp/* \
     && find /usr/local -type d -name __pycache__ -exec rm -rf {} + \
