@@ -14,16 +14,13 @@ COPY ./nginx.conf /etc/nginx/nginx.conf
 
 WORKDIR /yamtrack
 
-RUN apk add --no-cache nginx shadow \
-    && pip install --no-cache-dir -r /requirements.txt \
-    && pip install --no-cache-dir supervisor==4.2.5 \
-    && rm -rf /root/.cache /tmp/* \
-    && find /usr/local -type d -name __pycache__ -exec rm -rf {} + \
-    # create user abc for later PUID/PGID mapping
-    && useradd -U -M -s /bin/sh abc \
-    # Create required nginx directories and set permissions
-    && mkdir -p /var/log/nginx \
-    && mkdir -p /var/lib/nginx/body
+RUN apk add --no-cache nginx shadow \\
+    && pip install --no-cache-dir setuptools supervisor==4.2.5 \\
+    && pip install --no-cache-dir -r /requirements.txt \\
+    && rm -rf /root/.cache /tmp/* \\
+    && find /usr/local -type d -name __pycache__ -exec rm -rf {} + \\
+    && useradd -U -M -s /bin/sh abc \\
+    && mkdir -p /var/log/nginx /var/lib/nginx/body
 
 # Django app
 COPY src ./
