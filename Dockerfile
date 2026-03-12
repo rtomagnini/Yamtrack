@@ -14,13 +14,13 @@ COPY ./nginx.conf /etc/nginx/nginx.conf
 
 WORKDIR /yamtrack
 
-RUN apk add --no-cache nginx shadow \
-    && pip install --no-cache-dir setuptools wheel supervisor==4.2.5 \
+RUN apk add --no-cache nginx shadow supervisor \
     && pip install --no-cache-dir -r /requirements.txt \
     && rm -rf /root/.cache /tmp/* \
     && find /usr/local -type d -name __pycache__ -exec rm -rf {} + \
     && useradd -U -M -s /bin/sh abc \
     && mkdir -p /var/log/nginx /var/lib/nginx/body
+
 
 # Django app
 COPY src ./
