@@ -1,4 +1,10 @@
 
+## [0.25.34.RT] - 2026-03-12
+
+### 🐛 Fix: Guardado de fecha/hora en episodios YouTube
+- Ahora al marcar un video de YouTube como visto, se guarda correctamente la fecha y hora actual en el campo END DATE del episodio.
+- Si el formulario no valida el campo end_date, se usa automáticamente la hora actual como fallback.
+
 ## [0.25.33.RT] - 2026-03-12
 
 ### 🐛 Fix: YouTube MultipleObjectsReturned

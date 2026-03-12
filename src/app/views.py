@@ -793,8 +793,16 @@ def episode_save(request):
 
     form = EpisodeTrackingForm(request.POST)
     if not form.is_valid():
-        logger.error("Form validation failed: %s", form.errors)
-        return HttpResponseBadRequest("Invalid form data")
+        # For YouTube sources, end_date might come as 'Y-m-d H:i' but form expects only date.
+        # In that case, fall back to timezone.now() instead of rejecting the request.
+        if source == Sources.YOUTUBE.value:
+            logger.debug("DEBUG episode_save: YouTube form invalid (%s), using timezone.now() as end_date", form.errors)
+            end_date = timezone.now()
+        else:
+            logger.error("Form validation failed: %s", form.errors)
+            return HttpResponseBadRequest("Invalid form data")
+    else:
+        end_date = form.cleaned_data["end_date"] or timezone.now()
 
     # If season_number is None, try to get it from the episode
     if season_number is None:
@@ -926,7 +934,7 @@ def episode_save(request):
                 "season_number": season_number,
                 "episode_number": episode_number,
                 "source": source,
-                "end_date": form.cleaned_data["end_date"].isoformat(),
+                "end_date": end_date.isoformat() if hasattr(end_date, 'isoformat') else str(end_date),
             }
         })
 
@@ -936,7 +944,7 @@ def episode_save(request):
     else:
         auto_complete = True
     
-    related_season.watch(episode_number, form.cleaned_data["end_date"], auto_complete=auto_complete)
+    related_season.watch(episode_number, end_date, auto_complete=auto_complete)
 
     # If HTMX request, return only the updated card HTML
     if request.headers.get('HX-Request'):
