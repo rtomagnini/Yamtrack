@@ -685,15 +685,15 @@
           <div class="flex items-center space-x-2">
             <!-- Filter buttons -->
             <div class="flex space-x-2">
-              <a href="?{% for key, value in request.GET.items %}{% if key != 'filter' %}{{ key }}={{ value }}&{% endif %}{% endfor %}filter=all" 
+              <a href="?{% for key, value in request.GET.items %}{% if key != 'filter' and key != 'page' %}{{ key }}={{ value|urlencode }}&{% endif %}{% endfor %}filter=all"
                  class="px-3 py-1 rounded-full text-sm {% if current_filter == 'all' or not current_filter %}bg-indigo-600 text-white{% else %}bg-gray-700 text-gray-300 hover:bg-gray-600{% endif %} transition duration-200">
                 All
               </a>
-              <a href="?{% for key, value in request.GET.items %}{% if key != 'filter' %}{{ key }}={{ value }}&{% endif %}{% endfor %}filter=watched" 
+              <a href="?{% for key, value in request.GET.items %}{% if key != 'filter' and key != 'page' %}{{ key }}={{ value|urlencode }}&{% endif %}{% endfor %}filter=watched"
                  class="px-3 py-1 rounded-full text-sm {% if current_filter == 'watched' %}bg-indigo-600 text-white{% else %}bg-gray-700 text-gray-300 hover:bg-gray-600{% endif %} transition duration-200">
                 Watched
               </a>
-              <a href="?{% for key, value in request.GET.items %}{% if key != 'filter' %}{{ key }}={{ value }}&{% endif %}{% endfor %}filter=unwatched" 
+              <a href="?{% for key, value in request.GET.items %}{% if key != 'filter' and key != 'page' %}{{ key }}={{ value|urlencode }}&{% endif %}{% endfor %}filter=unwatched"
                  class="px-3 py-1 rounded-full text-sm {% if current_filter == 'unwatched' %}bg-indigo-600 text-white{% else %}bg-gray-700 text-gray-300 hover:bg-gray-600{% endif %} transition duration-200">
                 Unwatched
               </a>
@@ -701,7 +701,7 @@
             
             <!-- Sort button -->
             <div class="border-l border-gray-600 pl-2">
-              <a href="?{% for key, value in request.GET.items %}{% if key != 'sort' %}{{ key }}={{ value }}&{% endif %}{% endfor %}sort={% if current_sort == 'desc' or not current_sort %}asc{% else %}desc{% endif %}" 
+              <a href="?{% for key, value in request.GET.items %}{% if key != 'sort' and key != 'page' %}{{ key }}={{ value|urlencode }}&{% endif %}{% endfor %}sort={% if current_sort == 'desc' or not current_sort %}asc{% else %}desc{% endif %}"
                  class="px-3 py-1 rounded-full text-sm bg-gray-700 text-gray-300 hover:bg-gray-600 transition duration-200 flex items-center space-x-1">
                 <span>Order</span>
                 {% if current_sort == 'desc' or not current_sort %}
@@ -722,7 +722,7 @@
         
         {% if media.episodes %}
         <div class="space-y-6">
-          {% for episode in media.episodes %}
+          {% for episode in episodes_page|default:media.episodes %}
             <div class="bg-[#2a2f35] rounded-lg overflow-hidden shadow-lg" data-episode-card>
               <div class="flex flex-col md:flex-row">
                 <div class="md:w-64 flex-shrink-0">
@@ -922,6 +922,30 @@
             </div>
           {% endfor %}
         </div>
+        {% if episodes_page and episodes_page.paginator.num_pages > 1 %}
+          <nav class="flex flex-col sm:flex-row items-center justify-between gap-3 mt-6" aria-label="Episode pages">
+            <span class="text-sm text-gray-400">
+              Showing {{ episodes_page.start_index }}–{{ episodes_page.end_index }} of {{ episodes_page.paginator.count }} {% if is_youtube_channel %}videos{% else %}episodes{% endif %}
+            </span>
+            <div class="flex items-center gap-2">
+              {% if episodes_page.has_previous %}
+                <a href="?{% for key, value in request.GET.items %}{% if key != 'page' %}{{ key }}={{ value|urlencode }}&{% endif %}{% endfor %}page={{ episodes_page.previous_page_number }}"
+                   class="px-3 py-2 rounded bg-gray-700 text-gray-200 hover:bg-gray-600 transition">
+                  Previous
+                </a>
+              {% endif %}
+              <span class="text-sm text-gray-400">
+                Page {{ episodes_page.number }} of {{ episodes_page.paginator.num_pages }}
+              </span>
+              {% if episodes_page.has_next %}
+                <a href="?{% for key, value in request.GET.items %}{% if key != 'page' %}{{ key }}={{ value|urlencode }}&{% endif %}{% endfor %}page={{ episodes_page.next_page_number }}"
+                   class="px-3 py-2 rounded bg-gray-700 text-gray-200 hover:bg-gray-600 transition">
+                  Next
+                </a>
+              {% endif %}
+            </div>
+          </nav>
+        {% endif %}
         {% else %}
           <div class="text-center py-8 text-gray-400">
             {% if current_filter == 'watched' %}

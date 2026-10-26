@@ -36,8 +36,25 @@ def metadata(media_id, media_type):
 
 def season(media_id, season_number):
     """Return the metadata for a manual season."""
-    tv_metadata = metadata(media_id, MediaTypes.TV.value)
-    return tv_metadata[f"season/{season_number}"]
+    tv_item = models.Item.objects.get(
+        media_id=media_id,
+        media_type=MediaTypes.TV.value,
+        source=Sources.MANUAL.value,
+    )
+    season_item = models.Item.objects.get(
+        media_id=media_id,
+        media_type=MediaTypes.SEASON.value,
+        source=Sources.MANUAL.value,
+        season_number=season_number,
+    )
+    season_episodes = list(get_season_episodes(season_item))
+    season_response = build_season_response(
+        season_item,
+        build_episodes_response(season_episodes),
+        season_episodes,
+    )
+    season_response["title"] = tv_item.title
+    return season_response
 
 
 def get_season_items(media_id):
@@ -55,7 +72,7 @@ def process_seasons(season_items, response):
     response["related"]["seasons"] = []
 
     for season in season_items:
-        season_episodes = get_season_episodes(season)
+        season_episodes = list(get_season_episodes(season))
         episodes_response = build_episodes_response(season_episodes)
         season_response = build_season_response(
             season,
@@ -67,13 +84,14 @@ def process_seasons(season_items, response):
 
         season_response["title"] = response["title"]
         response["related"]["seasons"].append(season_response)
-        num_episodes += season_episodes.count()
+        num_episodes += len(season_episodes)
 
     return num_episodes
 
 
 def build_season_response(season, episodes_response, season_episodes):
     """Build the season response dictionary."""
+    episode_count = len(season_episodes)
     return {
         "source": Sources.MANUAL.value,
         "media_id": season.media_id,
@@ -83,11 +101,11 @@ def build_season_response(season, episodes_response, season_episodes):
         "image": season.image,
         "season_number": season.season_number,
         "episodes": episodes_response,
-        "max_progress": season_episodes.count(),
+        "max_progress": episode_count,
         "score": None,
         "score_count": None,
         "details": {
-            "episodes": season_episodes.count(),
+            "episodes": episode_count,
         },
     }
 

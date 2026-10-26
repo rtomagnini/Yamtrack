@@ -482,6 +482,10 @@ def season_details(request, source, media_id, title, season_number):  # noqa: AR
             key=lambda x: x["episode_number"]
         )
 
+    episodes_page = Paginator(season_metadata["episodes"], 30).get_page(
+        request.GET.get("page"),
+    )
+
     context = {
         "media": season_metadata,
         "tv": tv_with_seasons_metadata,
@@ -490,6 +494,7 @@ def season_details(request, source, media_id, title, season_number):  # noqa: AR
         "current_instance": current_instance,
         "current_filter": episode_filter,
         "current_sort": sort_order,
+        "episodes_page": episodes_page,
     }
     return render(request, "app/media_details.html", context)
 
@@ -1715,21 +1720,27 @@ def youtube_channel_details(request, source, media_id, title):  # noqa: ARG001 t
     if current_instance:
         # Get all episode Items from all seasons of this YouTube channel
         from app.models import TV, BasicMedia, Episode, Item, MediaTypes, Season, Sources, Status, GameSession, Game
-        episode_items = Item.objects.filter(
+        episode_items = list(Item.objects.filter(
             media_type=MediaTypes.EPISODE.value,
             source=Sources.YOUTUBE.value,
             media_id=media_id
-        ).order_by('-air_date')
+        ).order_by('-air_date'))
+
+    # Load all watch histories in one query instead of two queries per video.
+    episode_history_by_item = {}
+    if episode_items:
+        histories = Episode.objects.filter(
+            item__in=episode_items,
+            related_season__related_tv=current_instance,
+        ).order_by('-end_date')
+        for history in histories:
+            episode_history_by_item.setdefault(history.item_id, []).append(history)
 
     # For YouTube channels, we'll work with the episode items we have in the database
     # Convert episode items to a structure that the template expects
     episodes = []
     for item in episode_items:
-        # Get all Episode records (watch history) for this item
-        episode_history = Episode.objects.filter(
-            item=item,
-            related_season__related_tv=current_instance
-        ).order_by('-end_date')
+        episode_history = episode_history_by_item.get(item.id, [])
         
         episode_data = {
             "title": item.title,
@@ -1740,8 +1751,8 @@ def youtube_channel_details(request, source, media_id, title):  # noqa: ARG001 t
             "image": item.image,
             "runtime": item.runtime,
             "id": item.id,
-            "watched": episode_history.exists(),
-            "history": list(episode_history),
+            "watched": bool(episode_history),
+            "history": episode_history,
             # Add required fields for template tags
             "source": item.source,
             "media_type": item.media_type,
@@ -1793,6 +1804,8 @@ def youtube_channel_details(request, source, media_id, title):  # noqa: ARG001 t
             episodes,
             key=lambda x: (x.get("episode_number") or 0)
         )
+
+    episodes_page = Paginator(episodes, 30).get_page(request.GET.get("page"))
     
     # Get available years for filtering
     available_years = sorted(list(set(
@@ -1812,6 +1825,7 @@ def youtube_channel_details(request, source, media_id, title):  # noqa: ARG001 t
         "current_sort": sort_order,
         "current_year": year_filter,
         "available_years": available_years,
+        "episodes_page": episodes_page,
         "is_youtube_channel": True,  # Flag to customize template behavior
     }
     return render(request, "app/media_details.html", context)
