@@ -45,6 +45,20 @@ def home(request):
         media_type_to_load,
     )
 
+    # Add pending video counts before the HTMX response returns, so the
+    # additional YouTube channels loaded from Home get the same values.
+    for media_list in list_by_type.get(MediaTypes.YOUTUBE.value, {}).get('items', []):
+        try:
+            max_progress = getattr(media_list, 'max_progress', None)
+            progress = getattr(media_list, 'progress', None)
+            if max_progress is not None and progress is not None:
+                pending = max_progress - progress
+                media_list.pending_videos = pending if pending > 0 else 0
+            else:
+                media_list.pending_videos = 0
+        except Exception:
+            media_list.pending_videos = 0
+
     # If this is an HTMX request to load more items for a specific media type
     if request.headers.get("HX-Request") and media_type_to_load:
         context = {
@@ -68,19 +82,6 @@ def home(request):
     # Build lists of (media_type, media_list) pairs so templates don't need
     # to do dictionary lookups with bracket notation (not supported in Django
     # template variable expressions).
-    # Add pending_videos for YouTube items
-    for media_list in list_by_type.get(MediaTypes.YOUTUBE.value, {}).get('items', []):
-        try:
-            max_progress = getattr(media_list, 'max_progress', None)
-            progress = getattr(media_list, 'progress', None)
-            if max_progress is not None and progress is not None:
-                pending = max_progress - progress
-                media_list.pending_videos = pending if pending > 0 else 0
-            else:
-                media_list.pending_videos = 0
-        except Exception:
-            media_list.pending_videos = 0
-
     preferred_sections = []
     for mt in context["preferred_order"]:
         if mt in list_by_type:
