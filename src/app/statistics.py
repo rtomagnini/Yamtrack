@@ -159,13 +159,26 @@ def get_watch_time_timeseries(user, start_date, end_date):
     from django.utils import timezone
     import datetime
 
+    # Extend short selections to a 30-day daily chart.
+    chart_start_date = start_date
+    selected_days = None
+    if start_date and end_date:
+        selected_days = (end_date.date() - start_date.date()).days + 1
+        if selected_days <= 30:
+            chart_start_date = min(
+                start_date,
+                end_date - datetime.timedelta(days=29),
+            )
+
     # Determinar agrupamiento
     if not start_date or not end_date:
         # Si no hay fechas, usar por mes
         group = 'month'
     else:
         days = (end_date - start_date).days
-        if days <= 30:
+        if selected_days is not None and selected_days <= 30:
+            group = 'day'
+        elif days <= 30:
             group = 'day'
         elif days <= 180:
             group = 'week'
@@ -180,8 +193,8 @@ def get_watch_time_timeseries(user, start_date, end_date):
         'item__media_type': 'episode',
         'related_season__user': user,
     }
-    if start_date:
-        episode_filters['end_date__gte'] = start_date
+    if chart_start_date:
+        episode_filters['end_date__gte'] = chart_start_date
     if end_date:
         episode_filters['end_date__lte'] = end_date
     episodes = Episode.objects.filter(**episode_filters)
@@ -192,32 +205,32 @@ def get_watch_time_timeseries(user, start_date, end_date):
         'item__runtime__isnull': False,
         'user': user,
     }
-    if start_date:
-        movie_filters['end_date__gte'] = start_date
+    if chart_start_date:
+        movie_filters['end_date__gte'] = chart_start_date
     if end_date:
         movie_filters['end_date__lte'] = end_date
     movies = Movie.objects.filter(**movie_filters).select_related('item')
 
     # Query de ComicSession por usuario en el rango
     comic_session_filters = {'comic__user': user}
-    if start_date:
-        comic_session_filters['session_date__gte'] = start_date
+    if chart_start_date:
+        comic_session_filters['session_date__gte'] = chart_start_date
     if end_date:
         comic_session_filters['session_date__lte'] = end_date
     comic_sessions = ComicSession.objects.filter(**comic_session_filters)
 
     # Query de GameSession por usuario en el rango
     game_session_filters = {'game__user': user}
-    if start_date:
-        game_session_filters['session_date__gte'] = start_date
+    if chart_start_date:
+        game_session_filters['session_date__gte'] = chart_start_date
     if end_date:
         game_session_filters['session_date__lte'] = end_date
     game_sessions = GameSession.objects.filter(**game_session_filters)
 
     # Query de BookSession por usuario en el rango
     book_session_filters = {'book__user': user}
-    if start_date:
-        book_session_filters['session_date__gte'] = start_date
+    if chart_start_date:
+        book_session_filters['session_date__gte'] = chart_start_date
     if end_date:
         book_session_filters['session_date__lte'] = end_date
     book_sessions = BookSession.objects.filter(**book_session_filters)
@@ -289,14 +302,21 @@ def get_watch_time_timeseries(user, start_date, end_date):
     sorted_keys = sorted(data.keys())
     labels = []
     values = []
-    for k in sorted_keys:
-        if group == 'day':
-            labels.append(k.strftime('%Y-%m-%d'))
-        elif group == 'week':
-            labels.append(f"Semana {k.strftime('%Y-%m-%d')}")
-        else:
-            labels.append(k.strftime('%Y-%m'))
-        values.append(data[k])
+    if selected_days is not None and selected_days <= 30:
+        total_chart_days = (end_date.date() - chart_start_date.date()).days + 1
+        for offset in range(total_chart_days):
+            day = chart_start_date.date() + datetime.timedelta(days=offset)
+            labels.append(day.strftime('%Y-%m-%d'))
+            values.append(data.get(day, 0))
+    else:
+        for k in sorted_keys:
+            if group == 'day':
+                labels.append(k.strftime('%Y-%m-%d'))
+            elif group == 'week':
+                labels.append(f"Semana {k.strftime('%Y-%m-%d')}")
+            else:
+                labels.append(k.strftime('%Y-%m'))
+            values.append(data[k])
 
     # Formato para Chart.js
     return {
