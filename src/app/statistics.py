@@ -938,10 +938,10 @@ def get_activity_data(user, start_date, end_date):
         timezone.localdate(),
     )
 
-    # Calculate longest_streak from filtered data
+    # Calculate longest_streak globally (without date filters)
     _, longest_streak = calculate_streaks(
-        date_counts,
-        end_date.date(),
+        global_date_counts,
+        timezone.localdate(),
     )
 
     # Create complete date range including padding days
