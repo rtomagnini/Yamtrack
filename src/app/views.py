@@ -1,5 +1,7 @@
 ﻿import logging
 
+from copy import deepcopy
+
 from django.apps import apps
 from django.conf import settings
 from django.contrib import messages
@@ -19,6 +21,7 @@ from django.contrib.auth.decorators import login_required
 
 from app import helpers, history_processor
 from app import statistics as stats
+from app.metadata import display_metadata
 from app.forms import EpisodeTrackingForm, ManualItemForm, get_form_class
 from app.models import TV, BasicMedia, Episode, Item, MediaTypes, Season, Sources, Status, GameSession, Game
 from app.providers import manual, services, tmdb, youtube
@@ -394,6 +397,8 @@ def media_search(request):
 def media_details(request, source, media_type, media_id, title):  # noqa: ARG001 title for URL
     """Return the details page for a media item."""
     media_metadata = services.get_media_metadata(media_type, media_id, source)
+    if media_type == MediaTypes.MOVIE.value:
+        media_metadata = display_metadata(media_metadata, request.user)
     user_medias = BasicMedia.objects.filter_media_prefetch(
         request.user,
         media_id,
@@ -420,7 +425,7 @@ def season_details(request, source, media_id, title, season_number):  # noqa: AR
         source,
         [season_number],
     )
-    season_metadata = tv_with_seasons_metadata[f"season/{season_number}"]
+    season_metadata = deepcopy(tv_with_seasons_metadata[f"season/{season_number}"])
 
     user_medias = BasicMedia.objects.filter_media_prefetch(
         request.user,
@@ -443,6 +448,12 @@ def season_details(request, source, media_id, title, season_number):  # noqa: AR
             season_metadata,
             episodes_in_db,
         )
+
+    # Keep personal corrections outside the shared provider cache.
+    season_metadata["episodes"] = [
+        display_metadata(episode, request.user)
+        for episode in season_metadata["episodes"]
+    ]
 
     # Filter episodes by watched status if requested
     episode_filter = request.GET.get("filter", "all")
@@ -542,15 +553,15 @@ def sync_metadata(request, source, media_type, media_id, season_number=None):
             source,
             [season_number],
         )
+        catalog_defaults = {"title": metadata["title"], "image": metadata["image"]}
+        if media_type == MediaTypes.MOVIE.value and metadata.get("runtime") is not None:
+            catalog_defaults["runtime"] = metadata["runtime"]
         item, _ = Item.objects.update_or_create(
             media_id=media_id,
             source=source,
             media_type=media_type,
             season_number=season_number,
-            defaults={
-                "title": metadata["title"],
-                "image": metadata["image"],
-            },
+            defaults=catalog_defaults,
         )
         title = metadata["title"]
         if season_number:
@@ -664,16 +675,17 @@ def track_modal(
     }
 
     if media:
-        title = media.item
+        title = display_metadata(media.item, request.user)
         if media_type == MediaTypes.GAME.value:
             initial_data["progress"] = helpers.minutes_to_hhmm(media.progress)
     else:
-        title = services.get_media_metadata(
+        metadata = services.get_media_metadata(
             media_type,
             media_id,
             source,
             [season_number],
-        )["title"]
+        )
+        title = display_metadata(metadata, request.user)["title"]
         if media_type == MediaTypes.SEASON.value:
             title += f" S{season_number}"
 
@@ -1627,7 +1639,7 @@ def statistics(request):
     watch_time_distribution_pie_chart_data = stats.get_watch_time_distribution_pie_chart_data(
         user_media, request.user, start_date, end_date
     )
-    timeline = stats.get_timeline(user_media, start_date, end_date)
+    timeline = stats.get_timeline(user_media, start_date, end_date, user=request.user)
 
     activity_data = stats.get_activity_data(request.user, start_date, end_date)
 

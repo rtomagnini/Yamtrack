@@ -13,6 +13,23 @@ from app.models import MediaTypes, Sources, Status
 register = template.Library()
 
 
+@register.filter
+def metadata_for(item, user):
+    """Display the current user's title, image and duration corrections."""
+    from app.metadata import display_metadata
+
+    return display_metadata(item, user)
+
+
+@register.simple_tag
+def metadata_title(item, title, user):
+    """Preserve a card's formatted title unless the user corrected it."""
+    from app.metadata import override_for
+
+    correction = override_for(item, user)
+    return correction.title if correction and correction.title is not None else title
+
+
 @register.simple_tag
 def get_static_file_mtime(file_path):
     """Return the last modification time of a static file for cache busting."""

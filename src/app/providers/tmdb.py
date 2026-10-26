@@ -688,7 +688,7 @@ def process_episodes(season_metadata, episodes_in_db):
                 "title": episode_title,
                 "overview": episode["overview"],
                 "history": tracked_episodes.get(episode_number, []),
-                "runtime": get_readable_duration(episode["runtime"]),
+                "runtime": episode["runtime"],
             },
         )
     return episodes_metadata
@@ -725,6 +725,7 @@ def episode(media_id, season_number, episode_number):
                 "season_title": season_metadata["season_title"],
                 "episode_title": episode["name"],
                 "image": get_image_url(episode["still_path"]),
+                "runtime": episode.get("runtime"),
             }
 
     # Episode not found - throw ProviderAPIError

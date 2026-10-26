@@ -269,6 +269,26 @@ class ManualItemForm(forms.ModelForm):
         return instance
 
 
+class ItemMetadataForm(forms.Form):
+    """Personal corrections; empty fields use the original catalog value."""
+
+    title = forms.CharField(max_length=255, required=False)
+    image = forms.URLField(label="Poster / cover URL", required=False)
+    runtime = forms.IntegerField(label="Runtime (minutes)", min_value=1, required=False)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for field in self.fields.values():
+            field.widget.attrs["class"] = "w-full bg-gray-700 text-white border border-gray-600 rounded-lg p-3"
+        self.fields["image"].widget.attrs["x-model"] = "image"
+
+    def clean_image(self):
+        value = self.cleaned_data["image"]
+        if value and not value.lower().startswith(("http://", "https://")):
+            raise forms.ValidationError("Use an HTTP or HTTPS image URL.")
+        return value
+
+
 class MediaForm(forms.ModelForm):
     """Base form for all media types."""
 

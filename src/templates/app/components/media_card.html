@@ -1,4 +1,6 @@
 {% load app_tags %}
+{% with item=item|metadata_for:request.user %}
+{% metadata_title item title request.user as title %}
 
 <div class="{% if secondary_color %}bg-[#39404b]{% else %}bg-[#2a2f35]{% endif %} rounded-lg overflow-hidden shadow-lg relative"
      x-data="{ trackOpen: false, listsOpen: false, historyOpen: false }">
@@ -296,3 +298,5 @@
     </div>
   </div>
 </div>
+
+{% endwith %}

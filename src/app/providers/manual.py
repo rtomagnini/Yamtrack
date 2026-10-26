@@ -16,6 +16,7 @@ def metadata(media_id, media_type):
         "title": item.title,
         "max_progress": None,
         "image": item.image,
+        "runtime": item.runtime,
         "synopsis": "No synopsis available.",
         "score": None,
         "score_count": None,
@@ -114,6 +115,7 @@ def episode(media_id, season_number, episode_number):
                 "season_title": season_metadata["season_title"],
                 "episode_title": episode["title"],
                 "image": episode["image"],
+                "runtime": episode.get("runtime"),
             }
 
     return None

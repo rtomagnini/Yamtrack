@@ -14,6 +14,7 @@ from django.db.models import (
     F,
     IntegerField,
     Max,
+    OuterRef,
     Prefetch,
     Q,
     UniqueConstraint,
@@ -277,6 +278,26 @@ class Item(CalendarTriggerMixin, models.Model):
             events.tasks.reload_calendar(items_to_process=items_to_process)
 
 
+class ItemMetadataOverride(models.Model):
+    """Optional metadata corrections belonging to one user and catalog item."""
+
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    item = models.ForeignKey(Item, on_delete=models.CASCADE, related_name="metadata_overrides")
+    title = models.CharField(max_length=255, null=True, blank=True)
+    image = models.URLField(null=True, blank=True)
+    runtime = models.PositiveIntegerField(null=True, blank=True, validators=[MinValueValidator(1)])
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["user", "item"], name="unique_user_item_metadata_override"),
+            models.CheckConstraint(
+                condition=Q(runtime__isnull=True) | Q(runtime__gt=0),
+                name="metadata_override_runtime_positive",
+            ),
+        ]
+
+
 class MediaManager(models.Manager):
     """Custom manager for media models."""
 
@@ -308,11 +329,18 @@ class MediaManager(models.Manager):
         else:
             queryset = queryset.filter(item__media_type=media_type)
 
+        if media_type == MediaTypes.MOVIE.value:
+            correction = ItemMetadataOverride.objects.filter(user=user, item_id=OuterRef("item_id"))
+            queryset = queryset.annotate(metadata_title=models.functions.Coalesce(
+                models.Subquery(correction.values("title")[:1]), F("item__title"),
+            ))
+
         if status_filter != users.models.MediaStatusChoices.ALL:
             queryset = queryset.filter(status=status_filter)
 
         if search:
-            queryset = queryset.filter(item__title__icontains=search)
+            title_field = "metadata_title" if media_type == MediaTypes.MOVIE.value else "item__title"
+            queryset = queryset.filter(**{f"{title_field}__icontains": search})
 
         queryset = queryset.annotate(
             repeats=Window(
@@ -476,7 +504,8 @@ class MediaManager(models.Manager):
         if sort_filter in item_fields:
             if sort_filter == "title":
                 # Case-insensitive title sorting
-                return queryset.order_by(models.functions.Lower("item__title"))
+                title_field = "metadata_title" if "metadata_title" in queryset.query.annotations else "item__title"
+                return queryset.order_by(models.functions.Lower(title_field))
             # Default sorting for other Item fields
             return queryset.order_by(
                 f"-item__{sort_filter}",

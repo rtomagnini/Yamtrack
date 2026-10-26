@@ -1,12 +1,13 @@
 from django.urls import path, register_converter
 
-from app import converters, views
+from app import converters, views, views_metadata
 
 register_converter(converters.MediaTypeChecker, "media_type")
 register_converter(converters.SourceChecker, "source")
 
 
 urlpatterns = [
+    path("metadata/edit/<source:source>/<media_type:media_type>/<str:media_id>", views_metadata.edit_metadata, name="metadata_edit"),
     path("youtubes", __import__('app.views_youtubes').views_youtubes.youtubes_view, name="youtubes"),
     path("", views.home, name="home"),
     path("medialist/<media_type:media_type>", views.media_list, name="medialist"),

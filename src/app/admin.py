@@ -8,6 +8,7 @@ from app.models import (
     Episode,
     ExternalIdMapping,
     Item,
+    ItemMetadataOverride,
     YouTubeChannelFilter,
     Game,
     GameSession,
@@ -68,6 +69,13 @@ class YouTubeChannelFilterAdmin(admin.ModelAdmin):
 
 # Register models with custom admin classes
 admin.site.register(Item, ItemAdmin)
+
+
+@admin.register(ItemMetadataOverride)
+class ItemMetadataOverrideAdmin(admin.ModelAdmin):
+    list_display = ["item", "user", "title", "runtime", "updated_at"]
+    search_fields = ["item__title", "title", "user__username"]
+    readonly_fields = ["updated_at"]
 admin.site.register(Episode, EpisodeAdmin)
 admin.site.register(ExternalIdMapping, ExternalIdMappingAdmin)
 admin.site.register(YouTubeChannelFilter, YouTubeChannelFilterAdmin)

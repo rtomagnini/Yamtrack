@@ -16,6 +16,11 @@
            class="w-full rounded-lg shadow-lg bg-[#2a2f35] object-cover"
            src="{{ media.image }}">
 
+      {% if media_type == MediaTypes.MOVIE.value %}
+        <a href="{% url 'metadata_edit' media.source media_type media.media_id %}?next={{ request.get_full_path|urlencode }}"
+           class="mt-4 p-3 rounded-lg w-full block text-center bg-gray-700 hover:bg-gray-600 text-white">Edit metadata</a>
+      {% endif %}
+
       <div x-data="{ trackOpen: false }">
         <button class="mt-4 p-3 rounded-lg w-full flex items-center text-white transition duration-300 cursor-pointer {% if user_medias %}bg-indigo-600 hover:bg-indigo-700{% else %}bg-gray-600 hover:bg-gray-700{% endif %}"
                 hx-get="{% media_view_url 'track_modal' media %}"
@@ -878,6 +883,28 @@
                             </div>
                           </div>
                         </div>
+                        {% if episode.source == 'tmdb' or episode.source == 'manual' %}
+                          <div>
+                            <a href="{% url 'metadata_edit' episode.source 'episode' episode.media_id %}?season_number={{ episode.season_number }}&amp;episode_number={{ episode.episode_number }}&amp;next={{ request.get_full_path|urlencode }}"
+                               title="Edit metadata"
+                               aria-label="Edit metadata"
+                               class="inline-flex p-2 bg-violet-600 hover:opacity-80 text-white rounded-full transition duration-300 cursor-pointer">
+                              <svg xmlns="http://www.w3.org/2000/svg"
+                                   width="16"
+                                   height="16"
+                                   viewBox="0 0 24 24"
+                                   fill="none"
+                                   stroke="currentColor"
+                                   stroke-width="2"
+                                   stroke-linecap="round"
+                                   stroke-linejoin="round"
+                                   aria-hidden="true">
+                                <path d="M17 3a2.828 2.828 0 0 1 4 4L7.5 20.5 2 22l1.5-5.5Z"></path>
+                                <path d="m15 5 4 4"></path>
+                              </svg>
+                            </a>
+                          </div>
+                        {% endif %}
                       </div>
                     </div>
                     <div class="{% if episode.history %}md:h-[calc(2*1.5rem)]{% else %}md:h-[calc(3*1.5rem)]{% endif %} md:overflow-y-auto px-4">

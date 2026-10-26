@@ -1,4 +1,6 @@
 {% load app_tags %}
+{% with item=item|metadata_for:request.user %}
+{% metadata_title item title request.user as title %}
 
 <div class="bg-[#2a2f35] rounded-lg overflow-hidden hover:bg-[#39404b] transition-colors duration-200"
      x-data="{ trackOpen: false, listsOpen: false, historyOpen: false }">
@@ -159,3 +161,5 @@
     </div>
   </div>
 </div>
+
+{% endwith %}

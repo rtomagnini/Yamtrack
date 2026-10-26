@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Edit metadata - Yamtrack{% endblock %}
+{% block content %}
+<div class="max-w-2xl mx-auto bg-[#2a2f35] rounded-lg p-6">
+  <h1 class="text-2xl font-bold mb-2">Edit metadata</h1>
+  <p class="text-gray-400 mb-6">Your changes are kept when metadata is synced. Leave a field empty to use its original value.</p>
+  <form method="post" class="space-y-6" x-data="{ image: '{{ form.image.value|default_if_none:''|escapejs }}' }">
+    {% csrf_token %}
+    <input type="hidden" name="next" value="{{ next_url }}">
+    {{ form.non_field_errors }}
+    {% for field in form %}
+      <div>
+        <label for="{{ field.id_for_label }}" class="block text-sm font-medium mb-2">{{ field.label }}</label>
+        {{ field }}
+        {% if field.name == 'image' %}<img x-show="image" :src="image" alt="Cover preview" class="mt-2 h-48 rounded-lg object-contain" x-cloak>{% endif %}
+        {% for error in field.errors %}<p class="text-red-400 text-sm mt-1">{{ error }}</p>{% endfor %}
+        <p class="text-sm text-gray-400 mt-1">Original:
+          {% if field.name == 'title' %}{{ original.title }}{% elif field.name == 'image' %}<a href="{{ original.image }}" target="_blank" rel="noopener noreferrer" class="text-indigo-400 break-all">View original image</a>{% else %}{{ original.runtime|default_if_none:"Unknown" }}{% if original.runtime %} min{% endif %}{% endif %}
+        </p>
+      </div>
+    {% endfor %}
+    <div class="flex flex-wrap gap-3 pt-3">
+      <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg px-4 py-2 cursor-pointer">Save changes</button>
+      <a href="{{ next_url }}" class="bg-gray-700 hover:bg-gray-600 text-white rounded-lg px-4 py-2">Cancel</a>
+      {% if has_correction %}<button type="submit" name="action" value="reset" formnovalidate class="text-gray-300 hover:text-white px-4 py-2 cursor-pointer">Restore original values</button>{% endif %}
+    </div>
+  </form>
+</div>
+{% endblock %}
