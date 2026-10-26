@@ -2,10 +2,8 @@ function dateRangePicker() {
   return {
     isOpen: false,
     activeTab: "predefined",
-    selectedRange: "Last 12 Months",
-    startDate: new Date(new Date().setFullYear(new Date().getFullYear() - 1))
-      .toISOString()
-      .split("T")[0],
+    selectedRange: "Today",
+    startDate: new Date().toISOString().split("T")[0],
     endDate: new Date().toISOString().split("T")[0],
     customRangeLabel: "",
 
