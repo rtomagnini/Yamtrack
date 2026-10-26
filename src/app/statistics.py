@@ -896,7 +896,14 @@ def get_activity_data(user, start_date, end_date):
     if end_date is None:
         end_date = timezone.localtime()
 
-    start_date_aligned = get_aligned_monday(start_date)
+    activity_start_date = start_date
+    if start_date is not None:
+        selected_days = (end_date.date() - start_date.date()).days + 1
+        if selected_days <= 90:
+            minimum_start_date = end_date - datetime.timedelta(days=89)
+            activity_start_date = min(start_date, minimum_start_date)
+
+    start_date_aligned = get_aligned_monday(activity_start_date)
 
     combined_data = get_filtered_historical_data(start_date_aligned, end_date, user)
 
