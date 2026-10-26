@@ -1175,7 +1175,10 @@ class TV(Media):
         return sum(
             season.progress
             for season in self.seasons.all()
-            if season.item.season_number != 0
+            if (
+                self.item.source == Sources.YOUTUBE.value
+                or season.item.season_number != 0
+            )
         )
 
     @property
@@ -1188,7 +1191,11 @@ class TV(Media):
                 "end_date": episode.end_date,
             }
             for season in self.seasons.all()
-            if hasattr(season, "episodes") and season.item.season_number != 0
+            if hasattr(season, "episodes")
+            and (
+                self.item.source == Sources.YOUTUBE.value
+                or season.item.season_number != 0
+            )
             for episode in season.episodes.all()
             if episode.end_date is not None
         ]
@@ -1201,6 +1208,12 @@ class TV(Media):
             key=lambda x: (x["end_date"], x["season"], x["episode"]),
         )
 
+        if (
+            self.item.source == Sources.YOUTUBE.value
+            and latest_episode["season"] == 0
+        ):
+            return f"Unknown year E{latest_episode['episode']:02d}"
+
         return f"S{latest_episode['season']:02d}E{latest_episode['episode']:02d}"
 
     @property
@@ -1209,7 +1222,11 @@ class TV(Media):
         dates = [
             season.progressed_at
             for season in self.seasons.all()
-            if season.progressed_at and season.item.season_number != 0
+            if season.progressed_at
+            and (
+                self.item.source == Sources.YOUTUBE.value
+                or season.item.season_number != 0
+            )
         ]
         return max(dates) if dates else None
 
@@ -1219,7 +1236,11 @@ class TV(Media):
         dates = [
             season.start_date
             for season in self.seasons.all()
-            if season.start_date and season.item.season_number != 0
+            if season.start_date
+            and (
+                self.item.source == Sources.YOUTUBE.value
+                or season.item.season_number != 0
+            )
         ]
         return min(dates) if dates else None
 
@@ -1229,7 +1250,11 @@ class TV(Media):
         dates = [
             season.end_date
             for season in self.seasons.all()
-            if season.end_date and season.item.season_number != 0
+            if season.end_date
+            and (
+                self.item.source == Sources.YOUTUBE.value
+                or season.item.season_number != 0
+            )
         ]
         return max(dates) if dates else None
 

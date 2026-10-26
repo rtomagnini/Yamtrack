@@ -681,8 +681,27 @@
     {% if media.episodes or current_filter != 'all' %}
       <div class="w-full">
         <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 gap-2">
-          <h2 class="text-xl font-bold">Episodes</h2>
+          <h2 class="text-xl font-bold">{% if is_youtube_channel %}Videos{% else %}Episodes{% endif %}</h2>
           <div class="flex items-center space-x-2">
+            {% if is_youtube_channel %}
+              <form method="get" class="flex items-center gap-2">
+                {% for key, value in request.GET.items %}
+                  {% if key != 'year' and key != 'page' %}
+                    <input type="hidden" name="{{ key }}" value="{{ value }}">
+                  {% endif %}
+                {% endfor %}
+                <label for="youtube-year-filter" class="sr-only">Filter videos by year</label>
+                <select id="youtube-year-filter"
+                        name="year"
+                        onchange="this.form.submit()"
+                        class="px-3 py-1 rounded-full text-sm bg-gray-700 text-gray-200 border border-gray-600">
+                  <option value="all" {% if current_year == 'all' %}selected{% endif %}>All years</option>
+                  {% for year in available_years %}
+                    <option value="{{ year.value }}" {% if current_year == year.value %}selected{% endif %}>{{ year.label }}</option>
+                  {% endfor %}
+                </select>
+              </form>
+            {% endif %}
             <!-- Filter buttons -->
             <div class="flex space-x-2">
               <a href="?{% for key, value in request.GET.items %}{% if key != 'filter' and key != 'page' %}{{ key }}={{ value|urlencode }}&{% endif %}{% endfor %}filter=all"
@@ -745,7 +764,7 @@
                           </div>
                         </div>
                         <p class="text-sm text-gray-400">
-                          Episode {{ episode.episode_number }} • {{ episode.air_date|default_if_none:"Unknown air date" }}{% if episode.runtime %} • {{ episode.runtime }} min{% endif %}
+                          {% if is_youtube_channel %}Video{% else %}Episode{% endif %} {{ episode.episode_number }} • {% if episode.air_date %}{{ episode.air_date }}{% elif is_youtube_channel %}Unknown year{% else %}Unknown air date{% endif %}{% if episode.runtime %} • {{ episode.runtime }} min{% endif %}
                         </p>
                       </div>
                       <div class="flex space-x-2">

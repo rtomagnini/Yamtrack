@@ -6,9 +6,15 @@
        x-data="{ trackOpen: false, listsOpen: false, historyOpen: false }">
     <div class="relative">
       <img alt="{{ item }}"
-           class="lazyload w-full {% if item.media_type == 'youtube' %}aspect-square{% else %}aspect-[2/3]{% endif %} {% if item.image != IMG_NONE %}object-cover{% endif %}"
-           data-src="{{ item.image }}"
-           src="{{ IMG_NONE }}">
+           class="{% if item.media_type != 'youtube' %}lazyload {% endif %}w-full {% if item.media_type == 'youtube' %}aspect-square{% else %}aspect-[2/3]{% endif %} {% if item.image != IMG_NONE %}object-cover{% endif %}"
+           {% if item.media_type == 'youtube' %}
+             src="{{ item.image }}"
+             loading="lazy"
+             decoding="async">
+           {% else %}
+             data-src="{{ item.image }}"
+             src="{{ IMG_NONE }}">
+           {% endif %}
 
       {% if media.next_event and not media.next_event.is_max_datetime %}
         <div class="absolute top-2 left-1/2 -translate-x-1/2 flex items-center gap-1.5 bg-black/80 px-2 py-1.5 rounded-md shadow-md whitespace-nowrap max-w-[98%]">

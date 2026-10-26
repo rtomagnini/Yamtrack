@@ -91,6 +91,17 @@ def parse_published_date(published_at):
         return None
 
 
+def get_published_year(published_date):
+    """Return the publication year, or None when the date is unknown."""
+    if not published_date:
+        return None
+
+    try:
+        return datetime.strptime(str(published_date)[:10], "%Y-%m-%d").year
+    except (TypeError, ValueError):
+        return None
+
+
 def get_best_thumbnail(thumbnails):
     """
     Get the best quality thumbnail URL from YouTube thumbnails object.

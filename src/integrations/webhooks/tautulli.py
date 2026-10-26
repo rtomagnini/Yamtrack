@@ -2,7 +2,6 @@ import json
 import logging
 import re
 import os
-from datetime import datetime
 
 from django.db import models as django_models
 from django.utils import timezone
@@ -223,13 +222,11 @@ class TautulliWebhookProcessor(BaseWebhookProcessor):
         
         # Determine video year for season
         published_date = video_metadata.get("published_date")
-        if published_date:
-            try:
-                video_year = datetime.strptime(published_date, "%Y-%m-%d").year
-            except ValueError:
-                video_year = datetime.now().year
-        else:
-            video_year = datetime.now().year
+        video_year = youtube.get_published_year(published_date)
+        if video_year is None:
+            published_date = None
+            video_year = 0
+        season_label = "Unknown year" if video_year == 0 else str(video_year)
         
         # Find or create channel (TV instance)
         existing_tv = TV.objects.filter(
@@ -270,7 +267,9 @@ class TautulliWebhookProcessor(BaseWebhookProcessor):
             media_type=MediaTypes.SEASON.value,
             season_number=video_year,
             defaults={
-                "title": f"{channel_item.title} - {video_year}",
+                "title": (
+                    f"{channel_item.title} - {season_label}"
+                ),
                 "image": channel_item.image,
             }
         )
@@ -317,9 +316,9 @@ class TautulliWebhookProcessor(BaseWebhookProcessor):
         )
         
         logger.info(
-            "Created YouTube video item from Tautulli: %s S%sE%s - %s",
+            "Created YouTube video item from Tautulli: %s %s E%s - %s",
             channel_item.title,
-            video_year,
+            season_label,
             episode_number,
             episode_item.title,
         )
