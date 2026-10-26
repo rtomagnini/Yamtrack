@@ -948,9 +948,16 @@ def get_activity_data(user, start_date, end_date):
     ]
 
     # Calculate activity statistics
+    most_active_day_start_date = start_date
+    if start_date is not None:
+        selected_days = (end_date.date() - start_date.date()).days + 1
+        if selected_days < 28:
+            minimum_start_date = end_date - datetime.timedelta(days=27)
+            most_active_day_start_date = min(start_date, minimum_start_date)
+
     most_active_day, day_percentage = calculate_day_of_week_stats(
         user,
-        start_date,
+        most_active_day_start_date,
         end_date,
     )
 
