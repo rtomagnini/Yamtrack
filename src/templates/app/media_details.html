@@ -16,11 +16,6 @@
            class="w-full rounded-lg shadow-lg bg-[#2a2f35] object-cover"
            src="{{ media.image }}">
 
-      {% if media_type == MediaTypes.MOVIE.value %}
-        <a href="{% url 'metadata_edit' media.source media_type media.media_id %}?next={{ request.get_full_path|urlencode }}"
-           class="mt-4 p-3 rounded-lg w-full block text-center bg-gray-700 hover:bg-gray-600 text-white">Edit metadata</a>
-      {% endif %}
-
       <div x-data="{ trackOpen: false }">
         <button class="mt-4 p-3 rounded-lg w-full flex items-center text-white transition duration-300 cursor-pointer {% if user_medias %}bg-indigo-600 hover:bg-indigo-700{% else %}bg-gray-600 hover:bg-gray-700{% endif %}"
                 hx-get="{% media_view_url 'track_modal' media %}"
@@ -64,6 +59,11 @@
           </div>
         </div>
       </div>
+
+      {% if media_type == MediaTypes.MOVIE.value %}
+        <a href="{% url 'metadata_edit' media.source media_type media.media_id %}?next={{ request.get_full_path|urlencode }}"
+           class="mt-4 p-3 rounded-lg w-full block text-center bg-violet-600 hover:opacity-80 text-white transition duration-300 cursor-pointer">Edit metadata</a>
+      {% endif %}
     </div>
 
     {# Media details #}
