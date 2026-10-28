@@ -7,7 +7,7 @@ from django.conf import settings
 from django.contrib import messages
 from django.core.cache import cache
 from django.core.paginator import Paginator
-from django.db import IntegrityError
+from django.db import IntegrityError, transaction
 from django.db import models
 from django.db.models import prefetch_related_objects
 from django.http import HttpResponse, HttpResponseBadRequest, JsonResponse
@@ -21,7 +21,7 @@ from django.contrib.auth.decorators import login_required
 
 from app import helpers, history_processor
 from app import statistics as stats
-from app.metadata import display_metadata
+from app.metadata import display_metadata, override_for, save_poster_override
 from app.forms import EpisodeTrackingForm, ManualItemForm, get_form_class
 from app.models import TV, BasicMedia, Episode, Item, MediaTypes, Season, Sources, Status, GameSession, Game
 from app.providers import manual, services, tmdb, youtube
@@ -427,6 +427,7 @@ def season_details(request, source, media_id, title, season_number):  # noqa: AR
         [season_number],
     )
     season_metadata = deepcopy(tv_with_seasons_metadata[f"season/{season_number}"])
+    season_metadata = display_metadata(season_metadata, request.user)
 
     user_medias = BasicMedia.objects.filter_media_prefetch(
         request.user,
@@ -696,6 +697,12 @@ def track_modal(
             title += f" S{season_number}"
 
     form = get_form_class(media_type)(instance=media, initial=initial_data)
+    original_poster = None
+    if "poster_url" in form.fields:
+        poster_item = media.item if media else metadata
+        correction = override_for(poster_item, request.user)
+        form.initial["poster_url"] = correction.image if correction and correction.image else ""
+        original_poster = media.item.image if media else metadata.get("image")
 
     return render(
         request,
@@ -705,6 +712,7 @@ def track_modal(
             "form": form,
             "media": media,
             "return_url": request.GET["return_url"],
+            "original_poster": original_poster or settings.IMG_NONE,
         },
     )
 
@@ -748,7 +756,10 @@ def media_save(request):
     form_class = get_form_class(media_type)
     form = form_class(request.POST, instance=instance)
     if form.is_valid():
-        form.save()
+        with transaction.atomic():
+            form.save()
+            if "poster_url" in form.cleaned_data and "poster_url" in request.POST:
+                save_poster_override(form.instance.item, request.user, form.cleaned_data["poster_url"])
         logger.info("%s saved successfully.", form.instance)
     else:
         logger.error(form.errors.as_json())

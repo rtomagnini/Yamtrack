@@ -42,6 +42,21 @@ def override_for(item, user):
     return user_overrides(user).get(key)
 
 
+def save_poster_override(item, user, image):
+    """Change only the personal poster, preserving catalog and other corrections."""
+    correction = ItemMetadataOverride.objects.filter(user=user, item=item).first()
+    if image:
+        ItemMetadataOverride.objects.update_or_create(user=user, item=item, defaults={"image": image})
+    elif correction:
+        if correction.title is not None or correction.runtime is not None:
+            correction.image = None
+            correction.save(update_fields=["image", "updated_at"])
+        else:
+            correction.delete()
+    if hasattr(user, "_item_metadata_overrides"):
+        del user._item_metadata_overrides
+
+
 def display_metadata(item, user):
     """Return a copy with corrected fields; never mutate a shared provider result."""
     correction = override_for(item, user)

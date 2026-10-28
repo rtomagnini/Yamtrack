@@ -9,6 +9,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from app import statistics
+from app.forms import SeasonForm
 from app.metadata import display_metadata, runtime_expression
 from app.models import TV, BasicMedia, Episode, Item, ItemMetadataOverride, Movie, Season
 from app.providers import tmdb
@@ -258,3 +259,140 @@ def test_tmdb_episode_cards_use_numeric_minutes():
     with patch("app.providers.tmdb.fetch_season_multilingual", return_value={}):
         episodes = tmdb.process_episodes(season, [])
     assert episodes[0]["runtime"] == 77
+
+
+@pytest.fixture(params=["tmdb", "manual"])
+def poster_season(user, request):
+    source = request.param
+    tv_item = Item.objects.create(source=source, media_type="tv", media_id="123", title="Series")
+    tv = TV(user=user, item=tv_item, status="Planning")
+    TV.objects.bulk_create([tv])
+    item = Item.objects.create(
+        source=source, media_type="season", media_id="123", season_number=0,
+        title="Series", image="https://example.com/original-season.jpg",
+    )
+    season = Season(user=user, item=item, related_tv=tv, status="Planning")
+    Season.objects.bulk_create([season])
+    return season
+
+
+def poster_payload(season, **changes):
+    return {
+        "instance_id": str(season.pk), "media_type": "season",
+        "source": season.item.source, "media_id": season.item.media_id,
+        "season_number": season.item.season_number, "status": "Planning", "notes": "",
+        **changes,
+    }
+
+
+def test_season_tracking_modal_saves_personal_poster_and_status(client, user, poster_season):
+    season = poster_season
+    client.force_login(user)
+    response = client.get(reverse("track_modal", args=[season.item.source, "season", "123", 0]), {
+        "return_url": "/", "instance_id": season.pk,
+    })
+    assert response.status_code == 200
+    assert b"Season poster URL" in response.content
+    assert b"Season poster preview" in response.content
+    assert response.context["form"]["poster_url"].value() == ""
+    assert response.context["original_poster"] == season.item.image
+    with patch.object(Item, "fetch_releases"):
+        response = client.post(reverse("media_save"), poster_payload(
+            season, status="Paused", poster_url="https://example.com/my-season.jpg",
+        ))
+    assert response.status_code == 302
+    season.refresh_from_db()
+    assert season.status == "Paused"
+    correction = ItemMetadataOverride.objects.get(user=user, item=season.item)
+    assert correction.image == "https://example.com/my-season.jpg"
+    assert season.item.image == "https://example.com/original-season.jpg"
+    other = get_user_model().objects.create_user(username="other-season-viewer")
+    assert display_metadata(season.item, other).image == season.item.image
+    response = client.get(reverse("track_modal", args=[season.item.source, "season", "123", 0]), {
+        "return_url": "/", "instance_id": season.pk,
+    })
+    assert response.context["form"]["poster_url"].value() == correction.image
+
+
+def test_tracking_poster_survives_season_sync_and_renders_in_series_and_season(
+    client, user, poster_season, provider,
+):
+    item = poster_season.item
+    ItemMetadataOverride.objects.create(user=user, item=item, image="https://example.com/personal-season.jpg")
+    metadata = {
+        "source": item.source, "media_type": "season", "media_id": "123",
+        "season_number": 0, "title": "Series", "season_title": "Specials",
+        "image": "https://example.com/new-original.jpg", "episodes": [],
+    }
+    client.force_login(user)
+    if item.source == "tmdb":
+        provider.return_value = metadata
+        with patch("app.views.cache.ttl", return_value=0), patch.object(Item, "fetch_releases"), patch(
+            "app.views.tmdb.process_episodes", return_value=[],
+        ):
+            response = client.post(reverse("sync_metadata", args=["tmdb", "season", "123", 0]), {"next": "/"})
+        assert response.status_code == 302
+        item.refresh_from_db()
+        assert item.image == metadata["image"]
+    provider.return_value = {"season/0": metadata}
+    with patch("app.views.tmdb.process_episodes", return_value=[]), patch("app.views.manual.process_episodes", return_value=[]):
+        response = client.get(reverse("season_details", args=[item.source, "123", "series", 0]))
+    assert response.status_code == 200
+    assert response.context["media"]["image"] == "https://example.com/personal-season.jpg"
+    assert metadata["image"] == "https://example.com/new-original.jpg"
+    provider.return_value = {
+        "source": item.source, "media_type": "tv", "media_id": "123", "title": "Series",
+        "image": "https://example.com/tv.jpg", "related": {"seasons": [metadata]},
+    }
+    response = client.get(reverse("media_details", args=[item.source, "tv", "123", "series"]))
+    assert response.status_code == 200
+    assert b"https://example.com/personal-season.jpg" in response.content
+    assert metadata["image"] == "https://example.com/new-original.jpg"
+
+
+def test_blank_poster_restores_original_but_omitted_field_preserves_correction(client, user, poster_season):
+    season = poster_season
+    ItemMetadataOverride.objects.create(user=user, item=season.item, image="https://example.com/personal.jpg")
+    client.force_login(user)
+    with patch.object(Item, "fetch_releases"):
+        client.post(reverse("media_save"), poster_payload(season))
+        assert ItemMetadataOverride.objects.get(user=user, item=season.item).image == "https://example.com/personal.jpg"
+        response = client.post(reverse("media_save"), poster_payload(season, poster_url=""))
+    assert response.status_code == 302
+    assert not ItemMetadataOverride.objects.filter(user=user, item=season.item).exists()
+    assert Season.objects.filter(pk=season.pk).exists()
+
+
+def test_invalid_poster_does_not_update_tracking(client, user, poster_season):
+    client.force_login(user)
+    response = client.post(reverse("media_save"), poster_payload(
+        poster_season, status="Paused", poster_url="ftp://example.com/image.jpg",
+    ))
+    assert response.status_code == 302
+    poster_season.refresh_from_db()
+    assert poster_season.status == "Planning"
+    assert not ItemMetadataOverride.objects.exists()
+
+
+def test_untracked_season_can_set_poster_when_added(client, user, poster_season, provider):
+    source = poster_season.item.source
+    provider.return_value = {
+        "source": source, "media_type": "season", "media_id": "123", "season_number": 2,
+        "title": "Series", "image": "https://example.com/season-two.jpg", "episodes": [],
+    }
+    client.force_login(user)
+    response = client.get(reverse("track_modal", args=[source, "season", "123", 2]), {"return_url": "/"})
+    assert response.status_code == 200
+    assert "poster_url" in response.context["form"].fields
+    with patch.object(Item, "fetch_releases"):
+        response = client.post(reverse("media_save"), poster_payload(
+            poster_season, instance_id="", season_number=2, poster_url="https://example.com/custom-two.jpg",
+        ))
+    assert response.status_code == 302
+    season = Season.objects.get(user=user, item__season_number=2)
+    assert season.item.image == "https://example.com/season-two.jpg"
+    assert ItemMetadataOverride.objects.get(user=user, item=season.item).image == "https://example.com/custom-two.jpg"
+
+
+def test_youtube_seasons_do_not_offer_poster_editing():
+    assert "poster_url" not in SeasonForm(initial={"source": "youtube"}).fields

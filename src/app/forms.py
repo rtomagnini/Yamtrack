@@ -423,7 +423,24 @@ class TvForm(MediaForm):
 class SeasonForm(MediaForm):
     """Form for seasons."""
 
-    season_number = forms.IntegerField(widget=forms.HiddenInput(), required=False, min_value=1, max_value=9999)
+    season_number = forms.IntegerField(widget=forms.HiddenInput(), required=False, min_value=0, max_value=9999)
+    poster_url = forms.URLField(
+        label="Season poster URL", required=False,
+        help_text="Your poster is kept when metadata is synced. Leave empty to use the original poster.",
+        widget=forms.URLInput(attrs={"x-model": "poster", "placeholder": "https://..."}),
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        source = self.instance.item.source if self.instance.item_id else self.initial.get("source")
+        if source not in (Sources.TMDB.value, Sources.MANUAL.value):
+            self.fields.pop("poster_url")
+
+    def clean_poster_url(self):
+        value = self.cleaned_data["poster_url"]
+        if value and not value.lower().startswith(("http://", "https://")):
+            raise forms.ValidationError("Use an HTTP or HTTPS image URL.")
+        return value
 
     class Meta(MediaForm.Meta):
         """Bind form to model."""

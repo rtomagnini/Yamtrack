@@ -32,7 +32,7 @@
       {% if total_fields > 8 %}<div class="grid grid-cols-1 sm:grid-cols-2 gap-x-4">{% endif %}
 
         {% for field in form %}
-          {% if field.name != 'notes' and field.name != 'instance_id' and field.name != 'media_type' and field.name != 'source' and field.name != 'media_id' and field.name != 'season_number' %}
+          {% if field.name != 'notes' and field.name != 'instance_id' and field.name != 'media_type' and field.name != 'source' and field.name != 'media_id' and field.name != 'season_number' and field.name != 'poster_url' %}
             <div class="mb-5 {% if field.name == 'status' and total_fields|divisibleby:2 %}sm:col-span-2{% endif %}">
               <label class="block text-sm font-medium mb-1 text-gray-300"
                      for="{{ field.id_for_label }}">{{ field.label }}</label>
@@ -102,6 +102,19 @@
         <label class="block text-sm font-medium mb-1 text-gray-300"
                for="{{ form.notes.id_for_label }}">{{ form.notes.label }}</label>
         {{ form.notes|add_class:"w-full p-2 bg-[#39404b] rounded-md text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-[#4a9eff]" }}
+      </div>
+    {% endif %}
+
+    {% if form.poster_url %}
+      <div class="mb-5" x-data="{ poster: '{{ form.poster_url.value|default_if_none:''|escapejs }}', originalPoster: '{{ original_poster|escapejs }}' }">
+        <label class="block text-sm font-medium mb-1 text-gray-300" for="{{ form.poster_url.id_for_label }}">{{ form.poster_url.label }}</label>
+        {{ form.poster_url|add_class:"w-full p-2 bg-[#39404b] rounded-md text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-[#4a9eff]" }}
+        <p class="text-sm text-gray-400 mt-2">{{ form.poster_url.help_text }}</p>
+        <div class="flex items-start gap-4 mt-3">
+          <img :src="poster || originalPoster" alt="Season poster preview" class="h-36 rounded-md object-contain bg-[#39404b]">
+          <button type="button" @click="poster = ''" x-show="poster" x-cloak
+                  class="text-sm text-violet-400 hover:text-violet-300 cursor-pointer">Restore original poster</button>
+        </div>
       </div>
     {% endif %}
 
