@@ -10,7 +10,7 @@ from django.core.paginator import Paginator
 from django.db import IntegrityError, transaction
 from django.db import models
 from django.db.models import prefetch_related_objects
-from django.http import HttpResponse, HttpResponseBadRequest, JsonResponse
+from django.http import Http404, HttpResponse, HttpResponseBadRequest, JsonResponse
 from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -732,6 +732,8 @@ def media_save(request):
             media_type,
             instance_id,
         )
+        if instance is None:
+            raise Http404
     else:
         metadata = services.get_media_metadata(
             media_type,
@@ -749,7 +751,8 @@ def media_save(request):
                 "image": metadata["image"],
             },
         )
-        model = apps.get_model(app_label="app", model_name=media_type)
+        model_name = "tv" if media_type == MediaTypes.YOUTUBE.value else media_type
+        model = apps.get_model(app_label="app", model_name=model_name)
         instance = model(item=item, user=request.user)
 
     # Validate the form and save the instance if it's valid
@@ -1686,7 +1689,7 @@ def youtube_channel_details(request, source, media_id, title):  # noqa: ARG001 t
     
     # Get channel metadata using the real channel_id if available
     if channel_id and source == Sources.YOUTUBE.value:
-        channel_metadata = services.get_media_metadata("youtube", channel_id, source)
+        channel_metadata = deepcopy(services.get_media_metadata("youtube", channel_id, source))
         # Override the media_id from API with our internal media_id
         channel_metadata['media_id'] = media_id
     else:
@@ -1701,6 +1704,8 @@ def youtube_channel_details(request, source, media_id, title):  # noqa: ARG001 t
             'videos': [],
         }
     
+    channel_metadata = display_metadata(channel_metadata, request.user)
+
     # For YouTube channels, get episode items (not Episode records) through seasons
     episode_items = []
     if current_instance:

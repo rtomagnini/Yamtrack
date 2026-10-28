@@ -1,6 +1,7 @@
 from django.shortcuts import render
 from django.db.models import Q, OuterRef, Exists, Subquery, Value, CharField
-from app.models import Item, TV, Season, Episode, Sources, MediaTypes
+from django.db.models.functions import Coalesce
+from app.models import Item, ItemMetadataOverride, TV, Season, Episode, Sources, MediaTypes
 from django.views.decorators.http import require_GET
 
 @require_GET
@@ -51,9 +52,16 @@ def youtubes_view(request):
     )
     tv_title_qs = season_qs.filter(related_tv__isnull=False).values('related_tv__item__title')[:1]
     tv_image_qs = season_qs.filter(related_tv__isnull=False).values('related_tv__item__image')[:1]
+    personal_logo_qs = ItemMetadataOverride.objects.filter(
+        user=request.user, item__source=Sources.YOUTUBE.value,
+        item__media_type=MediaTypes.YOUTUBE.value, item__media_id=OuterRef('media_id'),
+    ).values('image')[:1]
     qs = qs.annotate(
         channel_name=Subquery(tv_title_qs, output_field=CharField()),
-        channel_image=Subquery(tv_image_qs, output_field=CharField()),
+        channel_image=Coalesce(
+            Subquery(personal_logo_qs, output_field=CharField()),
+            Subquery(tv_image_qs, output_field=CharField()),
+        ),
     )
 
     layout = request.GET.get('layout', 'grid')

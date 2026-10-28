@@ -855,7 +855,7 @@ class MediaManager(models.Manager):
         instance_id,
     ):
         """Get user media object given the media type and item."""
-        model = apps.get_model(app_label="app", model_name=media_type)
+        model = apps.get_model(app_label="app", model_name=self._get_model_name_for_media_type(media_type))
         params = self._get_media_params(
             user,
             media_type,
@@ -874,7 +874,7 @@ class MediaManager(models.Manager):
         instance_id,
     ):
         """Get user media object with prefetch_related applied."""
-        model = apps.get_model(app_label="app", model_name=media_type)
+        model = apps.get_model(app_label="app", model_name=self._get_model_name_for_media_type(media_type))
         params = self._get_media_params(
             user,
             media_type,
@@ -896,6 +896,8 @@ class MediaManager(models.Manager):
     ):
         """Get the common filter parameters for media queries."""
         params = {"id": instance_id}
+        if media_type == MediaTypes.YOUTUBE.value:
+            params["item__media_type"] = media_type
 
         if media_type == MediaTypes.EPISODE.value:
             params["related_season__user"] = user

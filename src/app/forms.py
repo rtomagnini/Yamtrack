@@ -411,7 +411,13 @@ class ComicForm(MediaForm):
 
 
 class PosterMediaForm(MediaForm):
-    """Tracking form with a protected personal poster for series and seasons."""
+    """Tracking form with a protected personal poster or channel logo."""
+
+    poster_sources = (Sources.TMDB.value, Sources.MANUAL.value)
+    poster_label = "Season poster URL"
+    poster_help_text = "Your poster is kept when metadata is synced. Leave empty to use the original poster."
+    poster_preview_label = "Poster preview"
+    poster_restore_label = "Restore original poster"
 
     poster_url = forms.URLField(
         label="Season poster URL", required=False,
@@ -422,10 +428,11 @@ class PosterMediaForm(MediaForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         source = self.instance.item.source if self.instance.item_id else self.initial.get("source")
-        if source not in (Sources.TMDB.value, Sources.MANUAL.value):
+        if source not in self.poster_sources:
             self.fields.pop("poster_url")
-        elif self._meta.model is TV:
-            self.fields["poster_url"].label = "Series poster URL"
+        else:
+            self.fields["poster_url"].label = self.poster_label
+            self.fields["poster_url"].help_text = self.poster_help_text
 
     def clean_poster_url(self):
         value = self.cleaned_data["poster_url"]
@@ -436,6 +443,8 @@ class PosterMediaForm(MediaForm):
 
 class TvForm(PosterMediaForm):
     """Form for TV shows."""
+
+    poster_label = "Series poster URL"
 
     class Meta(MediaForm.Meta):
         """Bind form to model."""
@@ -520,8 +529,14 @@ class EpisodeTrackingForm(forms.ModelForm):
             )
 
 
-class YoutubeForm(MediaForm):
+class YoutubeForm(PosterMediaForm):
     """Form for YouTube channels."""
+
+    poster_sources = (Sources.YOUTUBE.value,)
+    poster_label = "Channel logo URL"
+    poster_help_text = "Your logo is kept when channel data is updated. Leave empty to use the original logo."
+    poster_preview_label = "Channel logo preview"
+    poster_restore_label = "Restore original logo"
 
     class Meta(MediaForm.Meta):
         """Bind form to model."""

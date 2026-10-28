@@ -9,7 +9,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from app import statistics
-from app.forms import SeasonForm, TvForm
+from app.forms import SeasonForm, TvForm, YoutubeForm
 from app.metadata import display_metadata, runtime_expression
 from app.models import TV, BasicMedia, Episode, Item, ItemMetadataOverride, Movie, Season
 from app.providers import tmdb
@@ -482,3 +482,143 @@ def test_untracked_series_sets_poster_when_added(client, user, provider, source)
     series = TV.objects.get(user=user, item__media_id="321")
     assert series.item.image == "https://example.com/original-series.jpg"
     assert ItemMetadataOverride.objects.get(user=user, item=series.item).image == "https://example.com/custom-series.jpg"
+
+
+@pytest.fixture
+def youtube_channel(user):
+    item = Item.objects.create(
+        source="youtube", media_type="youtube", media_id="55", title="Channel",
+        image="https://example.com/original-logo.jpg",
+    )
+    channel = TV(user=user, item=item, status="In progress", notes="YouTube Channel ID: UCTestChannel")
+    TV.objects.bulk_create([channel])
+    season_item = Item.objects.create(
+        source="youtube", media_type="season", media_id="55", season_number=2026, title="2026",
+    )
+    season = Season(user=user, item=season_item, related_tv=channel, status="In progress")
+    Season.objects.bulk_create([season])
+    Item.objects.create(
+        source="youtube", media_type="episode", media_id="55", season_number=2026,
+        episode_number=1, title="Video", air_date=timezone.now(), runtime=10,
+    )
+    return channel
+
+
+def channel_logo_payload(channel, **changes):
+    return {
+        "instance_id": str(channel.pk), "media_type": "youtube", "source": "youtube",
+        "media_id": channel.item.media_id, "status": channel.status, "notes": channel.notes,
+        **changes,
+    }
+
+
+def test_youtube_tracking_modal_saves_status_and_logo(client, user, youtube_channel, provider):
+    channel = youtube_channel
+    client.force_login(user)
+    url = reverse("track_modal", args=["youtube", "youtube", "55"])
+    response = client.get(url, {"return_url": "/", "instance_id": channel.pk})
+    assert response.status_code == 200
+    assert b"Channel logo URL" in response.content
+    assert b"Channel logo preview" in response.content
+    assert b"Restore original logo" in response.content
+    assert response.context["original_poster"] == channel.item.image
+    provider.assert_not_called()
+    with patch.object(Item, "fetch_releases"):
+        response = client.post(reverse("media_save"), channel_logo_payload(
+            channel, status="Paused", poster_url="https://example.com/my-logo.jpg",
+        ))
+    assert response.status_code == 302
+    channel.refresh_from_db()
+    assert channel.status == "Paused"
+    assert channel.item.image == "https://example.com/original-logo.jpg"
+    assert ItemMetadataOverride.objects.get(user=user, item=channel.item).image == "https://example.com/my-logo.jpg"
+    response = client.get(url, {"return_url": "/", "instance_id": channel.pk})
+    assert response.context["form"]["poster_url"].value() == "https://example.com/my-logo.jpg"
+
+
+def test_youtube_logo_survives_provider_refresh_and_renders_in_all_views(
+    client, user, youtube_channel, provider,
+):
+    channel = youtube_channel
+    ItemMetadataOverride.objects.create(user=user, item=channel.item, image="https://example.com/custom-logo.jpg")
+    Item.objects.filter(pk=channel.item_id).update(image="https://example.com/new-logo.jpg")
+    original = {
+        "source": "youtube", "media_type": "youtube", "media_id": "UCTestChannel",
+        "title": "Channel", "image": "https://example.com/new-logo.jpg", "videos": [],
+    }
+    provider.return_value = original
+    client.force_login(user)
+    response = client.get(reverse("youtube_channel_details", args=["youtube", "55", "channel"]))
+    assert response.status_code == 200
+    assert response.context["media"]["image"] == "https://example.com/custom-logo.jpg"
+    assert response.context["media"]["media_id"] == "55"
+    assert b"fixed inset-0 bg-black/50" in response.content
+    assert b'hx-get="/track_modal/youtube/youtube/55"' in response.content
+    assert original["media_id"] == "UCTestChannel"
+    assert original["image"] == "https://example.com/new-logo.jpg"
+    assert "episodes" not in original
+    response = client.get(reverse("home"))
+    assert response.status_code == 200
+    assert b"https://example.com/custom-logo.jpg" in response.content
+    for layout in ("grid", "table"):
+        response = client.get(reverse("youtubes"), {"layout": layout})
+        assert response.status_code == 200
+        assert b"https://example.com/custom-logo.jpg" in response.content
+    other = get_user_model().objects.create_user(username="other-channel-viewer")
+    client.force_login(other)
+    response = client.get(reverse("youtubes"))
+    assert b"https://example.com/custom-logo.jpg" not in response.content
+
+
+def test_youtube_restore_logo_preserves_channel_and_videos(client, user, youtube_channel):
+    channel = youtube_channel
+    ItemMetadataOverride.objects.create(user=user, item=channel.item, image="https://example.com/custom-logo.jpg")
+    client.force_login(user)
+    with patch.object(Item, "fetch_releases"):
+        client.post(reverse("media_save"), channel_logo_payload(channel))
+        assert ItemMetadataOverride.objects.filter(user=user, item=channel.item).exists()
+        response = client.post(reverse("media_save"), channel_logo_payload(channel, poster_url=""))
+    assert response.status_code == 302
+    assert not ItemMetadataOverride.objects.filter(user=user, item=channel.item).exists()
+    assert TV.objects.filter(pk=channel.pk).exists()
+    assert Item.objects.filter(source="youtube", media_type="episode", media_id="55").count() == 1
+
+
+def test_youtube_invalid_logo_and_other_user_cannot_change_channel(client, user, youtube_channel):
+    channel = youtube_channel
+    client.force_login(user)
+    response = client.post(reverse("media_save"), channel_logo_payload(
+        channel, status="Paused", poster_url="ftp://example.com/image.jpg",
+    ))
+    assert response.status_code == 302
+    channel.refresh_from_db()
+    assert channel.status == "In progress"
+    assert not ItemMetadataOverride.objects.exists()
+    other = get_user_model().objects.create_user(username="not-channel-owner")
+    client.force_login(other)
+    response = client.post(reverse("media_save"), channel_logo_payload(
+        channel, poster_url="https://example.com/forbidden.jpg",
+    ))
+    assert response.status_code == 404
+    assert not ItemMetadataOverride.objects.exists()
+
+
+def test_youtube_new_channel_tracking_with_logo_uses_tv_model(client, user, provider):
+    provider.return_value = {
+        "source": "youtube", "media_type": "youtube", "media_id": "UCNewChannel",
+        "title": "New channel", "image": "https://example.com/api-logo.jpg",
+    }
+    client.force_login(user)
+    response = client.get(reverse("track_modal", args=["youtube", "youtube", "UCNewChannel"]), {"return_url": "/"})
+    assert response.status_code == 200
+    assert isinstance(response.context["form"], YoutubeForm)
+    assert "poster_url" in response.context["form"].fields
+    with patch.object(Item, "fetch_releases"):
+        response = client.post(reverse("media_save"), {
+            "media_type": "youtube", "source": "youtube", "media_id": "UCNewChannel",
+            "status": "Planning", "poster_url": "https://example.com/custom-logo.jpg",
+        })
+    assert response.status_code == 302
+    channel = TV.objects.get(user=user, item__media_id="UCNewChannel")
+    assert channel.item.media_type == "youtube"
+    assert ItemMetadataOverride.objects.get(user=user, item=channel.item).image == "https://example.com/custom-logo.jpg"
