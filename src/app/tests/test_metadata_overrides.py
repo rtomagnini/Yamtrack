@@ -9,7 +9,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from app import statistics
-from app.forms import SeasonForm
+from app.forms import SeasonForm, TvForm
 from app.metadata import display_metadata, runtime_expression
 from app.models import TV, BasicMedia, Episode, Item, ItemMetadataOverride, Movie, Season
 from app.providers import tmdb
@@ -293,7 +293,7 @@ def test_season_tracking_modal_saves_personal_poster_and_status(client, user, po
     })
     assert response.status_code == 200
     assert b"Season poster URL" in response.content
-    assert b"Season poster preview" in response.content
+    assert b"Poster preview" in response.content
     assert response.context["form"]["poster_url"].value() == ""
     assert response.context["original_poster"] == season.item.image
     with patch.object(Item, "fetch_releases"):
@@ -396,3 +396,89 @@ def test_untracked_season_can_set_poster_when_added(client, user, poster_season,
 
 def test_youtube_seasons_do_not_offer_poster_editing():
     assert "poster_url" not in SeasonForm(initial={"source": "youtube"}).fields
+    assert "poster_url" not in TvForm(initial={"source": "youtube"}).fields
+
+
+def series_poster_payload(series, **changes):
+    return {
+        "instance_id": str(series.pk), "media_type": "tv", "source": series.item.source,
+        "media_id": series.item.media_id, "status": "Planning", "notes": "", **changes,
+    }
+
+
+def test_series_tracking_modal_edits_and_restores_poster(client, user, poster_season, provider):
+    series = poster_season.related_tv
+    Item.objects.filter(pk=series.item_id).update(image="https://example.com/original-series.jpg")
+    series.item.refresh_from_db()
+    client.force_login(user)
+    url = reverse("track_modal", args=[series.item.source, "tv", "123"])
+    response = client.get(url, {"return_url": "/", "instance_id": series.pk})
+    assert response.status_code == 200
+    assert b"Series poster URL" in response.content
+    assert response.context["original_poster"] == series.item.image
+    with patch.object(Item, "fetch_releases"):
+        response = client.post(reverse("media_save"), series_poster_payload(
+            series, status="Paused", poster_url="https://example.com/custom-series.jpg",
+        ))
+    assert response.status_code == 302
+    series.refresh_from_db()
+    assert series.status == "Paused"
+    assert ItemMetadataOverride.objects.get(user=user, item=series.item).image == "https://example.com/custom-series.jpg"
+    assert display_metadata(poster_season.item, user).image == poster_season.item.image
+    response = client.get(url, {"return_url": "/", "instance_id": series.pk})
+    assert response.context["form"]["poster_url"].value() == "https://example.com/custom-series.jpg"
+    metadata = {
+        "source": series.item.source, "media_type": "tv", "media_id": "123",
+        "title": "Series", "image": "https://example.com/fresh-series.jpg", "related": {},
+    }
+    provider.return_value = metadata
+    if series.item.source == "tmdb":
+        with patch("app.views.cache.ttl", return_value=0), patch.object(Item, "fetch_releases"):
+            response = client.post(reverse("sync_metadata", args=["tmdb", "tv", "123"]), {"next": "/"})
+        assert response.status_code == 302
+        series.item.refresh_from_db()
+        assert series.item.image == metadata["image"]
+    response = client.get(reverse("media_details", args=[series.item.source, "tv", "123", "series"]))
+    assert response.status_code == 200
+    assert response.context["media"]["image"] == "https://example.com/custom-series.jpg"
+    assert metadata["image"] == "https://example.com/fresh-series.jpg"
+    with patch.object(Item, "fetch_releases"):
+        client.post(reverse("media_save"), series_poster_payload(series, status="Paused"))
+        assert ItemMetadataOverride.objects.filter(user=user, item=series.item).exists()
+        response = client.post(reverse("media_save"), series_poster_payload(series, status="Paused", poster_url=""))
+    assert response.status_code == 302
+    assert not ItemMetadataOverride.objects.filter(user=user, item=series.item).exists()
+    assert TV.objects.filter(pk=series.pk).exists()
+
+
+def test_series_tracking_rejects_invalid_poster(client, user, poster_season):
+    series = poster_season.related_tv
+    client.force_login(user)
+    response = client.post(reverse("media_save"), series_poster_payload(
+        series, status="Paused", poster_url="ftp://example.com/cover.jpg",
+    ))
+    assert response.status_code == 302
+    series.refresh_from_db()
+    assert series.status == "Planning"
+    assert not ItemMetadataOverride.objects.exists()
+
+
+@pytest.mark.parametrize("source", ["tmdb", "manual"])
+def test_untracked_series_sets_poster_when_added(client, user, provider, source):
+    provider.return_value = {
+        "source": source, "media_type": "tv", "media_id": "321", "title": "New series",
+        "image": "https://example.com/original-series.jpg", "related": {},
+    }
+    client.force_login(user)
+    response = client.get(reverse("track_modal", args=[source, "tv", "321"]), {"return_url": "/"})
+    assert response.status_code == 200
+    assert "poster_url" in response.context["form"].fields
+    with patch.object(Item, "fetch_releases"):
+        response = client.post(reverse("media_save"), {
+            "media_type": "tv", "source": source, "media_id": "321", "status": "Planning",
+            "poster_url": "https://example.com/custom-series.jpg",
+        })
+    assert response.status_code == 302
+    series = TV.objects.get(user=user, item__media_id="321")
+    assert series.item.image == "https://example.com/original-series.jpg"
+    assert ItemMetadataOverride.objects.get(user=user, item=series.item).image == "https://example.com/custom-series.jpg"

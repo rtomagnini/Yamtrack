@@ -410,20 +410,9 @@ class ComicForm(MediaForm):
         }
 
 
-class TvForm(MediaForm):
-    """Form for TV shows."""
+class PosterMediaForm(MediaForm):
+    """Tracking form with a protected personal poster for series and seasons."""
 
-    class Meta(MediaForm.Meta):
-        """Bind form to model."""
-
-        model = TV
-        fields = ["score", "status", "notes"]
-
-
-class SeasonForm(MediaForm):
-    """Form for seasons."""
-
-    season_number = forms.IntegerField(widget=forms.HiddenInput(), required=False, min_value=0, max_value=9999)
     poster_url = forms.URLField(
         label="Season poster URL", required=False,
         help_text="Your poster is kept when metadata is synced. Leave empty to use the original poster.",
@@ -435,12 +424,30 @@ class SeasonForm(MediaForm):
         source = self.instance.item.source if self.instance.item_id else self.initial.get("source")
         if source not in (Sources.TMDB.value, Sources.MANUAL.value):
             self.fields.pop("poster_url")
+        elif self._meta.model is TV:
+            self.fields["poster_url"].label = "Series poster URL"
 
     def clean_poster_url(self):
         value = self.cleaned_data["poster_url"]
         if value and not value.lower().startswith(("http://", "https://")):
             raise forms.ValidationError("Use an HTTP or HTTPS image URL.")
         return value
+
+
+class TvForm(PosterMediaForm):
+    """Form for TV shows."""
+
+    class Meta(MediaForm.Meta):
+        """Bind form to model."""
+
+        model = TV
+        fields = ["score", "status", "notes"]
+
+
+class SeasonForm(PosterMediaForm):
+    """Form for seasons."""
+
+    season_number = forms.IntegerField(widget=forms.HiddenInput(), required=False, min_value=0, max_value=9999)
 
     class Meta(MediaForm.Meta):
         """Bind form to model."""

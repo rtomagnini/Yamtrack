@@ -398,7 +398,7 @@ def media_search(request):
 def media_details(request, source, media_type, media_id, title):  # noqa: ARG001 title for URL
     """Return the details page for a media item."""
     media_metadata = services.get_media_metadata(media_type, media_id, source)
-    if media_type == MediaTypes.MOVIE.value:
+    if media_type in (MediaTypes.MOVIE.value, MediaTypes.TV.value):
         media_metadata = display_metadata(media_metadata, request.user)
     user_medias = BasicMedia.objects.filter_media_prefetch(
         request.user,
