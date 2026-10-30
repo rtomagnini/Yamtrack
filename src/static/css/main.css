@@ -1,4 +1,17 @@
 /*! tailwindcss v4.1.4 | MIT License | https://tailwindcss.com */
+@media (width >= 48rem) {
+  .episode-thumbnail-container {
+    position: relative;
+    min-height: 9rem;
+  }
+
+  .episode-thumbnail-container > img {
+    position: absolute;
+    inset: 0;
+    height: 100%;
+    aspect-ratio: auto;
+  }
+}
 @layer properties;
 @layer theme, base, components, utilities;
 @layer theme {

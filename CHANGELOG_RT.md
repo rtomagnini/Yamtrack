@@ -1,3 +1,9 @@
+## [0.25.43.RT] - 2026-10-30
+
+### Ajuste de la portada de episodios
+- La imagen ocupa toda la altura de la tarjeta en escritorio y elimina el espacio inferior.
+- En móvil conserva la proporción 16:9.
+
 ## [0.25.42.RT] - 2026-10-30
 
 ### Estado de TubeArchivist y Plex dentro de Settings

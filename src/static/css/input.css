@@ -8,6 +8,20 @@
   display: none !important;
 }
 
+@media (width >= 48rem) {
+  .episode-thumbnail-container {
+    position: relative;
+    min-height: 9rem;
+  }
+
+  .episode-thumbnail-container > img {
+    position: absolute;
+    inset: 0;
+    height: 100%;
+    aspect-ratio: auto;
+  }
+}
+
 .htmx-indicator {
   display: none;
 }
