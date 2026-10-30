@@ -14,6 +14,7 @@ from django.conf import settings
 from django.utils import timezone
 
 from integrations.models import TubeArchivistDeletion
+from integrations.plex_library import PlexError, PlexLibraryClient
 
 logger = logging.getLogger(__name__)
 MAX_FAILURES = 8
@@ -93,7 +94,8 @@ def validate_video_id(video_id):
     """Reject local IDs and malformed external identifiers before deleting."""
     if not video_id or not re.fullmatch(r"[A-Za-z0-9_-]{11}", video_id):
         raise TubeArchivistError(
-            "This video has no valid YouTube video ID.", permanent=True,
+            "This video has no valid YouTube video ID.",
+            permanent=True,
         )
 
 
@@ -121,7 +123,7 @@ def process_deletion(job_id):
     job = TubeArchivistDeletion.objects.get(pk=job_id)
     try:
         _sync(job)
-    except TubeArchivistError as error:
+    except (TubeArchivistError, PlexError) as error:
         job.failures += 1
         job.last_error = str(error)
         if error.permanent or job.failures >= MAX_FAILURES:
@@ -144,6 +146,9 @@ def process_deletion(job_id):
 
 def _sync(job):
     """Follow TA's Delete and Ignore flow, verifying the asynchronous ignore."""
+    if job.ta_completed_at:
+        _sync_plex(job)
+        return
     validate_video_id(job.youtube_id)
     client = TubeArchivistClient()
     video_path = f"video/{job.youtube_id}/"
@@ -155,8 +160,21 @@ def _sync(job):
     if queued and queued.get("status") == "ignore":
         if client.request("GET", video_path, allow_missing=True) is not None:
             raise TubeArchivistError("Video still exists in TubeArchivist.")
-        job.status = TubeArchivistDeletion.Status.COMPLETED
+        job.ta_completed_at = timezone.now()
+        job.failures = 0
         job.last_error = ""
+        # Commit the TA checkpoint before contacting Plex, so retries and crashes
+        # cannot repeat a completed deletion even when Plex is unavailable.
+        job.save(
+            update_fields=[
+                "ta_completed_at",
+                "file_deleted",
+                "failures",
+                "last_error",
+                "updated_at",
+            ],
+        )
+        _sync_plex(job)
         return
     now = timezone.now()
     if job.ignore_requested_at is None:
@@ -169,6 +187,15 @@ def _sync(job):
         )
     job.last_error = "Waiting for TubeArchivist to confirm ignored status."
     job.next_attempt_at = now + timedelta(seconds=30)
+
+
+def _sync_plex(job):
+    """Finish the optional Plex step independently of TA's credentials or state."""
+    if job.plex_library and not job.plex_scan_requested_at:
+        PlexLibraryClient().scan(job.plex_library)
+        job.plex_scan_requested_at = timezone.now()
+    job.status = TubeArchivistDeletion.Status.COMPLETED
+    job.last_error = ""
 
 
 def due_deletions():

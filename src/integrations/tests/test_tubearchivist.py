@@ -36,7 +36,11 @@ def api_response(status, data=None):
     return response
 
 
-@override_settings(TUBEARCHIVIST_URL="http://ta:8000", TUBEARCHIVIST_TOKEN="test-token")
+@override_settings(
+    TUBEARCHIVIST_URL="http://ta:8000",
+    TUBEARCHIVIST_TOKEN="test-token",
+    PLEX_YOUTUBE_LIBRARY="",
+)
 class TubeArchivistTest(TestCase):
     """Exercise deletion transactions and TA failures with all HTTP calls mocked."""
 

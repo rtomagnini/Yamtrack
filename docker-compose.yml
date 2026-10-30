@@ -11,6 +11,9 @@ services:
       - REDIS_URL=redis://redis:6379
       - TUBEARCHIVIST_URL=${TUBEARCHIVIST_URL:-}
       - TUBEARCHIVIST_TOKEN=${TUBEARCHIVIST_TOKEN:-}
+      - PLEX_SERVER_URL=${PLEX_SERVER_URL:-}
+      - PLEX_TOKEN=${PLEX_TOKEN:-}
+      - PLEX_YOUTUBE_LIBRARY=${PLEX_YOUTUBE_LIBRARY:-}
     volumes:
       - ./db:/yamtrack/db
     ports:

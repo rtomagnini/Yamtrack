@@ -1886,13 +1886,20 @@ def delete_youtube_video(request, video_id):
                 validate_video_id(video_item.youtube_video_id)
                 job, created = TubeArchivistDeletion.objects.get_or_create(
                     youtube_id=video_item.youtube_video_id,
-                    defaults={"title": video_item.title, "requested_by": request.user},
+                    defaults={
+                        "title": video_item.title,
+                        "requested_by": request.user,
+                        "plex_library": settings.PLEX_YOUTUBE_LIBRARY,
+                    },
                 )
                 if not created and job.status != TubeArchivistDeletion.Status.PENDING:
                     job.status = TubeArchivistDeletion.Status.PENDING
                     job.failures = 0
                     job.last_error = ""
                     job.file_deleted = False
+                    job.ta_completed_at = None
+                    job.plex_library = settings.PLEX_YOUTUBE_LIBRARY
+                    job.plex_scan_requested_at = None
                     job.ignore_requested_at = None
                     job.next_attempt_at = timezone.now()
                     job.locked_until = timezone.now()

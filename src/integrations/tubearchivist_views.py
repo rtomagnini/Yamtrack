@@ -31,7 +31,7 @@ def deletion_status(request):
 def retry_deletion(request, job_id):
     """Allow any authenticated user to retry a failed archive operation."""
     job = get_object_or_404(TubeArchivistDeletion, pk=job_id)
-    if not is_enabled():
+    if not job.ta_completed_at and not is_enabled():
         messages.error(request, "Configure the TubeArchivist URL and API token first.")
     elif TubeArchivistDeletion.objects.filter(
         pk=job.pk,
@@ -46,5 +46,5 @@ def retry_deletion(request, job_id):
         updated_at=timezone.now(),
     ):
         enqueue_deletion(job.pk)
-        messages.info(request, "TubeArchivist synchronization queued again.")
+        messages.info(request, "Deletion synchronization queued again.")
     return redirect("tubearchivist_status")

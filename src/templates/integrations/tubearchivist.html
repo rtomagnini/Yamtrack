@@ -34,8 +34,14 @@
             <td class="p-3">
               {% if job.status == 'completed' %}
                 Deleted and ignored in TubeArchivist.
+                {% if job.plex_scan_requested_at %}
+                  Scan requested in Plex ({{ job.plex_library }}). Plex finishes it in the background.
+                {% endif %}
               {% elif job.last_error %}
+                {% if job.ta_completed_at %}TubeArchivist completed. Plex pending: {% endif %}
                 {{ job.last_error }}
+              {% elif job.ta_completed_at %}
+                TubeArchivist completed; waiting to request the Plex scan.
               {% elif job.file_deleted %}
                 File deleted; waiting for ignored status.
               {% else %}
@@ -44,7 +50,7 @@
             </td>
             <td class="p-3">{{ job.updated_at|date:"Y-m-d H:i" }}</td>
             <td class="p-3">
-              {% if enabled and job.status == 'failed' %}
+              {% if job.status == 'failed' %}
                 <form method="post" action="{% url 'tubearchivist_retry' job.id %}">
                   {% csrf_token %}
                   <button type="submit" class="px-4 py-2 bg-indigo-600 rounded-md cursor-pointer">Retry</button>

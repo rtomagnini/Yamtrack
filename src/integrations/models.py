@@ -26,6 +26,9 @@ class TubeArchivistDeletion(models.Model):
         default=Status.PENDING,
     )
     file_deleted = models.BooleanField(default=False)
+    ta_completed_at = models.DateTimeField(null=True, blank=True)
+    plex_library = models.CharField(max_length=255, blank=True, default="")
+    plex_scan_requested_at = models.DateTimeField(null=True, blank=True)
     ignore_requested_at = models.DateTimeField(null=True, blank=True)
     failures = models.PositiveIntegerField(default=0)
     last_error = models.CharField(max_length=255, blank=True)

@@ -617,6 +617,8 @@ REDIRECT_LOGIN_TO_SSO = config("REDIRECT_LOGIN_TO_SSO", default=False, cast=bool
 # Plex API Configuration
 PLEX_SERVER_URL = config("PLEX_SERVER_URL", default=None)
 PLEX_TOKEN = config("PLEX_TOKEN", default=None)
+# Set a library name to enable a Plex scan after new TA deletion jobs.
+PLEX_YOUTUBE_LIBRARY = config("PLEX_YOUTUBE_LIBRARY", default="").strip()
 
 # TubeArchivist Delete + Ignore integration (disabled when both are empty).
 TUBEARCHIVIST_URL = config("TUBEARCHIVIST_URL", default="").strip()
