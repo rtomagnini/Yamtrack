@@ -1,5 +1,10 @@
+## [0.25.41.RT] - 2026-10-30
 
-
+### Integracion con TubeArchivist y Plex
+- Al borrar un video de YouTube en Yamtrack, TubeArchivist elimina el archivo y lo ignora para evitar futuras descargas.
+- Tras confirmar la operacion en TubeArchivist, Yamtrack solicita un escaneo de la biblioteca Youtube en Plex.
+- Las operaciones pendientes admiten reintentos sin repetir un borrado ya completado.
+- Se anaden variables de entorno para configurar TubeArchivist y Plex.
 
 ## [0.25.36.RT] - 2026-03-12
 
