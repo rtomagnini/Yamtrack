@@ -160,6 +160,12 @@ class TautulliWebhookProcessor(BaseWebhookProcessor):
             return False
         
         logger.info("Detected YouTube video ID from Tautulli: %s", video_id)
+
+        from integrations.models import TubeArchivistDeletion
+
+        if TubeArchivistDeletion.objects.filter(youtube_id=video_id).exists():
+            logger.info("Ignoring previously deleted YouTube video %s", video_id)
+            return True
         
         # Check if video already exists in Yamtrack
         existing_video = Item.objects.filter(
@@ -211,6 +217,10 @@ class TautulliWebhookProcessor(BaseWebhookProcessor):
             return False
         
         # Fetch channel metadata
+        # Deletion may have committed while metadata was fetched from YouTube.
+        if TubeArchivistDeletion.objects.filter(youtube_id=video_id).exists():
+            return True
+
         try:
             channel_metadata = youtube.fetch_channel_metadata(channel_id)
             if not channel_metadata:

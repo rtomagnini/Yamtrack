@@ -1,8 +1,14 @@
 from django.urls import path
 
-from integrations import views
+from integrations import tubearchivist_views, views
 
 urlpatterns = [
+    path("tubearchivist/", tubearchivist_views.deletion_status, name="tubearchivist_status"),
+    path(
+        "tubearchivist/<int:job_id>/retry/",
+        tubearchivist_views.retry_deletion,
+        name="tubearchivist_retry",
+    ),
     path("trakt-oauth", views.trakt_oauth, name="trakt_oauth"),
     path("import/trakt", views.import_trakt, name="import_trakt"),
     path("simkl-oauth", views.simkl_oauth, name="simkl_oauth"),

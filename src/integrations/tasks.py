@@ -25,6 +25,23 @@ logger = logging.getLogger(__name__)
 ERROR_TITLE = "\n\n\n Couldn't import the following media: \n\n"
 
 
+@shared_task(name="Sync TubeArchivist deletion")
+def sync_tubearchivist_deletion(job_id):
+    """Resume one durable TubeArchivist deletion."""
+    from integrations.tubearchivist import process_deletion  # noqa: PLC0415
+
+    process_deletion(job_id)
+
+
+@shared_task(name="Retry TubeArchivist deletions")
+def retry_tubearchivist_deletions():
+    """Recover due jobs, including jobs saved while the broker was unavailable."""
+    from integrations.tubearchivist import due_deletions, enqueue_deletion  # noqa: PLC0415
+
+    for job_id in due_deletions():
+        enqueue_deletion(job_id)
+
+
 def format_media_type_display(count, media_type):
     """Format media type display with proper pluralization."""
     if count == 0:

@@ -9,6 +9,8 @@ services:
       - TZ=Europe/Berlin
       - SECRET=longstring
       - REDIS_URL=redis://redis:6379
+      - TUBEARCHIVIST_URL=${TUBEARCHIVIST_URL:-}
+      - TUBEARCHIVIST_TOKEN=${TUBEARCHIVIST_TOKEN:-}
     volumes:
       - ./db:/yamtrack/db
     ports:

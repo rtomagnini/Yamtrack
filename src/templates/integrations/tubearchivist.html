@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+
+{% block title %}TubeArchivist - Yamtrack{% endblock %}
+
+{% block content %}
+  <div class="flex flex-wrap items-center justify-between gap-4 mb-6">
+    <h1 class="text-3xl font-bold">TubeArchivist deletions</h1>
+    <a href="{% url 'youtubes' %}" class="text-indigo-400 underline">Back to YouTube</a>
+  </div>
+  <p class="text-gray-300 mb-6">
+    Delete + Ignore removes the file from the shared archive and prevents future downloads.
+    Deleted videos are excluded from automatic Tautulli imports.
+    Refresh this page to see the latest status.
+  </p>
+  {% if not enabled %}
+    <p class="text-yellow-400 mb-6">TubeArchivist is not configured. Contact the server administrator to enable synchronization.</p>
+  {% endif %}
+  <div class="overflow-x-auto">
+    <table class="w-full text-left">
+      <thead>
+        <tr class="border-b border-gray-600">
+          <th class="p-3">Video</th>
+          <th class="p-3">Status</th>
+          <th class="p-3">Details</th>
+          <th class="p-3">Updated</th>
+          <th class="p-3">Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for job in jobs %}
+          <tr class="border-b border-gray-700">
+            <td class="p-3">{{ job.title }}<br><span class="text-sm text-gray-400">{{ job.youtube_id }}</span></td>
+            <td class="p-3">{{ job.get_status_display }}</td>
+            <td class="p-3">
+              {% if job.status == 'completed' %}
+                Deleted and ignored in TubeArchivist.
+              {% elif job.last_error %}
+                {{ job.last_error }}
+              {% elif job.file_deleted %}
+                File deleted; waiting for ignored status.
+              {% else %}
+                Waiting for synchronization.
+              {% endif %}
+            </td>
+            <td class="p-3">{{ job.updated_at|date:"Y-m-d H:i" }}</td>
+            <td class="p-3">
+              {% if enabled and job.status == 'failed' %}
+                <form method="post" action="{% url 'tubearchivist_retry' job.id %}">
+                  {% csrf_token %}
+                  <button type="submit" class="px-4 py-2 bg-indigo-600 rounded-md cursor-pointer">Retry</button>
+                </form>
+              {% endif %}
+            </td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="5" class="p-3">No TubeArchivist deletions yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="flex gap-4 mt-6">
+    {% if jobs.has_previous %}<a href="?page={{ jobs.previous_page_number }}" class="underline">Previous</a>{% endif %}
+    <span>Page {{ jobs.number }} of {{ jobs.paginator.num_pages }}</span>
+    {% if jobs.has_next %}<a href="?page={{ jobs.next_page_number }}" class="underline">Next</a>{% endif %}
+  </div>
+{% endblock %}

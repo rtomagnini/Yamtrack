@@ -1863,39 +1863,50 @@ def youtube_channel_details(request, source, media_id, title):  # noqa: ARG001 t
 @require_http_methods(["DELETE"])
 @login_required
 def delete_youtube_video(request, video_id):
-    """Delete a YouTube video (Item) from the database."""
-    logger.info(f"DELETE request received for video_id={video_id} by user={request.user.username}")
-    
+    """Delete a YouTube video and persist its optional TA synchronization."""
+    from integrations.models import TubeArchivistDeletion
+    from integrations.tubearchivist import (
+        TubeArchivistClient,
+        TubeArchivistError,
+        enqueue_deletion,
+        validate_video_id,
+    )
+
     try:
-        # Get the video item (YouTube episode only)
-        video_item = Item.objects.get(
-            id=video_id,
-            media_type=MediaTypes.EPISODE.value,
-            source=Sources.YOUTUBE.value
-        )
-
-        # Delete Episode(s) for this user and item, if any
-        deleted_episodes = Episode.objects.filter(
-            item=video_item,
-            related_season__related_tv__user=request.user
-        ).delete()
-        if deleted_episodes[0] > 0:
-            logger.info(f"Deleted {deleted_episodes[0]} Episode(s) for user {request.user.username} and video ID {video_id}")
-
-        video_title = video_item.title
-        logger.info(f"Found video: '{video_title}' (ID: {video_id}), proceeding with deletion of Item")
-        video_item.delete()
-        logger.info(f"YouTube video '{video_title}' (ID: {video_id}) successfully deleted by user {request.user.username}")
-
-        # Return empty response with 200 status to remove the element
+        configured = bool(settings.TUBEARCHIVIST_URL or settings.TUBEARCHIVIST_TOKEN)
+        if configured:
+            TubeArchivistClient()  # Reject partial configuration before local deletion.
+        with transaction.atomic():
+            video_item = Item.objects.select_for_update().get(
+                id=video_id,
+                media_type=MediaTypes.EPISODE.value,
+                source=Sources.YOUTUBE.value,
+            )
+            if configured:
+                validate_video_id(video_item.youtube_video_id)
+                job, created = TubeArchivistDeletion.objects.get_or_create(
+                    youtube_id=video_item.youtube_video_id,
+                    defaults={"title": video_item.title, "requested_by": request.user},
+                )
+                if not created and job.status != TubeArchivistDeletion.Status.PENDING:
+                    job.status = TubeArchivistDeletion.Status.PENDING
+                    job.failures = 0
+                    job.last_error = ""
+                    job.file_deleted = False
+                    job.ignore_requested_at = None
+                    job.next_attempt_at = timezone.now()
+                    job.locked_until = timezone.now()
+                    job.save()
+                transaction.on_commit(lambda: enqueue_deletion(job.pk))
+            # The Item is shared; cascading deletion removes its tracking records.
+            video_item.delete()
+        if configured:
+            messages.info(request, "Video deleted. TubeArchivist Delete + Ignore is queued.")
         return HttpResponse(status=200)
-
     except Item.DoesNotExist:
-        logger.warning(f"Attempted to delete non-existent video ID: {video_id} by user {request.user.username}")
-        return HttpResponseBadRequest("Video not found")
-    except Exception as e:
-        logger.error(f"Error deleting video ID {video_id}: {str(e)}")
-        return HttpResponseBadRequest(f"Error deleting video: {str(e)}")
+        return HttpResponse(status=200)  # Repeated deletes are harmless.
+    except TubeArchivistError as error:
+        return HttpResponseBadRequest(str(error))
 
 
 @login_required

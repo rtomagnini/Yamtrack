@@ -532,6 +532,10 @@ DAILY_DIGEST_HOUR = config(
     cast=int,
 )
 CELERY_BEAT_SCHEDULE = {
+    "retry_tubearchivist_deletions": {
+        "task": "Retry TubeArchivist deletions",
+        "schedule": 30,
+    },
     "reload_calendar": {
         "task": "Reload calendar",
         "schedule": 60 * 60 * 24,  # every 24 hours
@@ -613,3 +617,10 @@ REDIRECT_LOGIN_TO_SSO = config("REDIRECT_LOGIN_TO_SSO", default=False, cast=bool
 # Plex API Configuration
 PLEX_SERVER_URL = config("PLEX_SERVER_URL", default=None)
 PLEX_TOKEN = config("PLEX_TOKEN", default=None)
+
+# TubeArchivist Delete + Ignore integration (disabled when both are empty).
+TUBEARCHIVIST_URL = config("TUBEARCHIVIST_URL", default="").strip()
+TUBEARCHIVIST_TOKEN = (
+    config("TUBEARCHIVIST_TOKEN", default="").strip()
+    or secret("TUBEARCHIVIST_TOKEN_FILE", default="").strip()
+)

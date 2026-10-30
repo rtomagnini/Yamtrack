@@ -1,6 +1,7 @@
 """Tests for Tautulli webhook integration."""
 
 import json
+from datetime import date
 from unittest.mock import patch
 
 from django.test import TestCase
@@ -74,7 +75,7 @@ class TautulliWebhookTest(TestCase):
             self.assertIsNotNone(episode_item, "YouTube video Item should be created")
             self.assertEqual(episode_item.title, "Test YouTube Video")
             self.assertEqual(episode_item.runtime, 5)
-            self.assertEqual(episode_item.air_date, "2023-06-15")
+            self.assertEqual(episode_item.air_date, date(2023, 6, 15))
             
             # Verify channel (TV) was created
             channel_item = Item.objects.filter(
@@ -111,14 +112,8 @@ class TautulliWebhookTest(TestCase):
             
             self.assertIsNotNone(season, "Season instance should be created")
             
-            # Verify Episode instance was created
-            episode = Episode.objects.filter(
-                item=episode_item,
-                user=self.user,
-            ).first()
-            
-            self.assertIsNotNone(episode, "Episode instance should be created")
-            self.assertEqual(episode.status, Status.COMPLETED.value, "Episode should be marked as completed")
+            # Recently Added imports metadata without marking the video as watched.
+            self.assertFalse(Episode.objects.filter(item=episode_item).exists())
 
     def test_tautulli_recently_added_duplicate_prevention(self):
         """Test that duplicate YouTube videos are not created."""

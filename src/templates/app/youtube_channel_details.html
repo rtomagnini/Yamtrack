@@ -322,6 +322,7 @@
                     <div class="bg-[#1e2328] rounded-lg p-6 max-w-md w-full mx-4 shadow-xl"
                          @click.stop>
                       <h3 class="text-lg font-semibold mb-4">Delete Video?</h3>
+                      {% include "app/components/tubearchivist_delete_notice.html" %}
                       <p class="text-gray-300 mb-6">Are you sure you want to delete "{{ video.title }}"? This action cannot be undone.</p>
                       <div class="flex gap-3 justify-end">
                         <button @click="confirmDelete = false"
@@ -329,6 +330,7 @@
                           Cancel
                         </button>
                         <button hx-delete="{% url 'delete_youtube_video' video.id %}"
+                                hx-on::response-error="alert(event.detail.xhr.responseText || 'Could not delete this video.')"
                                 hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
                                 hx-target="closest [data-video-card]"
                                 hx-swap="outerHTML swap:0.5s"
