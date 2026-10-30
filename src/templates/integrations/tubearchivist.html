@@ -1,11 +1,12 @@
-{% extends "base.html" %}
+{% extends "users/base.html" %}
 
 {% block title %}TubeArchivist - Yamtrack{% endblock %}
 
-{% block content %}
+{% block settings_content %}
+  <div class="bg-[#2a2f35] rounded-lg p-6">
   <div class="flex flex-wrap items-center justify-between gap-4 mb-6">
-    <h1 class="text-3xl font-bold">TubeArchivist deletions</h1>
-    <a href="{% url 'youtubes' %}" class="text-indigo-400 underline">Back to YouTube</a>
+    <h2 class="text-xl font-semibold">TubeArchivist deletions</h2>
+    <a href="{% url 'integrations' %}" class="text-indigo-400 underline">Back to integrations</a>
   </div>
   <p class="text-gray-300 mb-6">
     Delete + Ignore removes the file from the shared archive and prevents future downloads.
@@ -68,5 +69,6 @@
     {% if jobs.has_previous %}<a href="?page={{ jobs.previous_page_number }}" class="underline">Previous</a>{% endif %}
     <span>Page {{ jobs.number }} of {{ jobs.paginator.num_pages }}</span>
     {% if jobs.has_next %}<a href="?page={{ jobs.next_page_number }}" class="underline">Next</a>{% endif %}
+  </div>
   </div>
 {% endblock %}

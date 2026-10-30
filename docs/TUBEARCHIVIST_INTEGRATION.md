@@ -56,7 +56,7 @@ The durable record also blocks later Tautulli automatic imports, regardless of
 the requesting user or synchronization status. Keep completed records to retain
 this protection. This does not block deliberate manual additions in Yamtrack.
 
-Open **YouTube → TubeArchivist deletion status** to see all shared jobs and
+Open **Settings → Integrations → TubeArchivist and Plex → View deletion status** to see all shared jobs and
 retry failures. The URL is `/tubearchivist/` when installed at the
 root. Connection/server failures retry automatically with exponential backoff
 (up to eight failures). Authentication/configuration errors require correction

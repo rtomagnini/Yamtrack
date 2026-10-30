@@ -1,3 +1,9 @@
+## [0.25.42.RT] - 2026-10-30
+
+### Estado de TubeArchivist y Plex dentro de Settings
+- Se mueve el acceso al estado de los borrados desde YouTube a Settings > Integrations.
+- La página de estado utiliza el diseño de Settings y mantiene seleccionada la sección Integrations.
+
 ## [0.25.41.RT] - 2026-10-30
 
 ### Integracion con TubeArchivist y Plex

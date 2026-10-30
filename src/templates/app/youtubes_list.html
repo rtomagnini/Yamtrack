@@ -5,7 +5,6 @@
 
 {% block content %}
 <h1 class="text-3xl font-bold mb-6">Youtubes</h1>
-<p class="mb-6"><a href="{% url 'tubearchivist_status' %}" class="text-indigo-400 underline">TubeArchivist deletion status</a></p>
 
 <div x-data="{ search: '{{ search }}', status: '{{ current_status }}', sort: '{{ current_sort }}', layout: '{{ current_layout|default:'grid' }}', statusLabels: { all: 'All', watched: 'Watched', unwatched: 'Unwatched' }, sortLabels: { title: 'Title', air_date: 'Air date', runtime: 'Runtime', end_date: 'End date' }, openStatus: false, openSort: false }">
   <form id="youtube-filter-form" x-ref="filterForm" class="hidden"
