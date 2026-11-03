@@ -1,7 +1,7 @@
 services:
   yamtrack:
     container_name: yamtrack
-    image: ghcr.io/fuzzygrim/yamtrack
+    image: ghcr.io/rtomagnini/yamtrack:master
     restart: unless-stopped
     depends_on:
       - redis
@@ -14,6 +14,8 @@ services:
       - PLEX_SERVER_URL=${PLEX_SERVER_URL:-}
       - PLEX_TOKEN=${PLEX_TOKEN:-}
       - PLEX_YOUTUBE_LIBRARY=${PLEX_YOUTUBE_LIBRARY:-}
+      - INVIDIOUS_URL=${INVIDIOUS_URL:-}
+      - INVIDIOUS_TOKEN=${INVIDIOUS_TOKEN:-}
     volumes:
       - ./db:/yamtrack/db
     ports:
