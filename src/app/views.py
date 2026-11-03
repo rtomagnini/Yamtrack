@@ -971,7 +971,17 @@ def episode_save(request):
     else:
         auto_complete = True
     
-    related_season.watch(episode_number, end_date, auto_complete=auto_complete)
+    with transaction.atomic():
+        related_season.watch(episode_number, end_date, auto_complete=auto_complete)
+        if source == Sources.YOUTUBE.value:
+            from integrations.youtube_watched import queue_watched
+
+            watched_item = Item.objects.filter(
+                media_id=media_id, source=source, media_type=MediaTypes.EPISODE.value,
+                season_number=season_number, episode_number=episode_number,
+            ).first()
+            if watched_item:
+                queue_watched(watched_item, request.user)
 
     # If HTMX request, return only the updated card HTML
     if request.headers.get('HX-Request'):

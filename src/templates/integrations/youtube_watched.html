@@ -1,0 +1,43 @@
+{% extends "users/base.html" %}
+
+{% block title %}YouTube watched synchronization - Yamtrack{% endblock %}
+
+{% block settings_content %}
+  <div class="bg-[#2a2f35] rounded-lg p-6">
+    <div class="flex flex-wrap items-center justify-between gap-4 mb-6">
+      <h2 class="text-xl font-semibold">YouTube watched synchronization</h2>
+      <a href="{% url 'integrations' %}" class="text-indigo-400 underline">Back to integrations</a>
+    </div>
+    <p class="text-gray-300 mb-6">Videos marked as watched in Yamtrack are sent to the configured TubeArchivist and Plex accounts. Each destination is retried separately. Your Yamtrack history is saved immediately. Refresh this page to see the latest status.</p>
+    {% if not enabled %}<p class="text-yellow-400 mb-6">Outgoing watched synchronization is disabled.</p>{% endif %}
+    <div class="overflow-x-auto">
+      <table class="w-full text-left">
+        <thead><tr class="border-b border-gray-600">
+          <th class="p-3">Video</th><th class="p-3">Destination</th><th class="p-3">Status</th>
+          <th class="p-3">Details</th><th class="p-3">Updated</th><th class="p-3">Action</th>
+        </tr></thead>
+        <tbody>
+          {% for job in jobs %}
+            <tr class="border-b border-gray-700">
+              <td class="p-3">{{ job.title }}<br><span class="text-sm text-gray-400">{{ job.youtube_id }}</span></td>
+              <td class="p-3">{{ job.get_target_display }}</td>
+              <td class="p-3">{{ job.get_status_display }}</td>
+              <td class="p-3">{% if job.status == 'completed' %}Watched status confirmed.{% elif job.last_error %}{{ job.last_error }}{% else %}Waiting for synchronization.{% endif %}</td>
+              <td class="p-3">{{ job.updated_at|date:"Y-m-d H:i" }}</td>
+              <td class="p-3">{% if job.status == 'failed' %}
+                <form method="post" action="{% url 'youtube_watched_retry' job.id %}">
+                  {% csrf_token %}<button type="submit" class="px-4 py-2 bg-indigo-600 rounded-md cursor-pointer">Retry</button>
+                </form>
+              {% endif %}</td>
+            </tr>
+          {% empty %}<tr><td colspan="6" class="p-3">No outgoing watched synchronizations yet.</td></tr>{% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="flex gap-4 mt-6">
+      {% if jobs.has_previous %}<a href="?page={{ jobs.previous_page_number }}" class="underline">Previous</a>{% endif %}
+      <span>Page {{ jobs.number }} of {{ jobs.paginator.num_pages }}</span>
+      {% if jobs.has_next %}<a href="?page={{ jobs.next_page_number }}" class="underline">Next</a>{% endif %}
+    </div>
+  </div>
+{% endblock %}

@@ -89,6 +89,38 @@ class TubeArchivistClient:
             return result
         return True
 
+    def mark_watched(self, video_id):
+        """Set and verify the watched flag, without altering the download queue."""
+        validate_video_id(video_id)
+        path = f"video/{video_id}/"
+        video = self.request("GET", path, allow_missing=True)
+        if video is None:
+            raise TubeArchivistError(
+                "Video not found in TubeArchivist.",
+                permanent=True,
+            )
+        if self._watched_state(video):
+            return
+        self.request("POST", "watched/", data={"id": video_id, "is_watched": True})
+        video = self.request("GET", path, allow_missing=True)
+        if video is None or not self._watched_state(video):
+            raise TubeArchivistError(
+                "TubeArchivist has not confirmed the watched status.",
+            )
+
+    @staticmethod
+    def _watched_state(video):
+        # TA v0.6 returns a flat VideoSerializer; older versions wrapped data.
+        metadata = video.get("data", video)
+        if not isinstance(metadata, dict) or not isinstance(
+            metadata.get("player"), dict,
+        ):
+            raise TubeArchivistError("Invalid TubeArchivist watched state response.")
+        watched = metadata["player"].get("watched")
+        if not isinstance(watched, bool):
+            raise TubeArchivistError("Invalid TubeArchivist watched state response.")
+        return watched
+
 
 def validate_video_id(video_id):
     """Reject local IDs and malformed external identifiers before deleting."""

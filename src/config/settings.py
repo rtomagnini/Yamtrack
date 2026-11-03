@@ -532,6 +532,10 @@ DAILY_DIGEST_HOUR = config(
     cast=int,
 )
 CELERY_BEAT_SCHEDULE = {
+    "retry_youtube_watched": {
+        "task": "Retry YouTube watched status",
+        "schedule": 30,
+    },
     "retry_tubearchivist_deletions": {
         "task": "Retry TubeArchivist deletions",
         "schedule": 30,
@@ -622,6 +626,7 @@ PLEX_YOUTUBE_LIBRARY = config("PLEX_YOUTUBE_LIBRARY", default="").strip()
 
 # TubeArchivist Delete + Ignore integration (disabled when both are empty).
 TUBEARCHIVIST_URL = config("TUBEARCHIVIST_URL", default="").strip()
+YOUTUBE_WATCH_SYNC_ENABLED = config("YOUTUBE_WATCH_SYNC_ENABLED", default=True, cast=bool)
 TUBEARCHIVIST_TOKEN = (
     config("TUBEARCHIVIST_TOKEN", default="").strip()
     or secret("TUBEARCHIVIST_TOKEN_FILE", default="").strip()

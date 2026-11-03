@@ -2,8 +2,8 @@
 
 Supported API: TubeArchivist **v0.6.0**. Any authenticated Yamtrack user can
 delete a YouTube video from the shared TubeArchivist archive. An optional final
-step scans the Plex YouTube library. Watched-state synchronization is outside
-this integration.
+step scans the Plex YouTube library. Watched-state synchronization uses a
+separate durable queue, described below.
 
 ## Configuration
 
@@ -49,7 +49,7 @@ same transaction as the local deletion. After commit, Celery sends:
 4. Poll until `status=ignore`, then verify `GET /api/video/VIDEO_ID/` is 404.
 
 TA creates the ignore entry asynchronously. A successful POST alone is not
-reported as completion. No watched-state API is called. TA deletes the media
+reported as completion. The deletion worker never calls the watched API. TA deletes the media
 file and metadata, not just a Yamtrack tracking entry.
 
 The durable record also blocks later Tautulli automatic imports, regardless of
@@ -111,10 +111,67 @@ the status page. Correct the configuration and use **Retry**. A Plex-only retry
 does not require TA to be online or its token to remain configured. Tautulli is
 not required for this step.
 
+## Watched synchronization from Yamtrack
+
+Marking a YouTube video as watched in Yamtrack also queues its watched state
+for each configured destination. This applies to the individual video watched
+buttons in the channel page and the YouTubes video list. It uses the video's
+`youtube_video_id`, never its local episode number or title. Existing history
+is not exported retroactively. Unmarking or deleting a local viewing does not
+clear the watched flag in the external services.
+
+No additional credentials are required:
+
+- TubeArchivist uses `TUBEARCHIVIST_URL` and `TUBEARCHIVIST_TOKEN`.
+- Plex uses `PLEX_SERVER_URL`, `PLEX_TOKEN` and `PLEX_YOUTUBE_LIBRARY`.
+- Set `YOUTUBE_WATCH_SYNC_ENABLED=false` on web and workers to disable only
+  outgoing watched synchronization, keeping deletion behavior unchanged.
+
+The watched state belongs to the external accounts authenticated by those
+tokens. There is no mapping to individual external accounts for multiple
+Yamtrack users. TubeArchivist may also apply its configured automatic deletion
+policy to watched videos.
+
+Yamtrack saves the local viewing and independent durable delivery records in
+one transaction. It contacts neither external server while handling the click.
+After commit, Celery sends and verifies each destination independently:
+
+1. TubeArchivist: read `GET /api/video/VIDEO_ID/`, then, if needed, send
+   `POST /api/watched/` with `{"id":"VIDEO_ID","is_watched":true}` and verify.
+2. Plex: resolve exactly one configured library, page through its leaf videos,
+   match the complete YouTube ID in the media filename, and resolve its
+   `ratingKey`. Missing videos are retried; ambiguous matches require manual
+   intervention. It reads the video's state before sending
+   `GET /:/scrobble?key=RATING_KEY&identifier=com.plexapp.plugins.library`,
+   then reads again to confirm. Already watched items are not scrobbled again.
+
+When an outgoing Plex scrobble causes a webhook, a short-lived, one-use guard
+matches its user, YouTube ID and rating key and prevents a duplicate viewing
+when the callback carries no real player/session information.
+Incoming webhooks never enqueue outgoing watched jobs. Later genuine playback
+can still add another viewing.
+
+Open **Settings → Integrations → TubeArchivist and Plex → View watched status**
+(`/youtube-watched/`) for your pending, completed and failed deliveries and
+manual **Retry**. A successful destination is not repeated when the other
+fails. Jobs retry after connection/server errors (up to eight failures) and
+survive worker restarts or broker outages; beat recovers them every 30 seconds.
+Authentication and missing TA video errors require manual retry after fixing
+the cause. Invalid or missing YouTube IDs are only marked locally. A saved
+deletion record prevents a queued watched delivery from acting on that video.
+
+This feature adds migration `integrations.0003_youtubewatchsync`. Deploy the
+image, allow startup migrations to run and restart the web, worker and beat
+processes. Test with an existing video in both external services and inspect
+both destination rows. Automated tests mock HTTP and never change live watch
+state.
+
 ## References
 
 - [API authentication](https://docs.tubearchivist.com/api/introduction/)
 - [v0.6.0 video API](https://github.com/tubearchivist/tubearchivist/blob/v0.6.0/backend/video/views.py)
 - [v0.6.0 download API](https://github.com/tubearchivist/tubearchivist/blob/v0.6.0/backend/download/views.py)
+- [v0.6.0 watched API](https://github.com/tubearchivist/tubearchivist/blob/v0.6.0/backend/common/views.py)
+- [PlexAPI watched requests](https://github.com/pkkid/python-plexapi/blob/master/plexapi/mixins/played_unplayed.py)
 - [Plex library API](https://developer.plex.tv/pms/#tag/Library)
 - [Plex library trash](https://support.plex.tv/articles/200289326-emptying-library-trash/)

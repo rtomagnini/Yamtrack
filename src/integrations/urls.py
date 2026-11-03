@@ -1,8 +1,10 @@
 from django.urls import path
 
-from integrations import tubearchivist_views, views
+from integrations import tubearchivist_views, views, youtube_watched_views
 
 urlpatterns = [
+    path("youtube-watched/", youtube_watched_views.watched_status, name="youtube_watched_status"),
+    path("youtube-watched/<int:job_id>/retry/", youtube_watched_views.retry_watched, name="youtube_watched_retry"),
     path("tubearchivist/", tubearchivist_views.deletion_status, name="tubearchivist_status"),
     path(
         "tubearchivist/<int:job_id>/retry/",

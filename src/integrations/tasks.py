@@ -42,6 +42,23 @@ def retry_tubearchivist_deletions():
         enqueue_deletion(job_id)
 
 
+@shared_task(name="Sync YouTube watched status")
+def sync_youtube_watched(job_id):
+    """Deliver a durable watched state to one external service."""
+    from integrations.youtube_watched import process_watched  # noqa: PLC0415
+
+    process_watched(job_id)
+
+
+@shared_task(name="Retry YouTube watched status")
+def retry_youtube_watched():
+    """Recover deliveries after transient failures and unavailable brokers."""
+    from integrations.youtube_watched import due_watches, enqueue_watch  # noqa: PLC0415
+
+    for job_id in due_watches():
+        enqueue_watch(job_id)
+
+
 def format_media_type_display(count, media_type):
     """Format media type display with proper pluralization."""
     if count == 0:

@@ -240,6 +240,15 @@ class PlexWebhookProcessor(BaseWebhookProcessor):
             )
             return False
 
+        from integrations.youtube_watched import consume_plex_echo
+
+        actual_playback = bool((payload.get("Player") or {}).get("uuid") or payload.get("Session"))
+        if not actual_playback and app.models.Episode.objects.filter(
+            related_season=season_instance, item=episode_item, end_date__isnull=False,
+        ).exists() and consume_plex_echo(video_id, user, metadata.get("ratingKey", "")):
+            logger.info("Acknowledged outgoing Plex watched sync for %s", video_id)
+            return True
+
         # Create Episode directly with the specific Item we found
         # Don't use season_instance.watch() which searches by episode_number
         # and could match the wrong video

@@ -3,6 +3,46 @@ from django.db import models
 from django.utils import timezone
 
 
+class YouTubeWatchSync(models.Model):
+    """Durable, independent deliveries of a user's watched video to each service."""
+
+    class Target(models.TextChoices):
+        """External watched-state destinations."""
+
+        TUBEARCHIVIST = "tubearchivist", "TubeArchivist"
+        PLEX = "plex", "Plex"
+
+    class Status(models.TextChoices):
+        """Delivery states for each destination."""
+
+        PENDING = "pending", "Pending"
+        COMPLETED = "completed", "Completed"
+        FAILED = "failed", "Failed"
+
+    youtube_id = models.CharField(max_length=11)
+    title = models.CharField(max_length=255)
+    requested_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    target = models.CharField(max_length=16, choices=Target.choices)
+    status = models.CharField(max_length=12, choices=Status.choices, default=Status.PENDING)
+    plex_library = models.CharField(max_length=255, blank=True, default="")
+    plex_rating_key = models.CharField(max_length=32, blank=True, default="")
+    plex_echo_until = models.DateTimeField(null=True, blank=True)
+    failures = models.PositiveIntegerField(default=0)
+    last_error = models.CharField(max_length=255, blank=True)
+    next_attempt_at = models.DateTimeField(default=timezone.now, db_index=True)
+    locked_until = models.DateTimeField(default=timezone.now)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        """Keep one durable destination record per user and external video."""
+
+        ordering = ["-created_at"]
+        constraints = [models.UniqueConstraint(
+            fields=["requested_by", "youtube_id", "target"], name="unique_youtube_watch_delivery",
+        )]
+
+
 class TubeArchivistDeletion(models.Model):
     """Persist deletion jobs and prevent automatic reimport of deleted videos."""
 
