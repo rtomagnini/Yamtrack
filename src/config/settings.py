@@ -631,3 +631,10 @@ TUBEARCHIVIST_TOKEN = (
     config("TUBEARCHIVIST_TOKEN", default="").strip()
     or secret("TUBEARCHIVIST_TOKEN_FILE", default="").strip()
 )
+
+# Optional history synchronization for new YouTube watched/deleted actions.
+INVIDIOUS_URL = config("INVIDIOUS_URL", default="").strip()
+INVIDIOUS_TOKEN = (
+    config("INVIDIOUS_TOKEN", default="").strip()
+    or secret("INVIDIOUS_TOKEN_FILE", default="").strip()
+)

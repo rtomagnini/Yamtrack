@@ -1,4 +1,4 @@
-"""Outbox for watched-state delivery to TubeArchivist and Plex."""
+"""Outbox for watched-state delivery to TubeArchivist, Plex and Invidious."""
 
 # Short redacted API failures are deliberately safe to show on the status page.
 # ruff: noqa: EM101, TRY003
@@ -12,6 +12,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from app.models import MediaTypes, Sources
+from integrations.invidious import InvidiousClient, InvidiousError
 from integrations.models import TubeArchivistDeletion, YouTubeWatchSync
 from integrations.plex_library import PlexError, PlexLibraryClient
 from integrations.tubearchivist import (
@@ -34,8 +35,8 @@ def enqueue_watch(job_id):
         logger.warning("Watched sync %s saved; waiting for periodic delivery.", job_id)
 
 
-def queue_watched(item, user):
-    """Queue only explicit local watched actions, inside their transaction."""
+def queue_watched(item, user, *, deleted=False):
+    """Queue new watched actions, or Invidious alone for a new local deletion."""
     if (
         not settings.YOUTUBE_WATCH_SYNC_ENABLED
         or item.source != Sources.YOUTUBE.value
@@ -51,10 +52,12 @@ def queue_watched(item, user):
         )
         return
     targets = []
-    if settings.TUBEARCHIVIST_URL or settings.TUBEARCHIVIST_TOKEN:
+    if not deleted and (settings.TUBEARCHIVIST_URL or settings.TUBEARCHIVIST_TOKEN):
         targets.append(YouTubeWatchSync.Target.TUBEARCHIVIST)
-    if settings.PLEX_YOUTUBE_LIBRARY:
+    if not deleted and settings.PLEX_YOUTUBE_LIBRARY:
         targets.append(YouTubeWatchSync.Target.PLEX)
+    if settings.INVIDIOUS_URL or settings.INVIDIOUS_TOKEN:
+        targets.append(YouTubeWatchSync.Target.INVIDIOUS)
     for target in targets:
         job, _ = YouTubeWatchSync.objects.get_or_create(
             requested_by=user,
@@ -126,14 +129,20 @@ def process_watched(job_id):
     job = YouTubeWatchSync.objects.get(pk=job_id)
     try:
         validate_video_id(job.youtube_id)
-        _ensure_not_deleted(job.youtube_id)
+        if job.target != YouTubeWatchSync.Target.INVIDIOUS:
+            _ensure_not_deleted(job.youtube_id)
         if job.target == YouTubeWatchSync.Target.TUBEARCHIVIST:
             TubeArchivistClient().mark_watched(job.youtube_id)
-        else:
+        elif job.target == YouTubeWatchSync.Target.PLEX:
             _sync_plex(job)
+        elif job.target == YouTubeWatchSync.Target.INVIDIOUS:
+            InvidiousClient().mark_watched(job.youtube_id)
+        else:
+            message = "Unsupported watched synchronization destination."
+            raise InvidiousError(message, permanent=True)  # noqa: TRY301
         job.status = YouTubeWatchSync.Status.COMPLETED
         job.last_error = ""
-    except (TubeArchivistError, PlexError) as error:
+    except (TubeArchivistError, PlexError, InvidiousError) as error:
         job.failures += 1
         job.last_error = str(error)
         if error.permanent or job.failures >= MAX_FAILURES:

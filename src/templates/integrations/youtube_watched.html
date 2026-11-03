@@ -8,7 +8,7 @@
       <h2 class="text-xl font-semibold">YouTube watched synchronization</h2>
       <a href="{% url 'integrations' %}" class="text-indigo-400 underline">Back to integrations</a>
     </div>
-    <p class="text-gray-300 mb-6">Videos marked as watched in Yamtrack are sent to the configured TubeArchivist and Plex accounts. Each destination is retried separately. Your Yamtrack history is saved immediately. Refresh this page to see the latest status.</p>
+    <p class="text-gray-300 mb-6">New videos marked as watched in Yamtrack are sent to the configured TubeArchivist, Plex and Invidious accounts. New video deletions are also marked as watched in Invidious. Each destination is retried separately. Refresh this page to see the latest status.</p>
     {% if not enabled %}<p class="text-yellow-400 mb-6">Outgoing watched synchronization is disabled.</p>{% endif %}
     <div class="overflow-x-auto">
       <table class="w-full text-left">

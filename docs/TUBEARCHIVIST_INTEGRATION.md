@@ -113,6 +113,12 @@ not required for this step.
 
 ## Watched synchronization from Yamtrack
 
+An optional third destination sends new watched **and deleted** YouTube videos
+to your Invidious account's history. See [Invidious setup](INVIDIOUS_INTEGRATION.md)
+for the URL/token configuration and required permission. This destination is
+independent of TA/Plex and can run after local/TA deletion. No old records are
+exported automatically.
+
 Marking a YouTube video as watched in Yamtrack also queues its watched state
 for each configured destination. This applies to the individual video watched
 buttons in the channel page and the YouTubes video list. It uses the video's

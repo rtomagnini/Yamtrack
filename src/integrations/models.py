@@ -11,6 +11,7 @@ class YouTubeWatchSync(models.Model):
 
         TUBEARCHIVIST = "tubearchivist", "TubeArchivist"
         PLEX = "plex", "Plex"
+        INVIDIOUS = "invidious", "Invidious"
 
     class Status(models.TextChoices):
         """Delivery states for each destination."""

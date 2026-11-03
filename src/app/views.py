@@ -1881,6 +1881,7 @@ def delete_youtube_video(request, video_id):
         enqueue_deletion,
         validate_video_id,
     )
+    from integrations.youtube_watched import queue_watched
 
     try:
         configured = bool(settings.TUBEARCHIVIST_URL or settings.TUBEARCHIVIST_TOKEN)
@@ -1915,6 +1916,8 @@ def delete_youtube_video(request, video_id):
                     job.locked_until = timezone.now()
                     job.save()
                 transaction.on_commit(lambda: enqueue_deletion(job.pk))
+            # Capture the external ID before the shared Item and history cascade.
+            queue_watched(video_item, request.user, deleted=True)
             # The Item is shared; cascading deletion removes its tracking records.
             video_item.delete()
         if configured:

@@ -58,6 +58,8 @@ def plex_video(key="42", watched=0, filename=None):
     PLEX_TOKEN="plex-test-token",
     PLEX_YOUTUBE_LIBRARY="Youtube",
     YOUTUBE_WATCH_SYNC_ENABLED=True,
+    INVIDIOUS_URL="",
+    INVIDIOUS_TOKEN="",
     TRACK_TIME=False,
 )
 class YouTubeWatchedTests(TestCase):
