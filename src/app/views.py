@@ -1188,13 +1188,17 @@ def create_entry(request):
             "initial_media_type": initial_media_type,
         })
 
+    return_url = reverse("create_entry")
+    if request.POST.get("media_type") == MediaTypes.EPISODE.value:
+        return_url += "?media_type=episode"
+
     # Process the form submission
     form = ManualItemForm(request.POST, user=request.user)
     if not form.is_valid():
         # Handle form validation errors
         logger.error(form.errors.as_json())
         helpers.form_error_messages(form, request)
-        return redirect("create_entry")
+        return redirect(return_url)
 
     # Special handling for YouTube Video
     if form.cleaned_data.get("media_type") == MediaTypes.YOUTUBE_VIDEO.value:
@@ -1213,7 +1217,7 @@ def create_entry(request):
 
         logger.exception("%s already exists in the database.", media_name)
         messages.error(request, f"{media_name} already exists in the database.")
-        return redirect("create_entry")
+        return redirect(return_url)
 
     # Episodes don't need media instances - they're just Item entries
     if item.media_type != MediaTypes.EPISODE.value:
@@ -1230,7 +1234,7 @@ def create_entry(request):
             # Delete the item since the media creation failed
             item.delete()
             logger.info("%s was deleted due to media form validation failure", item)
-            return redirect("create_entry")
+            return redirect(return_url)
 
         # Save the media instance
         media_form.instance.user = request.user
@@ -1247,7 +1251,7 @@ def create_entry(request):
     messages.success(request, msg)
     logger.info(msg)
 
-    return redirect("create_entry")
+    return redirect(return_url)
 
 
 @login_required
@@ -1488,7 +1492,7 @@ def search_parent_season(request):
         item__source=Sources.MANUAL.value,
         item__media_type=MediaTypes.SEASON.value,
         item__title__icontains=query,
-    ).order_by('item__season_number', 'item__title')[:20]
+    ).order_by('-item__season_number', 'item__title')[:20]
 
     return render(
         request,

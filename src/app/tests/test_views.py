@@ -1275,7 +1275,7 @@ class CreateEntryViewTests(TestCase):
         response = self.client.post(reverse("create_entry"), form_data, follow=True)
 
         # Check redirect
-        self.assertRedirects(response, reverse("create_entry"))
+        self.assertRedirects(response, reverse("create_entry") + "?media_type=episode")
 
         # Verify item was created
         self.assertTrue(
@@ -1287,11 +1287,13 @@ class CreateEntryViewTests(TestCase):
             ).exists(),
         )
 
-        # Verify media was created with correct relationship
-        episode = Episode.objects.get(item__title="TV Show")
-        self.assertEqual(episode.related_season, parent_season)
-        end_date_local = timezone.localtime(episode.end_date)
-        self.assertEqual(end_date_local.strftime("%Y-%m-%d %H:%M"), "2023-01-02 00:00")
+        # Creating a custom episode adds its catalog entry, not a viewing.
+        episode_item = Item.objects.get(
+            title="TV Show", media_type=MediaTypes.EPISODE.value,
+        )
+        self.assertEqual(episode_item.media_id, parent_season.item.media_id)
+        self.assertEqual(episode_item.season_number, parent_season.item.season_number)
+        self.assertFalse(Episode.objects.filter(item=episode_item).exists())
 
     def test_create_entry_post_duplicate_item(self):
         """Test creating a duplicate item."""
