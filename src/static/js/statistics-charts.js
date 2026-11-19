@@ -1,377 +1,169 @@
 document.addEventListener("DOMContentLoaded", function () {
-  Chart.register(ChartDataLabels);
+  const textColor = "#D1D5DB";
+  const gridColor = "rgba(255, 255, 255, 0.06)";
+  const numberFormat = new Intl.NumberFormat(document.documentElement.lang);
+  const percentFormat = new Intl.NumberFormat(document.documentElement.lang, {
+    style: "percent",
+    maximumFractionDigits: 1,
+  });
 
-  // Custom external tooltip for bar charts
-  function customBarTooltip(context) {
-    // External custom tooltip
-    let tooltipEl = document.getElementById("chartjs-tooltip");
-
-    // Create element if it doesn't exist
-    if (!tooltipEl) {
-      tooltipEl = document.createElement("div");
-      tooltipEl.id = "chartjs-tooltip";
-      tooltipEl.innerHTML = "<table></table>";
-      document.body.appendChild(tooltipEl);
-    }
-
-    // Hide if no tooltip
-    const tooltipModel = context.tooltip;
-    if (tooltipModel.opacity === 0) {
-      tooltipEl.style.opacity = 0;
-      return;
-    }
-
-    // Set Text
-    if (tooltipModel.body) {
-      const chart = context.chart;
-      const dataIndex = tooltipModel.dataPoints[0].dataIndex;
-      const title = tooltipModel.title[0] || "";
-
-      // Format title based on chart type
-      let formattedTitle = title;
-      if (chart.canvas.id === "scoreStackedChart") {
-        const score = parseInt(title);
-        if (score === 10) {
-          formattedTitle = `Score: 10`;
-        } else {
-          formattedTitle = `Score: ${score}.0-${score}.9`;
-        }
-      }
-
-      // Get all values for this stack
-      let tableBody =
-        '<thead><tr><th colspan="2">' +
-        formattedTitle +
-        "</th></tr></thead><tbody>";
-      let stackTotal = 0;
-
-      chart.data.datasets.forEach((dataset, i) => {
-        if (dataset.data[dataIndex] && dataset.data[dataIndex] > 0) {
-          const value = dataset.data[dataIndex];
-          stackTotal += value;
-          const bgColor = dataset.backgroundColor;
-          const label = dataset.label || "";
-
-          tableBody +=
-            "<tr>" +
-            '<td style="padding-right:15px;"><span style="display:inline-block;width:12px;height:12px;background:' +
-            bgColor +
-            ';margin-right:8px;border-radius:2px;"></span>' +
-            label +
-            ":</td>" +
-            '<td style="text-align:right;font-weight:bold;">' +
-            value +
-            "</td>" +
-            "</tr>";
-        }
-      });
-
-      // Add total row
-      tableBody +=
-        '<tr class="total-row">' +
-        "<td>Total:</td>" +
-        '<td style="text-align:right;font-weight:bold;">' +
-        stackTotal +
-        "</td>" +
-        "</tr>";
-
-      tableBody += "</tbody>";
-
-      const tableRoot = tooltipEl.querySelector("table");
-      tableRoot.innerHTML = tableBody;
-    }
-
-    // Position and style the tooltip
-    const position = context.chart.canvas.getBoundingClientRect();
-
-    // Set tooltip styles
-    tooltipEl.style.opacity = 1;
-    tooltipEl.style.position = "absolute";
-    tooltipEl.style.left =
-      position.left + window.scrollX + tooltipModel.caretX + "px";
-    tooltipEl.style.top =
-      position.top + window.scrollY + tooltipModel.caretY + "px";
-    tooltipEl.style.transform = "translate(-50%, -100%)";
-    tooltipEl.style.pointerEvents = "none";
+  function formatDuration(totalMinutes) {
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+    if (!hours) return `${minutes} min`;
+    return minutes ? `${numberFormat.format(hours)} h ${minutes} min` : `${numberFormat.format(hours)} h`;
   }
 
-  // Custom external tooltip for pie charts
-  function customPieTooltip(context) {
-    // External custom tooltip
-    let tooltipEl = document.getElementById("chartjs-pie-tooltip");
-
-    // Create element if it doesn't exist
-    if (!tooltipEl) {
-      tooltipEl = document.createElement("div");
-      tooltipEl.id = "chartjs-pie-tooltip";
-      document.body.appendChild(tooltipEl);
-    }
-
-    // Hide if no tooltip
-    const tooltipModel = context.tooltip;
-    if (tooltipModel.opacity === 0) {
-      tooltipEl.style.opacity = 0;
-      return;
-    }
-
-    // Set Text
-    if (tooltipModel.body) {
-      const dataPoint = tooltipModel.dataPoints[0];
-      const label = dataPoint.label;
-      const value = dataPoint.raw;
-
-      // Calculate percentage
-      const dataset = context.chart.data.datasets[dataPoint.datasetIndex];
-      const total = dataset.data.reduce((sum, val) => sum + val, 0);
-      const percentage = Math.round((value / total) * 100);
-
-      // Create tooltip content
-      let tooltipContent = `
-        <div class="pie-label">${label}</div>
-        <div class="pie-value">Count: ${value}</div>
-        <div class="pie-percent">${percentage}%</div>
-      `;
-
-      tooltipEl.innerHTML = tooltipContent;
-    }
-
-    // Position and style the tooltip
-    const position = context.chart.canvas.getBoundingClientRect();
-
-    // Set tooltip styles
-    tooltipEl.style.opacity = 1;
-    tooltipEl.style.position = "absolute";
-    tooltipEl.style.left =
-      position.left + window.scrollX + tooltipModel.caretX + "px";
-    tooltipEl.style.top =
-      position.top + window.scrollY + tooltipModel.caretY + "px";
-    tooltipEl.style.transform = "translate(-50%, -100%)";
-    tooltipEl.style.pointerEvents = "none";
+  function readChartData(id) {
+    return JSON.parse(document.getElementById(id).textContent);
   }
 
-  // Common configuration for pie charts
-  const pieChartConfig = {
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: {
-      datalabels: {
-        color: "#D1D5DB",
-        font: { size: 12 },
-        formatter: (value, ctx) => {
-          // The label already includes the percent, so just show the label
-          const label = ctx.chart.data.labels[ctx.dataIndex];
-          return label;
+  function renderDistribution(listId, dataId, formatValue, showShare = false) {
+    const list = document.getElementById(listId);
+    if (!list) return;
+
+    const { labels, datasets: [series] } = readChartData(dataId);
+    const total = series.data.reduce((sum, value) => sum + value, 0);
+    labels.forEach((label, index) => {
+      const value = series.data[index];
+      const share = total ? value / total : 0;
+      const row = document.createElement("li");
+      row.className = "statistics-bar-row";
+
+      const name = document.createElement("span");
+      name.textContent = showShare ? `${label} (${percentFormat.format(share)})` : label;
+
+      const amount = document.createElement("span");
+      amount.className = "statistics-bar-value";
+      amount.textContent = formatValue(value);
+
+      const track = document.createElement("span");
+      track.className = "statistics-bar-track";
+      track.setAttribute("aria-hidden", "true");
+
+      const fill = document.createElement("span");
+      fill.className = "statistics-bar-fill";
+      fill.style.width = `${share * 100}%`;
+      fill.style.backgroundColor = series.backgroundColor[index];
+
+      track.append(fill);
+      row.append(name, amount, track);
+      list.append(row);
+    });
+  }
+
+  renderDistribution("media-type-bars", "media_type_distribution", (count) =>
+    `${numberFormat.format(count)} ${count === 1 ? "item" : "items"}`
+  );
+  renderDistribution("watch-time-bars", "watch_time_distribution", formatDuration, true);
+
+  const statusChart = document.getElementById("statusStackedChart");
+  if (statusChart) {
+    const data = readChartData("status_distribution");
+    data.datasets = data.datasets.filter((series) => series.data.some((value) => value > 0));
+
+    new Chart(statusChart, {
+      type: "bar",
+      data,
+      options: {
+        indexAxis: "y",
+        responsive: true,
+        maintainAspectRatio: false,
+        datasets: {
+          bar: { borderRadius: 4, maxBarThickness: 20 },
         },
-        textAlign: "center",
-        textStrokeColor: "rgba(0,0,0,0.5)",
-        textStrokeWidth: 2,
-        textShadowBlur: 5,
-        textShadowColor: "rgba(0,0,0,0.5)",
-        padding: 6,
-      },
-      legend: {
-        position: "bottom",
-        labels: {
-          color: "#D1D5DB",
-          padding: 20,
-          usePointStyle: true,
-          pointStyle: "rectRounded",
-          generateLabels: function (chart) {
-            // Use legend_labels from backend if present
-            const legendLabels = chart.data.legend_labels || [];
-            const original = Chart.overrides.pie.plugins.legend.labels.generateLabels;
-            const labels = original.call(this, chart);
-            if (legendLabels.length === labels.length) {
-              labels.forEach((label, i) => {
-                label.text = legendLabels[i];
-                label.strokeStyle = "transparent";
-              });
-            }
-            return labels;
+        scales: {
+          x: {
+            stacked: true,
+            beginAtZero: true,
+            border: { display: false },
+            grid: { color: gridColor, drawTicks: false },
+            ticks: { color: textColor, precision: 0, padding: 8, maxTicksLimit: 6 },
+          },
+          y: {
+            stacked: true,
+            border: { display: false },
+            grid: { display: false },
+            ticks: { color: textColor, padding: 8, autoSkip: false },
           },
         },
-        margin: { top: 20 },
-      },
-      tooltip: {
-        enabled: false,
-        external: customPieTooltip,
-      },
-    },
-    layout: { padding: { bottom: 10 } },
-    elements: {
-      arc: {
-        borderWidth: 1,
-        borderColor: "#d3d3d3",
-      },
-    },
-  };
-
-  // Common configuration for bar charts
-  const barChartConfig = {
-    responsive: true,
-    maintainAspectRatio: false,
-    scales: {
-      x: {
-        stacked: true,
-        grid: { color: "rgba(255, 255, 255, 0.1)" },
-        ticks: { color: "#D1D5DB" },
-      },
-      y: {
-        stacked: true,
-        beginAtZero: true,
-        grid: { color: "rgba(255, 255, 255, 0.1)" },
-        ticks: { color: "#D1D5DB", precision: 0 },
-      },
-    },
-    plugins: {
-      legend: {
-        position: "bottom",
-        labels: {
-          color: "#D1D5DB",
-          padding: 20,
-          boxWidth: 12,
-          boxHeight: 12,
-          usePointStyle: true,
-          pointStyle: "rectRounded",
-          textAlign: "center",
-          font: {
-            size: 12,
-            lineHeight: 0.1,
+        interaction: { mode: "index", axis: "y", intersect: false },
+        plugins: {
+          legend: {
+            position: "bottom",
+            labels: {
+              color: textColor,
+              usePointStyle: true,
+              pointStyle: "rectRounded",
+              padding: 12,
+              boxWidth: 10,
+            },
+          },
+          tooltip: {
+            filter: (item) => item.parsed.x > 0,
+            callbacks: {
+              footer(items) {
+                if (items.length > 1) {
+                  const total = items.reduce((sum, item) => sum + item.parsed.x, 0);
+                  return `Total: ${numberFormat.format(total)}`;
+                }
+                return "";
+              },
+            },
           },
         },
       },
-      tooltip: {
-        enabled: false, // Disable default tooltip
-        mode: "index",
-        external: customBarTooltip,
+    });
+  }
+
+  const watchTimeChart = document.getElementById("watchTimeChart");
+  if (watchTimeChart) {
+    const data = readChartData("watch_time_timeseries");
+    const fewPeriods = data.labels.length <= 7;
+
+    new Chart(watchTimeChart, {
+      type: "bar",
+      data,
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        datasets: {
+          bar: {
+            backgroundColor: "#6366f1",
+            borderRadius: 5,
+            maxBarThickness: 28,
+            barPercentage: fewPeriods ? 0.3 : 0.65,
+            categoryPercentage: fewPeriods ? 0.5 : 0.8,
+          },
+        },
+        interaction: { mode: "index", axis: "x", intersect: false },
+        scales: {
+          x: {
+            border: { display: false },
+            grid: { display: false },
+            ticks: {
+              color: textColor,
+              maxRotation: 0,
+              maxTicksLimit: 6,
+              callback(index) {
+                return this.getLabelForValue(index).replace(/^Semana /, "");
+              },
+            },
+          },
+          y: {
+            beginAtZero: true,
+            border: { display: false },
+            grid: { color: gridColor, drawTicks: false },
+            ticks: { color: textColor, padding: 8, precision: 0, maxTicksLimit: 6, callback: formatDuration },
+          },
+        },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: { label: (item) => formatDuration(item.parsed.y) },
+          },
+        },
       },
-      // Disable datalabels for bar charts
-      datalabels: {
-        display: false,
-      },
-    },
-    interaction: {
-      mode: "index",
-      intersect: false,
-    },
-  };
-
-  // Helper function to process stacked bar data
-  function processBarData(chartData) {
-    return {
-      labels: chartData.labels,
-      datasets: chartData.datasets
-        .map((dataset) => ({
-          label: dataset.label,
-          data: dataset.data,
-          backgroundColor: dataset.backgroundColor, // <- usar la clave correcta
-          borderColor: "rgba(255, 255, 255, 0.1)",
-          borderRadius: 6,
-          borderWidth: 1,
-        }))
-        .filter((dataset) => dataset.data.some((value) => value > 0)),
-    };
-  }
-
-  // Helper function to safely initialize charts
-  function initializeChartIfExists(elementId, chartType, data, options) {
-    const element = document.getElementById(elementId);
-    if (element) {
-      return new Chart(element.getContext("2d"), {
-        type: chartType,
-        data: data,
-        options: options,
-      });
-    }
-    return null;
-  }
-
-  // Create Media Type Distribution Chart
-  const mediaTypeDistributionElement = document.getElementById(
-    "media_type_distribution"
-  );
-  if (mediaTypeDistributionElement) {
-    const mediaTypeData = JSON.parse(mediaTypeDistributionElement.textContent);
-    initializeChartIfExists(
-      "mediaTypeChart",
-      "pie",
-      mediaTypeData,
-      pieChartConfig
-    );
-  }
-
-  // Create Status Distribution Chart
-  const statusPieChartElement = document.getElementById(
-    "status_pie_chart_data"
-  );
-  if (statusPieChartElement) {
-    const statusPieData = JSON.parse(statusPieChartElement.textContent);
-    initializeChartIfExists(
-      "statusChart",
-      "pie",
-      statusPieData,
-      pieChartConfig
-    );
-  }
-
-  // Create Status Stacked Bar Chart
-  const statusDistributionElement = document.getElementById(
-    "status_distribution"
-  );
-  if (statusDistributionElement) {
-    const statusData = JSON.parse(statusDistributionElement.textContent);
-    initializeChartIfExists(
-      "statusStackedChart",
-      "bar",
-      processBarData(statusData),
-      barChartConfig
-    );
-  }
-
-  // Create Score Stacked Bar Chart
-  const scoreDistributionElement =
-    document.getElementById("score_distribution");
-  if (scoreDistributionElement) {
-    const scoreData = JSON.parse(scoreDistributionElement.textContent);
-    const scoreChartOptions = JSON.parse(JSON.stringify(barChartConfig)); // Deep clone
-
-    // Add score-specific configurations
-    scoreChartOptions.scales.x.title = {
-      display: true,
-      text: "Score",
-      color: "#D1D5DB",
-      padding: { top: 10, bottom: 0 },
-    };
-
-    scoreChartOptions.scales.y.title = {
-      display: true,
-      text: "Number of Items",
-      color: "#D1D5DB",
-      padding: { top: 0, left: 10 },
-    };
-
-    scoreChartOptions.plugins.title = {
-      display: true,
-      text: `Average Score: ${scoreData.average_score} (${scoreData.total_scored
-        } ${scoreData.total_scored === 1 ? "item" : "items"})`,
-      color: "#D1D5DB",
-      padding: { bottom: 10 },
-      font: { size: 14 },
-    };
-
-    // Ensure tooltip is properly configured for score chart
-    scoreChartOptions.plugins.tooltip = {
-      enabled: false,
-      mode: "index",
-      intersect: false,
-      external: customBarTooltip,
-    };
-
-    initializeChartIfExists(
-      "scoreStackedChart",
-      "bar",
-      processBarData(scoreData),
-      scoreChartOptions
-    );
+    });
   }
 });

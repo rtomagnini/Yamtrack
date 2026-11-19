@@ -6,6 +6,11 @@
   Statistics - Yamtrack
 {% endblock title %}
 
+{% block extra_head %}
+  <link rel="stylesheet"
+        href="{% static 'css/statistics.css' %}{% get_static_file_mtime 'css/statistics.css' %}">
+{% endblock extra_head %}
+
 {% block content %}
   <div class="mb-8">
     <h1 class="text-3xl font-bold mb-2">Statistics</h1>
@@ -320,9 +325,7 @@
         <h2 class="text-xl font-semibold mb-4">Media Type Distribution</h2>
 
         {% if media_type_distribution.labels %}
-          <div class="h-80 flex justify-center items-center">
-            <canvas id="mediaTypeChart"></canvas>
-          </div>
+          <ul id="media-type-bars" class="statistics-bar-list statistics-distribution" role="list"></ul>
         {% else %}
           <div class="flex flex-col items-center justify-center py-16">
             <div class="bg-[#39404b] rounded-full p-4 w-16 h-16 mx-auto mb-4 flex items-center justify-center">
@@ -351,9 +354,7 @@
         <h2 class="text-xl font-semibold mb-4">Watch Time Distribution</h2>
 
         {% if watch_time_distribution_pie_chart_data.labels %}
-          <div class="h-80 flex justify-center items-center">
-            <canvas id="statusChart"></canvas>
-          </div>
+          <ul id="watch-time-bars" class="statistics-bar-list statistics-distribution" role="list"></ul>
         {% else %}
           <div class="flex flex-col items-center justify-center py-16">
             <div class="bg-[#39404b] rounded-full p-4 w-16 h-16 mx-auto mb-4 flex items-center justify-center">
@@ -381,8 +382,8 @@
         <h2 class="text-xl font-semibold mb-4">Status Distribution by Media Type</h2>
 
         {% if media_type_distribution.labels %}
-          <div class="h-80 flex justify-center items-center">
-            <canvas id="statusStackedChart"></canvas>
+          <div class="relative h-80">
+            <canvas id="statusStackedChart" role="img" aria-label="Status distribution by media type"></canvas>
           </div>
         {% else %}
           <div class="flex flex-col items-center justify-center py-16">
@@ -408,72 +409,21 @@
         {% endif %}
       </div>
 
-      <!-- Most Watched Shows Section -->
-      <div class="bg-[#2a2f35] rounded-lg p-6">
-        <h2 class="text-xl font-semibold mb-6 text-center text-white">Most Watched Shows</h2>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <!-- TV Shows Table -->
-          <div>
-            <h3 class="text-lg font-bold mb-4 text-white text-center">Top TV Shows</h3>
-            <div class="overflow-x-auto">
-              <table class="min-w-full border border-gray-700 rounded-lg overflow-hidden">
-                <thead>
-                  <tr class="bg-[#39404b]">
-                    <th class="px-4 py-2 text-left text-gray-300 font-semibold border-b border-gray-700">Show</th>
-                    <th class="px-4 py-2 text-right text-gray-300 font-semibold border-b border-gray-700">Count</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {% for show in top_tv_shows %}
-                    <tr class="border-b border-gray-700 last:border-b-0">
-                      <td class="px-4 py-2 text-white truncate">{{ show.title }}</td>
-                      <td class="px-4 py-2 text-white text-right font-bold">{{ show.count }}</td>
-                    </tr>
-                  {% empty %}
-                    <tr>
-                      <td colspan="2" class="text-center text-white py-8">No TV Shows watched</td>
-                    </tr>
-                  {% endfor %}
-                </tbody>
-              </table>
-            </div>
-          </div>
-          <!-- YouTube Channels Table -->
-          <div>
-            <h3 class="text-lg font-bold mb-4 text-white text-center">Top YouTube Channels</h3>
-            <div class="overflow-x-auto">
-              <table class="min-w-full border border-gray-700 rounded-lg overflow-hidden">
-                <thead>
-                  <tr class="bg-[#39404b]">
-                    <th class="px-4 py-2 text-left text-gray-300 font-semibold border-b border-gray-700">Channel</th>
-                    <th class="px-4 py-2 text-right text-gray-300 font-semibold border-b border-gray-700">Count</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {% for channel in top_youtube_channels %}
-                    <tr class="border-b border-gray-700 last:border-b-0">
-                      <td class="px-4 py-2 text-white truncate">{{ channel.channel_name }}</td>
-                      <td class="px-4 py-2 text-white text-right font-bold">{{ channel.count }}</td>
-                    </tr>
-                  {% empty %}
-                    <tr>
-                      <td colspan="2" class="text-center text-white py-8">No YouTube channels watched</td>
-                    </tr>
-                  {% endfor %}
-                </tbody>
-              </table>
-            </div>
-          </div>
+      <section id="most-watched" class="statistics-ranking bg-[#2a2f35] rounded-lg p-6" aria-labelledby="most-watched-title">
+        <h2 id="most-watched-title" class="text-xl font-semibold mb-4">Most Watched Shows</h2>
+        <div class="statistics-ranking-groups">
+          {% include "app/components/statistics_ranking.html" with heading="TV Shows" heading_id="top-tv-shows" unit="Episodes" entries=top_tv_shows empty_message="No TV shows watched" only %}
+          {% include "app/components/statistics_ranking.html" with heading="YouTube Channels" heading_id="top-youtube-channels" unit="Videos" entries=top_youtube_channels empty_message="No YouTube channels watched" only %}
         </div>
-      </div>
+      </section>
     </div>
 
 
-    <!-- Watch Time Line Chart Section -->
+    <!-- Watch Time Over Time Section -->
     <div class="bg-[#2a2f35] rounded-lg p-6">
       <h2 class="text-xl font-semibold mb-4">Watch Time Over Time</h2>
-      <div class="h-80 flex items-center justify-center">
-        <canvas id="watchTimeLineChart" style="width:100% !important; max-width:100% !important; height:100% !important; display:block;"></canvas>
+      <div class="relative h-80">
+        <canvas id="watchTimeChart" role="img" aria-label="Watch time over time"></canvas>
       </div>
       <div class="text-gray-400 text-xs mt-2">
         <span>Agrupado por día</span>
@@ -573,113 +523,10 @@
   <script src="{% static 'js/date-range.js' %}{% get_static_file_mtime 'js/date-range.js' %}"></script>
 
   <script src="{% static 'js/libraries/chartjs-4.4.9.min.js' %}"></script>
-  <script src="{% static 'js/libraries/chartjs-datalabels-2.0.0.min.js' %}"></script>
-
-  <!-- JSON data for charts -->
   {{ media_type_distribution|json_script:"media_type_distribution" }}
-  {{ watch_time_distribution_pie_chart_data|json_script:"status_pie_chart_data" }}
-  <script>
-    document.addEventListener('DOMContentLoaded', function() {
-      // Patch legend labels for Watch Time Distribution pie chart
-      const pieDataScript = document.getElementById('status_pie_chart_data');
-      if (pieDataScript) {
-        try {
-          const pieData = JSON.parse(pieDataScript.textContent);
-          if (pieData.legend_labels) {
-            const chartCanvas = document.getElementById('statusChart');
-            if (chartCanvas && chartCanvas.chart) {
-              chartCanvas.chart.data.legend_labels = pieData.legend_labels;
-              chartCanvas.chart.update();
-            }
-          }
-        } catch (e) {}
-      }
-    });
-  </script>
+  {{ watch_time_distribution_pie_chart_data|json_script:"watch_time_distribution" }}
   {{ status_distribution|json_script:"status_distribution" }}
-  {{ score_distribution|json_script:"score_distribution" }}
   {{ watch_time_timeseries|json_script:"watch_time_timeseries" }}
 
   <script src="{% static 'js/statistics-charts.js' %}{% get_static_file_mtime 'js/statistics-charts.js' %}"></script>
-      <script>
-        document.addEventListener('DOMContentLoaded', function() {
-          const data = JSON.parse(document.getElementById('watch_time_timeseries').textContent);
-          const ctx = document.getElementById('watchTimeLineChart').getContext('2d');
-          // Set unified blue color for all bars
-          const unifiedBlue = '#6366f1';
-          if (data && data.datasets && data.datasets.length > 0) {
-            data.datasets.forEach(ds => {
-              ds.backgroundColor = unifiedBlue;
-              ds.borderRadius = 6;
-              ds.borderWidth = 1;
-              ds.borderColor = 'rgba(255,255,255,0.1)';
-            });
-          }
-          // Dynamic bar thickness: thinner bars if few data points
-          let barPercentage = 0.5;
-          let categoryPercentage = 0.7;
-          if (data && data.labels && data.labels.length <= 7) {
-            barPercentage = 0.3;
-            categoryPercentage = 0.5;
-          }
-          new Chart(ctx, {
-            type: 'bar',
-            data: data,
-            options: {
-              responsive: true,
-              maintainAspectRatio: false,
-              plugins: {
-                legend: { display: false },
-                title: { display: false },
-                tooltip: {
-                  mode: 'index',
-                  intersect: false,
-                  callbacks: {
-                    label: function(context) {
-                      const value = context.parsed.y;
-                      const hours = Math.floor(value / 60);
-                      const minutes = value % 60;
-                      let label = '';
-                      if (hours > 0) {
-                        label += hours + 'h';
-                      }
-                      if (minutes > 0 || hours === 0) {
-                        label += minutes + 'm';
-                      }
-                      return label;
-                    }
-                  }
-                },
-                datalabels: { display: false }
-              },
-              interaction: { mode: 'nearest', axis: 'x', intersect: false },
-              scales: {
-                x: {
-                  display: true,
-                  title: { display: false },
-                  grid: { color: 'rgba(255,255,255,0.08)' },
-                  ticks: { color: '#D1D5DB' },
-                  barPercentage: barPercentage,
-                  categoryPercentage: categoryPercentage
-                },
-                y: {
-                  display: true,
-                  title: { display: true, text: 'Horas' },
-                  grid: { color: 'rgba(255,255,255,0.08)' },
-                  ticks: {
-                    display: true,
-                    color: '#D1D5DB',
-                    callback: function(value) {
-                      // value is in minutes, convert to hours
-                      const hours = value / 60;
-                      return hours % 1 === 0 ? hours + 'h' : '';
-                    },
-                    stepSize: 60
-                  }
-                }
-              }
-            }
-          });
-        });
-      </script>
 {% endblock js %}

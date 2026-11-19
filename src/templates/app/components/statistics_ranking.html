@@ -1,0 +1,24 @@
+<section class="min-w-0" aria-labelledby="{{ heading_id }}">
+  <div class="flex flex-wrap items-baseline justify-between gap-3 mb-3">
+    <h3 id="{{ heading_id }}" class="font-semibold">{{ heading }}</h3>
+    {% if entries %}<span class="text-sm text-gray-400">{{ unit }}</span>{% endif %}
+  </div>
+  {% if entries %}
+    {% with maximum=entries.0.count %}
+      <ol class="statistics-bar-list" role="list">
+        {% for entry in entries %}
+          {% firstof entry.title entry.channel_name as entry_name %}
+          <li class="statistics-bar-row">
+            <span class="truncate" title="{{ entry_name }}">{{ entry_name }}</span>
+            <span class="statistics-bar-value">{{ entry.count }}</span>
+            <span class="statistics-bar-track" aria-hidden="true">
+              <span class="statistics-bar-fill" style="width: {% widthratio entry.count maximum 100 %}%"></span>
+            </span>
+          </li>
+        {% endfor %}
+      </ol>
+    {% endwith %}
+  {% else %}
+    <p class="text-sm text-gray-400">{{ empty_message }}</p>
+  {% endif %}
+</section>
