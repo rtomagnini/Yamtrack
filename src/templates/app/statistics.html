@@ -223,7 +223,7 @@
           <h3 class="text-sm font-medium text-gray-400">Most Active Day</h3>
           {% if activity_data.stats.most_active_day %}
             <p class="text-2xl font-bold">{{ activity_data.stats.most_active_day }}</p>
-            <p class="text-sm text-gray-500">{{ activity_data.stats.most_active_day_percentage }}% of activity</p>
+            <p class="text-sm text-gray-500">{{ activity_data.stats.most_active_day_percentage }}% of total time</p>
           {% else %}
             <p class="text-2xl font-bold text-gray-500">--</p>
           {% endif %}
@@ -247,7 +247,7 @@
         </div>
         <div>
           <h3 class="text-sm font-medium text-gray-400">Current Streak</h3>
-          {% if activity_data.stats.most_active_day %}
+          {% if activity_data.stats.longest_streak %}
             <p class="text-2xl font-bold">
               {{ activity_data.stats.current_streak }} day{{ activity_data.stats.current_streak|pluralize }}
               <p class="text-sm text-gray-500">
@@ -296,8 +296,13 @@
               {% for week in activity_data.calendar_weeks %}
                 <div class="flex flex-col gap-1">
                   {% for day in week %}
-                    <div class="w-4 h-4 rounded-sm transition-colors duration-200 hover:ring-2 hover:ring-white {% if day.level == 0 %}bg-[#2f353e]{% elif day.level == 1 %}bg-indigo-700{% elif day.level == 2 %}bg-indigo-600{% elif day.level == 3 %}bg-indigo-500{% elif day.level == 4 %}bg-indigo-400{% endif %}"
-                         title="{{ day.date }}: {{ day.count }} activit{{ day.count|pluralize:"y,ies" }}"></div>
+                    {% if day.future %}
+                      <div class="w-4 h-4 rounded-sm border border-gray-600 opacity-40"
+                           title="{{ day.date }}: Future day"></div>
+                    {% else %}
+                      <div class="w-4 h-4 rounded-sm transition-colors duration-200 hover:ring-2 hover:ring-white {% if day.level == 0 %}bg-[#2f353e]{% elif day.level == 1 %}bg-indigo-700{% elif day.level == 2 %}bg-indigo-600{% elif day.level == 3 %}bg-indigo-500{% elif day.level == 4 %}bg-indigo-400{% endif %}"
+                           title="{{ day.date }}: {{ day.count }} item{{ day.count|pluralize }}"></div>
+                    {% endif %}
                   {% endfor %}
                 </div>
               {% endfor %}
@@ -308,13 +313,14 @@
         <!-- Legend -->
         <div class="flex items-center gap-2 pl-6 text-xs text-gray-400"
              :class="graphTooWide ? 'mb-5 mt-2' : 'mt-4'">
-          <span>Less</span>
+          <span>0{% if not activity_data.max_items %} items{% endif %}</span>
           <div class="w-4 h-4 rounded-sm bg-[#2f353e]"></div>
-          <div class="w-4 h-4 rounded-sm bg-indigo-700"></div>
-          <div class="w-4 h-4 rounded-sm bg-indigo-600"></div>
-          <div class="w-4 h-4 rounded-sm bg-indigo-500"></div>
-          <div class="w-4 h-4 rounded-sm bg-indigo-400"></div>
-          <span>More</span>
+          {% if activity_data.max_items %}
+            {% for level in activity_data.legend_levels %}
+              <div class="w-4 h-4 rounded-sm {% if level == 1 %}bg-indigo-700{% elif level == 2 %}bg-indigo-600{% elif level == 3 %}bg-indigo-500{% elif level == 4 %}bg-indigo-400{% endif %}"></div>
+            {% endfor %}
+            <span>{{ activity_data.max_items }} item{{ activity_data.max_items|pluralize }}</span>
+          {% endif %}
         </div>
       </div>
     </div>

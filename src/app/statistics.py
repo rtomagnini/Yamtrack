@@ -343,14 +343,37 @@ from django.db.models import (
     Prefetch,
     Q,
 )
+from django.db.models.functions import TruncDate
 from django.utils import timezone
 
 from app import media_type_config
 from app.metadata import display_metadata, runtime_expression
-from app.models import TV, BasicMedia, Episode, MediaManager, MediaTypes, Season, Status
+from app.models import (
+    TV,
+    BookSession,
+    ComicSession,
+    Episode,
+    GameSession,
+    MediaManager,
+    MediaTypes,
+    Movie,
+    Season,
+    Status,
+)
 from app.templatetags import app_tags
 
 logger = logging.getLogger(__name__)
+
+
+def get_consumption_querysets(user):
+    """Return the querysets and date fields counted as consumed items."""
+    return (
+        (Episode.objects.filter(related_season__user=user, end_date__isnull=False), "end_date"),
+        (Movie.objects.filter(user=user, end_date__isnull=False), "end_date"),
+        (ComicSession.objects.filter(comic__user=user), "session_date"),
+        (GameSession.objects.filter(game__user=user), "session_date"),
+        (BookSession.objects.filter(book__user=user), "session_date"),
+    )
 
 
 def get_user_media(user, start_date, end_date):
@@ -463,28 +486,16 @@ def get_user_media(user, start_date, end_date):
         user,
         "for all time" if start_date is None else f"from {start_date} to {end_date}",
     )
-    # Calculate total items watched/read/played (count sessions in timeline, not accumulated progress)
-    from app.models import ComicSession, GameSession, BookSession
-    
-    if start_date is None and end_date is None:
-        watched_episodes = Episode.objects.filter(related_season__user=user, end_date__isnull=False)
-        watched_movies_qs = apps.get_model("app", "movie").objects.filter(user=user, end_date__isnull=False)
-        comic_sessions = ComicSession.objects.filter(comic__user=user)
-        game_sessions = GameSession.objects.filter(game__user=user)
-        book_sessions = BookSession.objects.filter(book__user=user)
+    consumption = get_consumption_querysets(user)
+    if start_date is not None or end_date is not None:
+        querysets = tuple(
+            queryset.filter(**{f"{field}__range": (start_date, end_date)})
+            for queryset, field in consumption
+        )
     else:
-        watched_episodes = Episode.objects.filter(related_season__user=user, end_date__isnull=False, end_date__range=(start_date, end_date))
-        watched_movies_qs = apps.get_model("app", "movie").objects.filter(user=user, end_date__isnull=False, end_date__range=(start_date, end_date))
-        comic_sessions = ComicSession.objects.filter(comic__user=user, session_date__range=(start_date, end_date))
-        game_sessions = GameSession.objects.filter(game__user=user, session_date__range=(start_date, end_date))
-        book_sessions = BookSession.objects.filter(book__user=user, session_date__range=(start_date, end_date))
-
-    episodes_watched = watched_episodes.count()
-    movies_watched = watched_movies_qs.count()
-    comics_read = comic_sessions.count()
-    games_played = game_sessions.count()
-    books_read = book_sessions.count()
-    items_watched = episodes_watched + movies_watched + comics_read + games_played + books_read
+        querysets = tuple(queryset for queryset, _ in consumption)
+    watched_episodes, watched_movies_qs, comic_sessions, game_sessions, book_sessions = querysets
+    items_watched = sum(queryset.count() for queryset in querysets)
 
     episode_minutes = watched_episodes.select_related("item").aggregate(total=models.Sum(runtime_expression(user)))["total"] or 0
     movie_minutes = watched_movies_qs.select_related("item").aggregate(total=models.Sum(runtime_expression(user)))["total"] or 0
@@ -915,116 +926,68 @@ def time_line_sort_key(media):
     return timezone.localdate(media.start_date)
 
 
+def get_daily_consumption(user):
+    """Count watched episodes and movies and reading and play sessions by local date."""
+    counts = defaultdict(int)
+    for queryset, field in get_consumption_querysets(user):
+        days = queryset.order_by().values(day=TruncDate(field)).annotate(count=models.Count("pk"))
+        for day in days:
+            counts[day["day"]] += day["count"]
+    return counts
+
+
 def get_activity_data(user, start_date, end_date):
-    """Get daily activity counts for the last year."""
-    if end_date is None:
-        end_date = timezone.localtime()
+    """Build a weekly calendar and streaks from daily consumption."""
+    today = timezone.localdate()
+    end_date = end_date or timezone.localtime()
+    end_day = end_date.date()
+    date_counts = get_daily_consumption(user)
 
-    activity_start_date = start_date
-    if start_date is not None:
-        selected_days = (end_date.date() - start_date.date()).days + 1
-        if selected_days <= 90:
-            minimum_start_date = end_date - datetime.timedelta(days=89)
-            activity_start_date = min(start_date, minimum_start_date)
-
-    start_date_aligned = get_aligned_monday(activity_start_date)
-
-    combined_data = get_filtered_historical_data(start_date_aligned, end_date, user)
-
-    # update start_date values from historical records if not provided
     if start_date is None:
-        dates = [item["date"] for item in combined_data]
-        start_date = datetime.datetime.combine(
-            min(dates) if dates else timezone.localdate(),
-            datetime.time.min,
-        )
-        start_date_aligned = get_aligned_monday(start_date)
+        first_day = min((day for day in date_counts if day <= min(today, end_day)), default=end_day)
+    else:
+        first_day = min(start_date.date(), end_day - datetime.timedelta(days=89))
 
-    # Aggregate counts by date
-    date_counts = {}
-    for item in combined_data:
-        date = item["date"]
-        date_counts[date] = date_counts.get(date, 0) + item["count"]
+    monday = first_day - datetime.timedelta(days=first_day.weekday())
+    sunday = end_day + datetime.timedelta(days=6 - end_day.weekday())
+    days = [monday + datetime.timedelta(days=i) for i in range((sunday - monday).days + 1)]
 
-    date_range = [
-        start_date_aligned.date() + datetime.timedelta(days=x)
-        for x in range((end_date.date() - start_date_aligned.date()).days + 1)
+    positive_counts = sorted({date_counts.get(day, 0) for day in days if day <= today} - {0})
+    # Spread distinct totals across the color scale so equal counts always match.
+    levels = {
+        count: 1 + index * 3 // max(len(positive_counts) - 1, 1)
+        for index, count in enumerate(positive_counts)
+    }
+
+    calendar_days = []
+    for day in days:
+        count = date_counts.get(day, 0)
+        calendar_days.append({
+            "date": day.isoformat(),
+            "count": count,
+            "level": levels.get(count, 0),
+            "future": day > today,
+        })
+    calendar_weeks = [calendar_days[i : i + 7] for i in range(0, len(calendar_days), 7)]
+    months = [
+        (month, sum(1 for _ in weeks))
+        for month, weeks in itertools.groupby(days[::7], key=lambda day: day.strftime("%b"))
     ]
 
-    # Calculate activity statistics
-    most_active_day_start_date = start_date
-    if start_date is not None:
-        selected_days = (end_date.date() - start_date.date()).days + 1
-        if selected_days < 28:
-            minimum_start_date = end_date - datetime.timedelta(days=27)
-            most_active_day_start_date = min(start_date, minimum_start_date)
-
-    most_active_day, day_percentage = calculate_day_of_week_stats(
-        user,
-        most_active_day_start_date,
-        end_date,
+    active_day_start = (
+        min(start_date, end_date - datetime.timedelta(days=27)) if start_date else None
     )
-
-    # Calculate current_streak globally (without date filters)
-    global_data = get_filtered_historical_data(None, timezone.localtime(), user)
-    global_date_counts = {}
-    for item in global_data:
-        date = item["date"]
-        global_date_counts[date] = global_date_counts.get(date, 0) + item["count"]
-    current_streak, _ = calculate_streaks(
-        global_date_counts,
-        timezone.localdate(),
+    most_active_day, day_percentage = calculate_day_of_week_stats(user, active_day_start, end_date)
+    current_streak, longest_streak = calculate_streaks(
+        {day: count for day, count in date_counts.items() if day <= today},
+        today,
     )
-
-    # Calculate longest_streak globally (without date filters)
-    _, longest_streak = calculate_streaks(
-        global_date_counts,
-        timezone.localdate(),
-    )
-
-    # Create complete date range including padding days
-    activity_data = [
-        {
-            "date": current_date.strftime("%Y-%m-%d"),
-            "count": date_counts.get(current_date, 0),
-            "level": get_level(date_counts.get(current_date, 0)),
-        }
-        for current_date in date_range
-    ]
-
-    # Format data into calendar weeks
-    calendar_weeks = [activity_data[i : i + 7] for i in range(0, len(activity_data), 7)]
-
-    # Generate months list with their Monday counts
-    months = []
-    mondays_per_month = []
-    current_month = date_range[0].strftime("%b")
-    monday_count = 0
-
-    for current_date in date_range:
-        if current_date.weekday() == 0:  # Monday
-            month = current_date.strftime("%b")
-
-            if current_month != month:
-                if current_month is not None:
-                    if monday_count > 1:
-                        months.append(current_month)
-                        mondays_per_month.append(monday_count)
-                    else:
-                        months.append("")
-                        mondays_per_month.append(monday_count)
-                current_month = month
-                monday_count = 0
-
-            monday_count += 1
-    # For the last month
-    if monday_count > 1:
-        months.append(current_month)
-        mondays_per_month.append(monday_count)
 
     return {
         "calendar_weeks": calendar_weeks,
-        "months": list(zip(months, mondays_per_month, strict=False)),
+        "months": months,
+        "max_items": positive_counts[-1] if positive_counts else 0,
+        "legend_levels": sorted(set(levels.values())),
         "stats": {
             "most_active_day": most_active_day,
             "most_active_day_percentage": day_percentage,
@@ -1032,61 +995,6 @@ def get_activity_data(user, start_date, end_date):
             "longest_streak": longest_streak,
         },
     }
-
-
-def get_aligned_monday(datetime_obj):
-    """Get the Monday of the week containing the given date."""
-    if datetime_obj is None:
-        return None
-
-    days_to_subtract = datetime_obj.weekday()  # 0=Monday, 6=Sunday
-    return datetime_obj - datetime.timedelta(days=days_to_subtract)
-
-
-def get_level(count):
-    """Calculate intensity level (0-4) based on count."""
-    thresholds = [0, 3, 6, 9]
-    for i, threshold in enumerate(thresholds):
-        if count <= threshold:
-            return i
-    return 4
-
-
-def get_filtered_historical_data(start_date, end_date, user):
-    """Return [{"date": datetime.date, "count": int}]."""
-    historical_models = BasicMedia.objects.get_historical_models()
-    local_tz = timezone.get_current_timezone()
-
-    day_buckets = defaultdict(int)
-
-
-    for model_name in historical_models:
-        # Map 'historicalyoutube' to 'historicaltv' to avoid LookupError
-        mapped_model_name = "historicaltv" if model_name == "historicalyoutube" else model_name
-        try:
-            model = apps.get_model("app", mapped_model_name)
-        except LookupError:
-            logger.warning(f"Model {mapped_model_name} not found in app; skipping.")
-            continue
-
-        qs = model.objects.filter(history_user_id=user)
-
-        if start_date:
-            qs = qs.filter(history_date__gte=start_date)
-        if end_date:
-            qs = qs.filter(history_date__lte=end_date)
-
-        # We only need the timestamp, stream results to keep memory usage flat
-        for ts in qs.values_list("history_date", flat=True).iterator(chunk_size=2_000):
-            aware_ts = timezone.localtime(ts, local_tz)
-            day_buckets[aware_ts.date()] += 1
-
-    combined_data = [
-        {"date": day, "count": count} for day, count in day_buckets.items()
-    ]
-
-    logger.info("%s - built historical data (%s rows)", user, len(combined_data))
-    return combined_data
 
 
 def calculate_day_of_week_stats(user, start_date, end_date):

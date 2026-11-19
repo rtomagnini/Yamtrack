@@ -1629,6 +1629,8 @@ def statistics(request):
             end_date = timezone.make_aware(
                 datetime.combine(end_date, datetime.max.time()),
             )
+        else:
+            start_date = end_date = None
 
     # Get all user media data in a single operation
     user_media, media_count, items_watched, total_watch_minutes = stats.get_user_media(

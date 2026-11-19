@@ -1,5 +1,5 @@
 import datetime
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
@@ -757,112 +757,37 @@ class StatisticsTests(TestCase):
         self.assertEqual(months[1], "February 2025")
         self.assertEqual(months[2], "January 2025")
 
-    def test_get_level(self):
-        """Test the get_level function."""
-        self.assertEqual(statistics.get_level(0), 0)
-        self.assertEqual(statistics.get_level(1), 1)
-        self.assertEqual(statistics.get_level(3), 1)
-        self.assertEqual(statistics.get_level(4), 2)
-        self.assertEqual(statistics.get_level(6), 2)
-        self.assertEqual(statistics.get_level(7), 3)
-        self.assertEqual(statistics.get_level(9), 3)
-        self.assertEqual(statistics.get_level(10), 4)
-        self.assertEqual(statistics.get_level(20), 4)
-
-    @patch("app.statistics.get_filtered_historical_data")
-    def test_get_activity_data(self, mock_get_filtered_data):
-        """Test the get_activity_data function."""
-        start_date = datetime.datetime(2025, 1, 1, 0, 0, tzinfo=datetime.UTC)
-        end_date = datetime.datetime(2025, 3, 31, 0, 0, tzinfo=datetime.UTC)
-
-        # Mock the historical data
-        mock_get_filtered_data.return_value = [
-            {"date": datetime.date(2025, 1, 1), "count": 2},
-            {"date": datetime.date(2025, 1, 2), "count": 1},
-            {"date": datetime.date(2025, 1, 3), "count": 3},
-            {"date": datetime.date(2025, 1, 4), "count": 0},
-            {"date": datetime.date(2025, 1, 5), "count": 5},
-            {"date": datetime.date(2025, 1, 6), "count": 2},
-            {"date": datetime.date(2025, 1, 7), "count": 1},
-            {"date": datetime.date(2025, 1, 8), "count": 4},
-            {"date": datetime.date(2025, 1, 9), "count": 0},
-            {"date": datetime.date(2025, 1, 10), "count": 0},
-            {"date": datetime.date(2025, 3, 31), "count": 3},  # Last day
-        ]
-
-        result = statistics.get_activity_data(self.user, start_date, end_date)
-
-        # Check that the function returns the expected structure
-        self.assertIn("calendar_weeks", result)
-        self.assertIn("months", result)
-        self.assertIn("stats", result)
-
-        # Check stats
-        stats = result["stats"]
-        self.assertIn("most_active_day", stats)
-        self.assertIn("most_active_day_percentage", stats)
-        self.assertIn("current_streak", stats)
-        self.assertIn("longest_streak", stats)
-
-        # Check calendar data
-        calendar_weeks = result["calendar_weeks"]
-        self.assertIsInstance(calendar_weeks, list)
-
-        # Verify the first day is aligned to Monday
-        first_week = calendar_weeks[0]
-        self.assertEqual(len(first_week), 7)  # 7 days in a week
-
-        # Check months data
-        months = result["months"]
-        self.assertIsInstance(months, list)
-
-    @patch("app.statistics.BasicMedia.objects.get_historical_models")
-    @patch("app.statistics.apps.get_model")
-    def test_get_filtered_historical_data(self, mock_get_model, mock_get_hist_models):
-        """Test the get_filtered_historical_data function."""
+    def test_activity_calendar_matches_consumption_summary(self):
         start = datetime.datetime(2025, 1, 1, tzinfo=datetime.UTC)
-        end = datetime.datetime(2025, 3, 31, tzinfo=datetime.UTC)
+        end = datetime.datetime(2025, 1, 1, 23, 59, tzinfo=datetime.UTC)
+        _, _, summary_count, _ = statistics.get_user_media(self.user, start, end)
 
-        mock_get_hist_models.return_value = ["historicalmodel1", "historicalmodel2"]
+        calendar = statistics.get_activity_data(self.user, start, end)
+        weeks = calendar["calendar_weeks"]
+        days = {day["date"]: day for week in weeks for day in week}
 
-        def build_fake_model(timestamps):
-            qs = MagicMock()
-            qs.filter.return_value = qs
-            qs.values_list.return_value.iterator.return_value = timestamps
-            model = MagicMock()
-            model.objects = qs
-            return model
+        self.assertTrue(all(len(week) == 7 for week in weeks))
+        self.assertEqual(weeks[0][0]["date"], "2024-09-30")
+        self.assertEqual(weeks[-1][-1]["date"], "2025-01-05")
+        self.assertEqual(days["2025-01-01"]["count"], summary_count)
+        self.assertEqual(summary_count, 1)
+        self.assertEqual(days["2024-09-30"]["count"], 0)
 
-        model1_ts = [
-            datetime.datetime(2025, 1, 5, 12, tzinfo=datetime.UTC),
-            datetime.datetime(2025, 1, 5, 18, tzinfo=datetime.UTC),
-            datetime.datetime(2025, 1, 10, 9, tzinfo=datetime.UTC),
-            datetime.datetime(2025, 1, 10, 10, tzinfo=datetime.UTC),
-            datetime.datetime(2025, 1, 10, 11, tzinfo=datetime.UTC),
-        ]
-        model2_ts = [
-            datetime.datetime(2025, 2, 15, 8, tzinfo=datetime.UTC),
-            datetime.datetime(2025, 3, 20, 17, tzinfo=datetime.UTC),
-            datetime.datetime(2025, 3, 20, 18, tzinfo=datetime.UTC),
-            datetime.datetime(2025, 3, 20, 19, tzinfo=datetime.UTC),
-            datetime.datetime(2025, 3, 20, 20, tzinfo=datetime.UTC),
-        ]
+    @patch("app.statistics.timezone.localdate", return_value=datetime.date(2025, 1, 2))
+    @patch("app.statistics.get_daily_consumption")
+    def test_activity_calendar_scales_visible_counts(self, mock_daily_consumption, _mock_today):
+        dates = [datetime.date(2024, 12, 30) + datetime.timedelta(days=i) for i in range(5)]
+        mock_daily_consumption.return_value = dict(zip(dates, (12, 20, 25, 36, 100), strict=True))
+        start = datetime.datetime(2025, 1, 2, tzinfo=datetime.UTC)
+        end = datetime.datetime(2025, 1, 2, 23, 59, tzinfo=datetime.UTC)
 
-        fake_model1 = build_fake_model(model1_ts)
-        fake_model2 = build_fake_model(model2_ts)
-        mock_get_model.side_effect = lambda _, name: (
-            fake_model1 if name == "historicalmodel1" else fake_model2
-        )
+        calendar = statistics.get_activity_data(self.user, start, end)
+        week = calendar["calendar_weeks"][-1]
 
-        result = statistics.get_filtered_historical_data(start, end, self.user)
-
-        expected = [
-            {"date": datetime.date(2025, 1, 5), "count": 2},
-            {"date": datetime.date(2025, 1, 10), "count": 3},
-            {"date": datetime.date(2025, 2, 15), "count": 1},
-            {"date": datetime.date(2025, 3, 20), "count": 4},
-        ]
-        self.assertCountEqual(result, expected)
+        self.assertEqual([day["level"] for day in week[:4]], [1, 2, 3, 4])
+        self.assertEqual(calendar["max_items"], 36)
+        self.assertTrue(week[4]["future"])
+        self.assertEqual(calendar["stats"]["current_streak"], 4)
 
     def test_calculate_day_of_week_stats(self):
         """Test the calculate_day_of_week_stats function."""
