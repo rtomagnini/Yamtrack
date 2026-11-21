@@ -267,14 +267,22 @@ class IntegrationTest(StaticLiveServerTestCase):
         with (
             patch("app.providers.services.get_media_metadata", side_effect=get_metadata),
             patch("app.providers.tmdb.fetch_season_multilingual", return_value={}),
+            patch("app.providers.tmdb.tv_with_seasons", return_value=metadata),
         ):
-            self.page.goto(f"{self.live_server_url}{details}?filter=unwatched", wait_until="domcontentloaded")
+            url = f"{self.live_server_url}{details}?filter=unwatched&sort=desc"
+            self.page.goto(url, wait_until="domcontentloaded")
+            navigation = self.page.evaluate("performance.timeOrigin")
+            self.page.evaluate("window.nextEpisodeCard = document.getElementById('season-episode-3')")
             started_at = timezone.now()
             watch = self.page.get_by_role("button", name="Mark episode 2 watched")
             watch.click()
             expect(watch).to_have_count(0)
             tracked = season.episodes.get(item__episode_number=2)
             self.assertGreaterEqual(tracked.end_date, started_at)
+            expect(self.page.locator("#season-tracking-history")).to_contain_text("2 / 3")
+            self.assertTrue(self.page.evaluate(
+                "window.nextEpisodeCard === document.getElementById('season-episode-3')",
+            ))
 
             self.page.get_by_role("button", name="Mark episode 3 watched").click()
             expect(self.page.get_by_role("heading", name="Complete Season?")).to_be_visible()
@@ -282,9 +290,61 @@ class IntegrationTest(StaticLiveServerTestCase):
             self.page.get_by_role("button", name="No, keep as In Progress").click()
             expect(self.page.get_by_role("button", name="Mark episode 3 watched")).to_have_count(0)
             self.assertTrue(season.episodes.filter(item__episode_number=3).exists())
+            expect(self.page).to_have_url(url)
+            self.assertEqual(self.page.evaluate("performance.timeOrigin"), navigation)
 
         season.refresh_from_db()
         self.assertEqual(season.status, Status.IN_PROGRESS.value)
+
+    def test_season_watch_refresh_preserves_scroll_and_retry_does_not_record_again(self):
+        season = _create_home_season(
+            self.user, "101", range(1, 10), watched=(1,), source=Sources.TMDB.value,
+        )
+        metadata = self._season_metadata(season, 9)
+
+        def get_metadata(media_type, *args):
+            return metadata["season/1"] if media_type == "season" else metadata
+
+        def fail_refresh_once(route):
+            if route.request.headers.get("x-season-fragment") == "1":
+                route.fulfill(status=503, body="Temporarily unavailable")
+            else:
+                route.continue_()
+
+        details = reverse("season_details", args=[Sources.TMDB.value, "101", "show-101", 1])
+        with (
+            patch("app.providers.services.get_media_metadata", side_effect=get_metadata),
+            patch("app.providers.tmdb.fetch_season_multilingual", return_value={}),
+            patch("app.providers.tmdb.tv_with_seasons", return_value=metadata),
+        ):
+            self.page.goto(
+                f"{self.live_server_url}{details}?filter=unwatched&sort=desc",
+                wait_until="domcontentloaded",
+            )
+            navigation = self.page.evaluate("performance.timeOrigin")
+            self.page.route(
+                lambda url: url.startswith(f"{self.live_server_url}{details}?"),
+                fail_refresh_once,
+                times=1,
+            )
+            watch = self.page.get_by_role("button", name="Mark episode 6 watched")
+            watch.click()
+            expect(self.page.get_by_text("Watch saved. The episode list could not refresh.")).to_be_visible()
+            self.assertEqual(season.episodes.filter(item__episode_number=6).count(), 1)
+            self.page.evaluate("""() => {
+              const card = document.getElementById('season-episode-6');
+              window.scrollBy(0, card.getBoundingClientRect().top - 160);
+              window.watchCardTop = card.getBoundingClientRect().top;
+              document.querySelector('#season-watch-refresh button').click();
+            }""")
+            expect(watch).to_have_count(0)
+            expect(self.page.locator("#season-watch-refresh")).to_be_hidden()
+            self.page.wait_for_function(
+                """Math.abs(document.getElementById('season-episode-5').getBoundingClientRect().top
+                   - window.watchCardTop) < 2""",
+            )
+            self.assertEqual(season.episodes.filter(item__episode_number=6).count(), 1)
+            self.assertEqual(self.page.evaluate("performance.timeOrigin"), navigation)
 
     def test_tv_manual(self):
         """Test the manual creation of a TV show."""

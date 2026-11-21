@@ -539,6 +539,7 @@ def media_details(request, source, media_type, media_id, title):  # noqa: ARG001
 
 
 @require_GET
+@vary_on_headers("X-Season-Fragment")
 def season_details(request, source, media_id, title, season_number):  # noqa: ARG001 For URL
     """Return the details page for a season."""
     tv_with_seasons_metadata = services.get_media_metadata(
@@ -619,6 +620,10 @@ def season_details(request, source, media_id, title, season_number):  # noqa: AR
         "current_sort": sort_order,
         "episodes_page": episodes_page,
     }
+    if request.headers.get("X-Season-Fragment") == "1":
+        response = render(request, "app/components/season_watch_fragments.html", context)
+        response.headers["X-Season-Fragment"] = "1"
+        return response
     return render(request, "app/media_details.html", context)
 
 
@@ -1104,6 +1109,9 @@ def episode_save(request):
             ).first()
             if watched_item:
                 queue_watched(watched_item, request.user)
+
+    if request.headers.get("X-Season-Watch") == "1":
+        return JsonResponse({"saved": True})
 
     # If HTMX request, return only the updated card HTML
     if request.headers.get('HX-Request'):

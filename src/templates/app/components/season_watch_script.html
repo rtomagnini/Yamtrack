@@ -1,0 +1,90 @@
+<script>
+  (() => {
+    const warning = document.getElementById('season-watch-refresh');
+    const retryButton = warning.querySelector('button');
+    const regionIds = ['season-tracker-control', 'season-tracking-history', 'season-episodes'];
+    let retryRefresh;
+
+    window.refreshSeasonWatch = async (number, refocus) => {
+      retryRefresh = () => window.refreshSeasonWatch(number, refocus);
+      try {
+        const response = await fetch(window.location.href, {
+          cache: 'no-store',
+          headers: { 'X-Season-Fragment': '1' },
+        });
+        if (!response.ok || response.headers.get('X-Season-Fragment') !== '1') throw new Error();
+
+        const fragment = new DOMParser().parseFromString(await response.text(), 'text/html');
+        const updates = regionIds.map(id => [document.getElementById(id), fragment.getElementById(id)]);
+        if (updates.some(([current, replacement]) => !current || !replacement)) throw new Error();
+
+        const [episodes, updatedEpisodes] = updates[2];
+        const currentCards = [...episodes.querySelectorAll('[data-episode-card]')];
+        const updatedCards = new Map(
+          [...updatedEpisodes.querySelectorAll('[data-episode-card]')].map(card => [card.id, card])
+        );
+        const watchedId = `season-episode-${number}`;
+        const watchedCard = document.getElementById(watchedId);
+        const successor = currentCards.slice(currentCards.indexOf(watchedCard) + 1)
+          .find(card => updatedCards.has(card.id));
+        const anchor = watchedCard && (updatedCards.get(watchedId) || (successor && updatedCards.get(successor.id)));
+        const anchorTop = watchedCard?.getBoundingClientRect().top;
+        const scrollPosition = [window.scrollX, window.scrollY];
+        const activeElement = document.activeElement;
+        const restoreFocus = refocus && (activeElement === document.body
+          || activeElement === retryButton || watchedCard?.contains(activeElement));
+
+        for (const card of currentCards) {
+          const updated = updatedCards.get(card.id);
+          if (card.id !== watchedId && updated
+            && card.dataset.watchCount === updated.dataset.watchCount
+            && card.dataset.latestWatch === updated.dataset.latestWatch) {
+            updated.setAttribute('hx-preserve', '');
+          }
+        }
+        for (const [current, updated] of updates) {
+          htmx.swap(current, updated.outerHTML, { swapStyle: 'outerHTML' });
+        }
+
+        const url = new URL(window.location.href);
+        const page = updatedEpisodes.dataset.page;
+        if (url.searchParams.has('page') && url.searchParams.get('page') !== page) {
+          if (page === '1') url.searchParams.delete('page');
+          else url.searchParams.set('page', page);
+          window.history.replaceState(window.history.state, '', url);
+        }
+
+        warning.hidden = true;
+        delete warning.dataset.refreshRequired;
+        requestAnimationFrame(() => {
+          const anchorCard = anchor && document.getElementById(anchor.id);
+          if (anchorCard) window.scrollBy(0, anchorCard.getBoundingClientRect().top - anchorTop);
+          else window.scrollTo(...scrollPosition);
+
+          if (restoreFocus) {
+            const list = document.getElementById('season-episodes');
+            const card = anchorCard || list.querySelector('[data-episode-card]');
+            const focusTarget = card?.querySelector('[data-watch-now], button[title="Track Episode"]')
+              || list.querySelector('[data-episode-heading]');
+            focusTarget?.focus({ preventScroll: true });
+          }
+        });
+      } catch {
+        warning.dataset.refreshRequired = 'true';
+        warning.hidden = false;
+      }
+    };
+
+    retryButton.addEventListener('click', async () => {
+      if (warning.dataset.busy) return;
+      warning.dataset.busy = 'true';
+      retryButton.disabled = true;
+      try {
+        await retryRefresh();
+      } finally {
+        delete warning.dataset.busy;
+        retryButton.disabled = false;
+      }
+    });
+  })();
+</script>
