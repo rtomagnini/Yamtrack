@@ -4,11 +4,15 @@
 {% for media in media_list.items %}
   {% with item=media.item|metadata_for:request.user %}
   <div class="bg-[#2a2f35] rounded-lg overflow-hidden shadow-lg transition-all duration-300"
-       x-data="{ actionsOpen: false, trackOpen: false, listsOpen: false, historyOpen: false }"
+       x-data="{ actionsOpen: false, posterTapped: false, posterHovered: false, trackOpen: false, listsOpen: false, historyOpen: false }"
        x-init="['trackOpen', 'listsOpen', 'historyOpen'].forEach(name => $watch(name, open => {
          if (!open) $refs.actions.focus({ preventScroll: true });
        }))">
-    <div class="relative">
+    <div class="relative"
+         @pointerenter="posterHovered = $event.pointerType === 'mouse'"
+         @pointerleave="posterHovered = false"
+         @click.outside="actionsOpen = false; posterTapped = false"
+         @keydown.escape="if (actionsOpen) { $event.stopPropagation(); actionsOpen = false; $refs.actions.focus() }">
       {% with poster=item.image|default:IMG_NONE %}
         {% with srcset=poster|home_poster_srcset %}
           <img alt="{{ item }}"
@@ -38,7 +42,7 @@
       {% endwith %}
 
       {% if media.next_event and not media.next_event.is_max_datetime %}
-        <div class="absolute top-2 left-1/2 -translate-x-1/2 flex items-center gap-1.5 bg-black/80 px-2 py-1.5 rounded-md shadow-md whitespace-nowrap max-w-[98%]">
+        <div class="absolute bottom-2 left-1/2 -translate-x-1/2 flex items-center gap-1.5 bg-black/80 px-2 py-1.5 rounded-md shadow-md whitespace-nowrap max-w-[98%]">
           <svg xmlns="http://www.w3.org/2000/svg"
                width="24"
                height="24"
@@ -63,30 +67,29 @@
         </div>
       {% endif %}
 
-      <a href="{{ item|media_url }}" class="absolute inset-0" tabindex="-1" aria-hidden="true"></a>
-    </div>
+      <a href="{{ item|media_url }}" class="absolute inset-0" tabindex="-1" aria-hidden="true"
+         data-home-poster-link
+         @click="if (!posterTapped && ($event.pointerType === 'touch' || $event.pointerType === 'pen' || (!$event.pointerType && !matchMedia('(hover: hover)').matches))) {
+           $event.preventDefault();
+           posterTapped = true;
+         }"></a>
 
-    <div class="p-3 space-y-3">
-      <div class="relative flex items-center gap-1"
-           @click.outside="actionsOpen = false"
-           @keydown.escape.stop="if (actionsOpen) { actionsOpen = false; $refs.actions.focus() }">
-        <a href="{{ item|media_url }}"
-           class="min-w-0 flex-1 text-sm font-semibold text-white hover:text-indigo-400 line-clamp-1"
-           title="{{ item }}">{{ item }}</a>
+      <div>
         <button type="button"
                 x-ref="actions"
                 aria-label="Actions for {{ item }}"
                 aria-controls="home-actions-{{ item.media_type }}-{{ media.pk }}"
                 :aria-expanded="actionsOpen.toString()"
                 @click="actionsOpen = !actionsOpen; if (actionsOpen) $nextTick(() => $refs.firstAction.focus())"
-                class="home-card-actions text-gray-300 hover:bg-gray-700 hover:text-white rounded-md cursor-pointer">
+                :class="{ 'home-card-actions-visible': posterHovered || posterTapped || actionsOpen }"
+                class="home-card-actions absolute top-2 right-2 bg-black/80 hover:bg-gray-700 text-white rounded-md cursor-pointer">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
             <circle cx="5" cy="12" r="2"></circle><circle cx="12" cy="12" r="2"></circle><circle cx="19" cy="12" r="2"></circle>
           </svg>
         </button>
         <div id="home-actions-{{ item.media_type }}-{{ media.pk }}"
              x-cloak x-show="actionsOpen"
-             class="absolute bottom-full left-0 right-0 z-20 mb-2 py-1 bg-[#1a1d20] rounded-md shadow-lg border border-gray-700">
+             class="home-card-menu absolute left-2 right-2 z-20 py-1 bg-[#1a1d20] rounded-md shadow-lg border border-gray-700">
           <button type="button"
                   x-ref="firstAction"
                   title="Add to tracker"
@@ -109,6 +112,12 @@
                   class="block w-full px-3 py-2 text-left text-sm hover:bg-gray-700 cursor-pointer">History</button>
         </div>
       </div>
+    </div>
+
+    <div class="p-3 space-y-3">
+      <a href="{{ item|media_url }}"
+         class="text-sm font-semibold text-white hover:text-indigo-400 line-clamp-1"
+         title="{{ item }}">{{ item }}</a>
       <div id="progress-{{ item.media_type }}-{{ media.id }}">
         {% include "app/components/progress_changer.html" with media=media csrf_token=csrf_token MediaTypes=MediaTypes only %}
       </div>

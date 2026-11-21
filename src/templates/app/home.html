@@ -14,8 +14,18 @@
       flex: none;
     }
     .home-card-actions {
-      width: 2rem;
-      height: 2rem;
+      width: 2.75rem;
+      height: 2.75rem;
+      opacity: 0;
+      pointer-events: none;
+    }
+    .home-card-actions-visible,
+    .home-card-actions:focus-visible {
+      opacity: 1;
+      pointer-events: auto;
+    }
+    .home-card-menu {
+      top: 3.5rem;
     }
     .home-progress-controls {
       gap: .25rem;
