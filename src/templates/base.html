@@ -22,6 +22,68 @@
     <link rel="stylesheet"
           type="text/css"
           href="{% static 'css/main.css' %}{% get_static_file_mtime 'css/main.css' %}">
+    <style>
+      .app-header-tools {
+        display: flex;
+        align-items: center;
+        gap: .5rem;
+        flex: 1;
+        min-width: 0;
+        max-width: 42rem;
+      }
+      .app-header-search {
+        display: grid;
+        grid-template-columns: 2.75rem minmax(0, 1fr) auto;
+        align-items: center;
+        flex: 1;
+        min-width: 0;
+        border-radius: 999px;
+        background: #272c31;
+      }
+      .app-header-search input {
+        width: 100%;
+        min-width: 0;
+        height: 2.75rem;
+        padding-inline-end: .25rem;
+        font-size: .875rem;
+      }
+      .app-header-search select {
+        width: clamp(4.25rem, 22vw, 9rem);
+        min-width: 0;
+        min-height: 2.75rem;
+        margin-inline-end: .5rem;
+        padding-inline-start: .5rem;
+        border-inline-start: 1px solid #424a53;
+        background: #272c31;
+        color: #e5e7eb;
+        font-size: .875rem;
+        cursor: pointer;
+      }
+      .app-header-icon {
+        flex: none;
+        width: 2.75rem;
+        height: 2.75rem;
+        color: #d1d5db;
+        border-radius: 50%;
+        cursor: pointer;
+      }
+      .app-header-icon svg {
+        margin: auto;
+      }
+      .app-header-refresh {
+        background: #272c31;
+      }
+      .app-header-icon:hover {
+        background: #343a40;
+        color: white;
+      }
+      .app-header-search input:focus-visible,
+      .app-header-search select:focus-visible,
+      .app-header-icon:focus-visible {
+        outline: 2px solid #818cf8;
+        outline-offset: -2px;
+      }
+    </style>
 
     <script src="{% static 'js/libraries/htmx-2.0.4.min.js' %}"></script>
     <script defer src="{% static 'js/libraries/alpinejs-3.14.9.min.js' %}"></script>
@@ -177,8 +239,10 @@
             <div class="container mx-auto px-4">
               <div class="flex items-center justify-between lg:justify-center h-16">
                 {# Mobile: sidebar toggle button #}
-                <button @click="isMobileMenuOpen = !isMobileMenuOpen"
-                        class="lg:hidden pe-3 text-gray-400 hover:text-white transition-colors duration-200">
+                <button type="button" aria-label="Main menu"
+                        :aria-expanded="isMobileMenuOpen"
+                        @click="isMobileMenuOpen = !isMobileMenuOpen"
+                        class="app-header-icon app-header-menu lg:hidden">
                   <svg xmlns="http://www.w3.org/2000/svg"
                        width="24"
                        height="24"
@@ -202,82 +266,51 @@
                   {% firstof media_type user.last_search_type as search_type %}
                 {% endif %}
 
-                {# Search bar #}
-                <div class="relative w-full max-w-2xl">
+                {% get_search_media_types user as search_types %}
+                <div class="app-header-tools">
                   <form method="get"
                         action="{% url 'search' %}"
-                        x-data=" { isOpen: false, selectedType: { display: '{{ search_type|media_type_readable_plural }}', value: '{{ search_type }}' }, mediaTypes: {% get_search_media_types user as search_types %}{{ search_types }}, getPlaceholder() { return `Search ${this.selectedType.display.toLowerCase()}...` } }">
-                    <div class="flex">
-                      <div class="relative flex-grow">
-                        {# Search input #}
-                        <input type="search"
-                               name="q"
-                               value="{{ request.GET.q }}"
-                               :placeholder="getPlaceholder()"
-                               class="w-full py-2 pl-10 pr-4 text-sm text-gray-300 bg-[#272c31] rounded-l-md focus:outline-none focus:ring-2 focus:ring-[#4a9eff] focus:ring-inset placeholder-gray-500">
-                        <button type="submit"
-                                class="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-white transition-colors duration-200 focus:outline-none cursor-pointer">
-                          <svg xmlns="http://www.w3.org/2000/svg"
-                               width="24"
-                               height="24"
-                               viewBox="0 0 24 24"
-                               fill="none"
-                               stroke="currentColor"
-                               stroke-width="2"
-                               stroke-linecap="round"
-                               stroke-linejoin="round"
-                               class="w-5 h-5">
-                            <circle cx="11" cy="11" r="8"></circle>
-                            <path d="m21 21-4.3-4.3"></path>
-                          </svg>
-                        </button>
-                      </div>
-
-                      <input type="hidden" name="media_type" :value="selectedType.value">
-
-                      {# Media type dropdown #}
-                      <button type="button"
-                              @click="isOpen = !isOpen"
-                              @click.away="isOpen = false"
-                              class="flex items-center justify-between max-w-[180px] sm:max-w-none sm:w-44 px-2 sm:px-4 py-2 text-sm text-gray-300 bg-[#272c31] rounded-r-md focus:outline-none focus:ring-2 focus:ring-[#4a9eff] focus:ring-inset hover:bg-[#2a2e33] transition-colors duration-200 cursor-pointer">
-                        <span class="truncate sm:whitespace-normal" x-text="selectedType.display"></span>
-                        <svg class="w-4 h-4 ml-2"
-                             fill="none"
-                             stroke="currentColor"
-                             viewBox="0 0 24 24"
-                             xmlns="http://www.w3.org/2000/svg">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
-                        </svg>
-                      </button>
-                      <!-- Refresh Button -->
-                      <button type="button"
-                              class="flex items-center justify-center ml-2 p-2 bg-[#272c31] rounded-md hover:bg-[#2a2e33] transition-colors duration-200 cursor-pointer"
-                              title="Recargar página"
-                              onclick="location.reload()">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5 text-gray-300">
-                          <path d="M21 2v6h-6"/>
-                          <path d="M3 12a9 9 0 0 1 15-7.36L21 8"/>
-                          <path d="M21 12a9 9 0 1 1-9-9" opacity="0.3"/>
-                        </svg>
-                      </button>
-                      <ul x-cloak
-                          x-show="isOpen"
-                          @keydown.escape.window="isOpen = false"
-                          x-transition:enter="transition ease-out duration-100"
-                          x-transition:enter-start="transform opacity-0 scale-95"
-                          x-transition:enter-end="transform opacity-100 scale-100"
-                          x-transition:leave="transition ease-in duration-75"
-                          x-transition:leave-start="transform opacity-100 scale-100"
-                          x-transition:leave-end="transform opacity-0 scale-95"
-                          class="absolute z-20 py-1 mt-12 overflow-auto text-sm text-gray-300 bg-[#2a2e33] rounded-md shadow-lg right-0 w-[128px]">
-                        <template x-for="type in mediaTypes" :key="type.value">
-                          <li @click="selectedType = type; isOpen = false"
-                              class="px-4 py-2 cursor-pointer hover:bg-[#343a40] transition duration-150 ease-in-out"
-                              x-text="type.display"></li>
-                        </template>
-                      </ul>
-                    </div>
+                        role="search"
+                        class="app-header-search"
+                        x-data="{
+                          placeholder: '',
+                          updatePlaceholder(select) {
+                            const label = select.selectedOptions[0]?.textContent.trim().toLowerCase();
+                            this.placeholder = label ? 'Search ' + label + '...' : 'Search...';
+                          }
+                        }">
+                    <button type="submit" aria-label="Search" class="app-header-icon">
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
+                           stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                        <circle cx="11" cy="11" r="7"></circle>
+                        <path d="m20 20-4-4"></path>
+                      </svg>
+                    </button>
+                    <input type="search"
+                           name="q"
+                           aria-label="Search query"
+                           value="{{ request.GET.q }}"
+                           placeholder="Search {{ search_type|media_type_readable_plural|lower }}..."
+                           :placeholder="placeholder || undefined">
+                    <select name="media_type" aria-label="Media type"
+                            x-init="updatePlaceholder($el)"
+                            @change="updatePlaceholder($el)">
+                      {% for type in search_types %}
+                        <option value="{{ type.value }}" {% if type.value == search_type %}selected{% endif %}>{{ type.display }}</option>
+                      {% endfor %}
+                    </select>
                   </form>
+                  <button type="button" class="app-header-icon app-header-refresh"
+                          title="Recargar página" aria-label="Recargar página"
+                          onclick="location.reload()">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
+                         stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                         stroke-linejoin="round" aria-hidden="true">
+                      <path d="M21 2v6h-6"/>
+                      <path d="M3 12a9 9 0 0 1 15-7.36L21 8"/>
+                      <path d="M21 12a9 9 0 1 1-9-9"/>
+                    </svg>
+                  </button>
                 </div>
               </div>
             </div>

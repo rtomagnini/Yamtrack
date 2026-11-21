@@ -45,6 +45,29 @@ class IntegrationTest(StaticLiveServerTestCase):
         cls.browser.close()
         cls.playwright.stop()
 
+    def test_header_search_and_reload_on_mobile(self):
+        with self.browser.new_context(
+            viewport={"width": 320, "height": 720}, is_mobile=True, has_touch=True,
+        ) as context:
+            context.add_cookies(self.page.context.cookies())
+            page = context.new_page()
+            page.goto(f"{self.live_server_url}/")
+            refresh = page.get_by_role("button", name="Recargar página")
+            expect(refresh).to_be_in_viewport(ratio=1)
+            with page.expect_navigation(timeout=5000):
+                refresh.tap(timeout=5000)
+            expect(page).to_have_url(f"{self.live_server_url}/")
+
+            media_type = page.get_by_role("combobox", name="Media type")
+            media_type.select_option("manga")
+            query = page.get_by_role("searchbox", name="Search query")
+            expect(query).to_have_attribute("placeholder", "Search manga...")
+            query.fill("Berserk")
+            search_url = f"{self.live_server_url}{reverse('search')}?q=Berserk&media_type=manga"
+            page.route(search_url, lambda route: route.fulfill(body="Search received"))
+            query.press("Enter")
+            expect(page).to_have_url(search_url)
+
     @patch("app.providers.services.get_media_metadata", side_effect=OSError)
     def test_season_progress_edit(self, provider):
         """Track pending episodes from the Home without a page reload."""
