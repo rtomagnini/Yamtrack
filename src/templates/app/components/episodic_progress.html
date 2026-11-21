@@ -1,0 +1,51 @@
+<div x-data="homeProgress"
+     data-progress-url="{% url 'progress_edit' media.item.media_type media.id %}"
+     data-csrf-token="{{ csrf_token }}"
+     data-next-episode="{{ media.pending_episode_numbers.0|default_if_none:'' }}"
+     data-pending-videos="{{ media.pending_videos|default_if_none:'' }}">
+  <div x-show="!confirming" class="flex items-center justify-center space-x-4">
+    <button type="button"
+            aria-label="Remove last watch"
+            class="p-1 bg-gray-700 hover:bg-gray-600 rounded-md cursor-pointer disabled:opacity-50"
+            {% if not watched %}disabled{% endif %}
+            :disabled="busy || {{ watched|yesno:'false,true' }}"
+            data-progress-action="decrease"
+            @click="change('decrease')">
+      <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+        <path d="M5 12h14"></path>
+      </svg>
+    </button>
+    <div class="text-xs text-indigo-400 font-medium text-center">
+      {% if media.item.media_type == MediaTypes.SEASON.value %}
+        {% if media.max_progress is None %}
+          <span title="Episode availability has not been synced">{{ media.progress }} watched</span>
+        {% else %}
+          <span title="Episodes watched / available">{{ media.progress }} / {{ media.max_progress|default:media.progress }}</span>
+        {% endif %}
+      {% else %}
+        {{ media.pending_videos }} video{{ media.pending_videos|pluralize }}
+      {% endif %}
+    </div>
+    <button type="button"
+            aria-label="{% if media.item.media_type == MediaTypes.SEASON.value %}Watch next episode{% else %}Watch next video{% endif %}"
+            class="p-1 bg-gray-700 hover:bg-gray-600 rounded-md cursor-pointer disabled:opacity-50"
+            {% if not media.pending_episode_numbers and not media.pending_videos %}disabled{% endif %}
+            :disabled="busy || {% if media.pending_episode_numbers or media.pending_videos %}false{% else %}true{% endif %}"
+            data-progress-action="increase"
+            @click="change('increase')">
+      <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+        <path d="M5 12h14M12 5v14"></path>
+      </svg>
+    </button>
+  </div>
+  {% if media.item.media_type == MediaTypes.SEASON.value %}
+    <div x-cloak x-show="confirming" class="text-center">
+      <p class="text-xs text-gray-300 mb-3">Mark this season as completed?</p>
+      <div class="flex justify-center gap-2">
+        <button type="button" class="px-2 py-1 bg-gray-600 text-white rounded text-xs" :disabled="busy" @click="change('increase', 'no')">No</button>
+        <button type="button" class="px-2 py-1 bg-indigo-600 text-white rounded text-xs" :disabled="busy" @click="change('increase', 'yes')">Yes</button>
+      </div>
+    </div>
+  {% endif %}
+  <p x-cloak x-show="error" x-text="error" role="alert" class="text-xs text-red-300 mt-2"></p>
+</div>

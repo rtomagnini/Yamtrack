@@ -1,0 +1,24 @@
+{% load app_tags %}
+
+<div id="home-pager-{{ media_type }}" data-home-pager>
+  <input type="hidden" form="home-page-state" name="shown_{{ media_type }}" value="{{ media_list.shown }}" data-home-count>
+  {% if media_list.shown < media_list.total %}
+    <div class="mt-6 flex justify-center items-center gap-3">
+      <button type="button"
+              data-home-load-more
+              aria-label="Show more {{ media_type|media_type_readable_plural }}"
+              hx-get="{% url 'home' %}?sort={{ current_sort }}&amp;load_media_type={{ media_type }}&amp;offset={{ media_list.shown }}&amp;signature={{ media_list.signature }}"
+              hx-target="#home-pager-{{ media_type }}"
+              hx-swap="outerHTML show:none"
+              hx-indicator="#loading-indicator-{{ media_type }}"
+              hx-disabled-elt="this"
+              class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md transition-colors cursor-pointer">
+        Show more
+      </button>
+      <span id="loading-indicator-{{ media_type }}" class="htmx-indicator text-sm" role="status">Loading…</span>
+    </div>
+    <p data-home-error hidden role="alert" class="mt-2 text-sm text-red-300 text-center">
+      Could not load more. Try again.
+    </p>
+  {% endif %}
+</div>

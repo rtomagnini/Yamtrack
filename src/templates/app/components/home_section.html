@@ -1,0 +1,17 @@
+{% load app_tags %}
+
+{% if media_list.items %}
+  <section id="home-section-{{ media_type }}"
+           data-home-section
+           data-sort="{{ current_sort }}"
+           aria-labelledby="home-heading-{{ media_type }}"
+           tabindex="-1">
+    <h2 id="home-heading-{{ media_type }}" class="text-xl font-semibold mb-4">
+      {{ media_type|media_type_readable_plural }}
+    </h2>
+    <div id="media-grid-{{ media_type }}" class="media-grid">
+      {% include "app/components/home_grid.html" %}
+    </div>
+    {% include "app/components/home_pager.html" %}
+  </section>
+{% endif %}

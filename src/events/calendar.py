@@ -3,12 +3,15 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 import requests
+from django.conf import settings
 from django.core.cache import cache
+from django.db import transaction
 from django.db.models import Exists, OuterRef, Q, Subquery
 from django.utils import timezone
+from simple_history.utils import bulk_update_with_history
 
 from app import media_type_config
-from app.models import Item, MediaTypes, Sources
+from app.models import TV, Item, MediaTypes, Season, Sources, Status
 from app.providers import comicvine, services, tmdb
 from events.models import Event, SentinelDatetime
 
@@ -25,8 +28,9 @@ def fetch_releases(user=None, items_to_process=None):
         return "No items to process"
 
     events_bulk = process_items(items_to_process)
-    items_updated = save_events(events_bulk)
-    cleanup_invalid_events(events_bulk)
+    with transaction.atomic():
+        items_updated = save_events(events_bulk)
+        cleanup_invalid_events(events_bulk)
 
     return generate_final_message(items_to_process, items_updated)
 
@@ -173,14 +177,17 @@ def get_items_to_process(user=None):
     media_types = [
         choice.value
         for choice in MediaTypes
-        if choice not in [MediaTypes.SEASON, MediaTypes.EPISODE]
+        if choice not in {
+            MediaTypes.SEASON, MediaTypes.EPISODE, MediaTypes.YOUTUBE,
+            MediaTypes.YOUTUBE_VIDEO,
+        }
     ]
 
     query = Q()
 
     for media_type in media_types:
         # Build query for this media type
-        media_query = Q(**{f"{media_type}__isnull": False})
+        media_query = Q(media_type=media_type, **{f"{media_type}__isnull": False})
 
         # Add user filter if specified
         if user:
@@ -193,16 +200,16 @@ def get_items_to_process(user=None):
 
     items = Item.objects.filter(query).distinct()
 
-    return filter_items_to_fetch(items)
+    return filter_items_to_fetch(items, user=user)
 
 
-def filter_items_to_fetch(items):
+def filter_items_to_fetch(items, *, user=None):
     """Filter items that need calendar events according to specific rules.
 
     1. Always include if item has no events
     2. For items with events:
        - If comic: only include if latest event is within 365 days
-       - If TV show: ignore if all seasons aired in the past
+       - If TV show: include tracked in-progress seasons or future events
        - Other media types: only include if has future events
     """
     now = timezone.now()
@@ -211,7 +218,9 @@ def filter_items_to_fetch(items):
 
     # Handle TV items with a single optimized query
     tv_items = items.filter(media_type=MediaTypes.TV.value)
-    tv_items_to_include = get_tv_items_to_include(tv_items, now, sentinel_datetime)
+    tv_items_to_include = get_tv_items_to_include(
+        tv_items, now, sentinel_datetime, user=user,
+    )
 
     # Subquery for future events
     future_events = Event.objects.filter(
@@ -243,7 +252,7 @@ def filter_items_to_fetch(items):
     return annotated.filter(tv_q | comic_q | other_q).distinct()
 
 
-def get_tv_items_to_include(tv_items, now, sentinel_datetime):
+def get_tv_items_to_include(tv_items, now, sentinel_datetime, *, user=None):
     """Return list of TV item ids that passed the season checks."""
     if not tv_items.exists():
         return []
@@ -262,12 +271,21 @@ def get_tv_items_to_include(tv_items, now, sentinel_datetime):
 
     tv_items_to_include = []
 
-    for tv_item in tv_items:
+    active_seasons = Season.objects.filter(
+        Q(status=Status.IN_PROGRESS.value) | Q(home_completion_pending=True),
+        related_tv__item_id=OuterRef("pk"),
+        item__source=Sources.TMDB.value,
+    )
+    if user:
+        active_seasons = active_seasons.filter(user=user)
+
+    for tv_item in tv_items.annotate(has_active_season=Exists(active_seasons)):
         key = (tv_item.media_id, tv_item.source)
         show_events = events_by_show.get(key, [])
 
         if (
-            not show_events
+            tv_item.has_active_season
+            or not show_events
             or any(ev.datetime >= now for ev in show_events)
             or all(ev.datetime == sentinel_datetime for ev in show_events)
         ):
@@ -396,9 +414,9 @@ def get_anime_schedule_bulk(media_ids):
 def process_tv(tv_item, events_bulk):
     """Process TV item and create events for all seasons and episodes.
 
-    Only processes:
+    Processes:
     1. Seasons with no events
-    2. Currently airing seasons (identified by next_episode_season)
+    2. Seasons that are currently airing or tracked as in progress
     """
     logger.info("Processing TV show: %s", tv_item)
 
@@ -450,12 +468,17 @@ def get_seasons_to_process(tv_item):
 
     # Create a set of seasons that already have events
     seasons_with_events = {event.item.season_number for event in existing_season_events}
+    tracked_season_numbers = set(
+        Season.objects.filter(
+            Q(status=Status.IN_PROGRESS.value) | Q(home_completion_pending=True),
+            related_tv__item=tv_item,
+        ).values_list("item__season_number", flat=True),
+    )
 
     seasons_to_process = []
 
     for season_num in season_numbers:
-        if season_num not in seasons_with_events:
-            # No events for this season, process it
+        if season_num not in seasons_with_events or season_num in tracked_season_numbers:
             seasons_to_process.append(season_num)
         elif next_episode_season and season_num >= next_episode_season:
             # Current or future season, process it
@@ -480,6 +503,13 @@ def process_tv_seasons(tv_item, seasons_to_process, events_bulk):
     process_seasons_data = tmdb.tv_with_seasons(
         tv_item.media_id,
         seasons_to_process,
+    )
+    last_season_number = max(
+        (
+            season["season_number"]
+            for season in process_seasons_data.get("related", {}).get("seasons", [])
+        ),
+        default=None,
     )
 
     # Process each season that needs processing
@@ -507,8 +537,70 @@ def process_tv_seasons(tv_item, seasons_to_process, events_bulk):
             },
         )
 
+        if tv_item.source == Sources.TMDB.value and season_metadata.get("episodes"):
+            _sync_watched_season(season_item, season_metadata["episodes"], last_season_number)
+
         # Process episodes for this season
         process_season_episodes(season_item, season_metadata, events_bulk)
+
+
+@transaction.atomic
+def _sync_watched_season(season_item, episodes, last_season_number):
+    """Fill local episode metadata and reconcile completion requested from Home."""
+    catalog = {episode["episode_number"]: episode for episode in episodes}
+    episode_items = (
+        Item.objects.select_for_update()
+        .filter(
+            Q(air_date__isnull=True) | Q(runtime__isnull=True) | Q(image__in=["", settings.IMG_NONE]),
+            media_type=MediaTypes.EPISODE.value,
+            media_id=season_item.media_id,
+            source=season_item.source,
+            season_number=season_item.season_number,
+            episode_number__in=catalog,
+        )
+    )
+    updated_items = []
+    for item in episode_items:
+        fields = Item.episode_metadata_fields(catalog[item.episode_number])
+        changed = False
+        if item.air_date is None and fields["air_date"] is not None:
+            item.air_date = fields["air_date"]
+            changed = True
+        if item.runtime is None and fields["runtime"] is not None:
+            item.runtime = fields["runtime"]
+            changed = True
+        if item.image in {"", settings.IMG_NONE} and fields["image"] not in {
+            None, "", settings.IMG_NONE,
+        }:
+            item.image = fields["image"]
+            changed = True
+        if changed:
+            updated_items.append(item)
+    if updated_items:
+        Item.objects.bulk_update(updated_items, ["air_date", "runtime", "image"])
+
+    if last_season_number is None:
+        return
+    pending = Season.objects.select_related("related_tv").select_for_update().filter(
+        item=season_item, home_completion_pending=True,
+    )
+    for season in pending:
+        if season.status == Status.COMPLETED.value:
+            watched = set(
+                season.episodes.filter(end_date__isnull=False)
+                .values_list("item__episode_number", flat=True),
+            )
+            if not catalog.keys() <= watched:
+                season.status = Status.IN_PROGRESS.value
+                bulk_update_with_history([season], Season, fields=["status"])
+            elif (
+                season_item.season_number == last_season_number
+                and season.related_tv.status == Status.IN_PROGRESS.value
+            ):
+                tv = season.related_tv
+                tv.status = Status.COMPLETED.value
+                bulk_update_with_history([tv], TV, fields=["status"])
+        Season.objects.filter(pk=season.pk).update(home_completion_pending=False)
 
 
 def process_season_episodes(item, metadata, events_bulk):

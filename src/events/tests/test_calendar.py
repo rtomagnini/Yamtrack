@@ -12,6 +12,7 @@ from app.models import (
     Anime,
     Book,
     Comic,
+    Episode,
     Item,
     Manga,
     MediaTypes,
@@ -27,6 +28,7 @@ from events.calendar import (
     fetch_releases,
     get_anime_schedule_bulk,
     get_items_to_process,
+    get_seasons_to_process,
     get_tvmaze_episode_map,
     process_anime_bulk,
     process_comic,
@@ -336,6 +338,124 @@ class ReloadCalendarTaskTests(TestCase):
         # Should include items from both users
         self.assertIn(self.anime_item, all_items)
         self.assertIn(user2_item, all_items)
+
+    @patch("events.calendar.tmdb.tv")
+    def test_tracked_season_with_only_past_events_is_refreshed(self, mock_tv):
+        """Keep active seasons eligible even when their stored dates are all past."""
+        mock_tv.return_value = {"related": {"seasons": [{"season_number": 1}]}}
+        Event.objects.create(
+            item=self.season_item, content_number=1,
+            datetime=timezone.now() - datetime.timedelta(days=30),
+        )
+        channel = Item.objects.create(
+            media_id="12345", source=Sources.YOUTUBE.value,
+            media_type=MediaTypes.YOUTUBE.value, title="YouTube channel",
+        )
+        TV.objects.bulk_create([TV(user=self.user, item=channel)])
+
+        self.assertNotIn(self.tv_item, get_items_to_process(self.user))
+        self.assertEqual(get_seasons_to_process(self.tv_item), [])
+        Season.objects.filter(item=self.season_item).update(status=Status.IN_PROGRESS.value)
+
+        items = get_items_to_process(self.user)
+        self.assertIn(self.tv_item, items)
+        self.assertNotIn(channel, items)
+        self.assertEqual(get_seasons_to_process(self.tv_item), [1])
+
+        mock_tv.side_effect = OSError
+        fetch_releases(items_to_process=[self.tv_item])
+        self.assertTrue(Event.objects.filter(item=self.season_item, content_number=1).exists())
+
+    @patch("events.calendar.tmdb.tv")
+    @patch("events.calendar.tmdb.tv_with_seasons")
+    def test_calendar_enriches_offline_watch_and_confirms_completion(self, season_api, tv_api):
+        """Retry after an outage, enriching the same watched item in place."""
+        season = Season.objects.get(item=self.season_item)
+        TV.objects.filter(pk=season.related_tv_id).update(status=Status.IN_PROGRESS.value)
+        Season.objects.filter(pk=season.pk).update(
+            status=Status.COMPLETED.value, home_completion_pending=True,
+        )
+        Event.objects.create(
+            item=self.season_item, content_number=1,
+            datetime=timezone.now() - datetime.timedelta(days=30),
+        )
+        item = Item.objects.create(
+            media_id=self.tv_item.media_id, source=Sources.TMDB.value,
+            media_type=MediaTypes.EPISODE.value, title=self.tv_item.title,
+            season_number=1, episode_number=1,
+        )
+        watch = Episode.objects.bulk_create([
+            Episode(item=item, related_season=season, end_date=timezone.now()),
+        ])[0]
+        self.assertIn(self.tv_item, get_items_to_process(self.user))
+
+        tv_api.side_effect = OSError
+        fetch_releases(items_to_process=[self.tv_item])
+        season.refresh_from_db()
+        self.assertTrue(season.home_completion_pending)
+
+        tv_api.side_effect = None
+        tv_api.return_value = {"related": {"seasons": [{"season_number": 1}]}}
+        season_api.return_value = {
+            **tv_api.return_value,
+            "season/1": {
+                "image": self.season_item.image,
+                "season_number": 1,
+                "episodes": [{
+                    "episode_number": 1, "air_date": "2008-01-20",
+                    "runtime": 58, "still_path": "/pilot.jpg",
+                }],
+            },
+        }
+        fetch_releases(items_to_process=[self.tv_item])
+
+        item.refresh_from_db()
+        season.refresh_from_db()
+        self.assertEqual(item.air_date, datetime.date(2008, 1, 20))
+        self.assertEqual(item.runtime, 58)
+        self.assertTrue(item.image.endswith("/pilot.jpg"))
+        self.assertEqual(season.episodes.get().pk, watch.pk)
+        self.assertFalse(season.home_completion_pending)
+        self.assertEqual(season.related_tv.status, Status.COMPLETED.value)
+
+    @patch("events.calendar.tmdb.tv")
+    @patch("events.calendar.tmdb.tv_with_seasons")
+    def test_calendar_reopens_offline_completion_if_catalog_has_more_episodes(
+        self, season_api, tv_api,
+    ):
+        """A stale cached finale must not complete a season with more episodes."""
+        season = Season.objects.get(item=self.season_item)
+        TV.objects.filter(pk=season.related_tv_id).update(status=Status.IN_PROGRESS.value)
+        Season.objects.filter(pk=season.pk).update(
+            status=Status.COMPLETED.value, home_completion_pending=True,
+        )
+        item = Item.objects.create(
+            media_id=self.tv_item.media_id, source=Sources.TMDB.value,
+            media_type=MediaTypes.EPISODE.value, title=self.tv_item.title,
+            season_number=1, episode_number=1,
+        )
+        Episode.objects.bulk_create([
+            Episode(item=item, related_season=season, end_date=timezone.now()),
+        ])
+        tv_api.return_value = {"related": {"seasons": [{"season_number": 1}]}}
+        season_api.return_value = {
+            **tv_api.return_value,
+            "season/1": {
+                "image": self.season_item.image, "season_number": 1,
+                "episodes": [
+                    {"episode_number": 1, "air_date": "2008-01-20"},
+                    {"episode_number": 2, "air_date": "2008-01-27"},
+                ],
+            },
+        }
+
+        fetch_releases(items_to_process=[self.tv_item])
+        season.refresh_from_db()
+        self.assertEqual(season.status, Status.IN_PROGRESS.value)
+        self.assertEqual(season.related_tv.status, Status.IN_PROGRESS.value)
+        self.assertFalse(season.home_completion_pending)
+        self.assertEqual(season.episodes.count(), 1)
+        self.assertTrue(Event.objects.filter(item=self.season_item, content_number=2).exists())
 
     @patch("events.calendar.tmdb.tv")
     @patch("events.calendar.tmdb.tv_with_seasons")

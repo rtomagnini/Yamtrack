@@ -1,20 +1,38 @@
 {% load app_tags %}
+{% url 'home' as home_url %}
 
 {% for media in media_list.items %}
   {% with item=media.item|metadata_for:request.user %}
   <div class="bg-[#2a2f35] rounded-lg overflow-hidden shadow-lg transition-all duration-300"
        x-data="{ trackOpen: false, listsOpen: false, historyOpen: false }">
     <div class="relative">
-      <img alt="{{ item }}"
-           class="{% if item.media_type != 'youtube' %}lazyload {% endif %}w-full {% if item.media_type == 'youtube' %}aspect-square{% else %}aspect-[2/3]{% endif %} {% if item.image != IMG_NONE %}object-cover{% endif %}"
-           {% if item.media_type == 'youtube' %}
-             src="{{ item.image }}"
-             loading="lazy"
-             decoding="async">
-           {% else %}
-             data-src="{{ item.image }}"
-             src="{{ IMG_NONE }}">
-           {% endif %}
+      {% with poster=item.image|default:IMG_NONE %}
+        {% with srcset=poster|home_poster_srcset %}
+          <img alt="{{ item }}"
+               class="w-full {% if item.media_type == 'youtube' %}aspect-square{% else %}aspect-[2/3]{% endif %} {% if poster != IMG_NONE %}object-cover{% endif %}{% if not priority_posters or forloop.counter > 2 %} lazyload{% endif %}"
+               width="200"
+               height="{% if item.media_type == 'youtube' %}200{% else %}300{% endif %}"
+               decoding="async"
+               {% if priority_posters and forloop.counter <= 2 %}
+                 src="{{ poster }}"
+                 loading="eager"
+                 {% if forloop.first %}fetchpriority="high"{% endif %}
+                 {% if srcset %}
+                   srcset="{{ srcset }}"
+                   sizes="(max-width: 39.75rem) calc(50vw - 2.5rem), (max-width: 47.99rem) 12rem, 14rem"
+                 {% endif %}
+               {% else %}
+                 src="{{ IMG_NONE }}"
+                 loading="lazy"
+                 data-src="{{ poster }}"
+                 data-expand="200"
+                 {% if srcset %}
+                   data-srcset="{{ srcset }}"
+                   data-sizes="auto"
+                 {% endif %}
+               {% endif %}>
+        {% endwith %}
+      {% endwith %}
 
       {% if media.next_event and not media.next_event.is_max_datetime %}
         <div class="absolute top-2 left-1/2 -translate-x-1/2 flex items-center gap-1.5 bg-black/80 px-2 py-1.5 rounded-md shadow-md whitespace-nowrap max-w-[98%]">
@@ -50,7 +68,7 @@
           <button class="p-2.5 bg-indigo-600 text-white rounded-full hover:bg-indigo-500 hover:scale-110 hover:shadow-[0_0_15px_rgba(99,102,241,0.5)] transition-all duration-200 cursor-pointer"
                   title="Add to tracker"
                   hx-get="{% media_view_url 'track_modal' item %}"
-                  hx-vals='{"return_url": "{{ request.get_full_path|urlencode }}", "instance_id": "{{ media.id }}"}'
+                  hx-vals='{"return_url": "{{ home_url|urlencode }}", "instance_id": "{{ media.id }}"}'
                   hx-target="#{% component_id 'track' item media.id %}"
                   hx-trigger="click once"
                   @click="trackOpen = true">
@@ -72,7 +90,7 @@
           <button class="p-2.5 bg-emerald-600 text-white rounded-full hover:bg-emerald-500 hover:scale-110 hover:shadow-[0_0_15px_rgba(16,185,129,0.5)] transition-all duration-200 cursor-pointer"
                   title="Add to custom lists"
                   hx-get="{% media_view_url 'lists_modal' item %}"
-                  hx-vals='{"return_url": "{{ request.get_full_path|urlencode }}"}'
+                  hx-vals='{"return_url": "{{ home_url|urlencode }}"}'
                   hx-target="#{% component_id 'lists' item %}"
                   hx-trigger="click once"
                   @click="listsOpen = true">
@@ -97,7 +115,7 @@
           <button class="p-2.5 bg-amber-600 text-white rounded-full hover:bg-amber-500 hover:scale-110 hover:shadow-[0_0_15px_rgba(245,158,11,0.5)] transition-all duration-200 cursor-pointer"
                   title="View your activity history"
                   hx-get="{% media_view_url 'history_modal' item %}"
-                  hx-vals='{"return_url": "{{ request.get_full_path|urlencode }}"}'
+                  hx-vals='{"return_url": "{{ home_url|urlencode }}"}'
                   hx-target="#{% component_id 'history' item %}"
                   hx-trigger="click once"
                   @click="historyOpen = true">

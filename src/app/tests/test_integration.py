@@ -1,9 +1,14 @@
 import os
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.contrib.staticfiles.testing import StaticLiveServerTestCase
-from django.utils import formats, timezone
+from django.utils import timezone
 from playwright.sync_api import expect, sync_playwright
+
+from app.models import Sources
+from app.tests.test_views import _create_home_season
+from events.models import Event
 
 
 class IntegrationTest(StaticLiveServerTestCase):
@@ -39,34 +44,100 @@ class IntegrationTest(StaticLiveServerTestCase):
         cls.browser.close()
         cls.playwright.stop()
 
-    def test_season_progress_edit(self):
-        """Test the progress edit of a season."""
-        self.page.get_by_placeholder("Search tv shows...").fill("breaking bad")
-        self.page.get_by_role("button").nth(1).click()
-        expect(self.page.locator("h2")).to_contain_text("Search Results")
-        self.page.get_by_role("link", name="Breaking Bad", exact=True).click()
-        expect(self.page.get_by_role("main")).to_contain_text("Breaking Bad")
-        self.page.get_by_role("link", name="Season 1").click()
-        expect(self.page.get_by_role("main")).to_contain_text("Season 1")
-        self.page.locator(".p-2").first.click()
-        expect(self.page.get_by_role("main")).to_contain_text("Track Episode")
-        self.page.get_by_role("button", name="Air date").click()
-        self.page.get_by_role("button", name="Add watch").click()
-        expect(self.page.get_by_role("main")).to_contain_text(
-            "Last watched: Jan. 20, 2008",
+    @patch("app.providers.services.get_media_metadata", side_effect=OSError)
+    def test_season_progress_edit(self, provider):
+        """Track pending episodes from the Home without a page reload."""
+        season = _create_home_season(
+            self.user, "101", [1, 3], watched=(1, 3), source=Sources.TMDB.value,
         )
-        self.page.get_by_role("link", name="Home").click()
-        expect(self.page.get_by_text("Breaking Bad S1 1 Episode")).to_be_visible()
-        self.page.get_by_text("Breaking Bad S1 1 Episode").get_by_role("button").nth(
-            1,
-        ).click()
-        self.page.get_by_role("link", name="Breaking Bad S1").click()
+        Event.objects.bulk_create([
+            Event(item=season.item, content_number=number, datetime=timezone.now())
+            for number in (1, 2, 3, 4)
+        ])
+        self.page.goto(f"{self.live_server_url}/", wait_until="domcontentloaded")
+        navigations = []
 
-        today = formats.date_format(
-            timezone.localdate(),
-            "DATE_FORMAT",
+        def record_navigation(frame):
+            if frame == self.page.main_frame:
+                navigations.append(frame.url)
+
+        self.page.on("framenavigated", record_navigation)
+        section = self.page.locator("#home-section-season")
+        watch = section.get_by_role("button", name="Watch next episode")
+        try:
+            expect(section.get_by_text("2 / 4", exact=True)).to_be_visible()
+            watch.focus()
+            self.page.keyboard.press("Enter")
+            expect(section.get_by_text("3 / 4", exact=True)).to_be_visible()
+            expect(watch).to_be_focused()
+            watch.click()
+            expect(section.get_by_text("Mark this season as completed?")).to_be_visible()
+            section.get_by_role("button", name="No", exact=True).click()
+            expect(section).to_have_count(0)
+            expect(self.page.get_by_text("No media in progress")).to_be_visible()
+        finally:
+            self.page.remove_listener("framenavigated", record_navigation)
+
+        self.assertEqual(navigations, [])
+        provider.assert_not_called()
+        self.assertEqual(
+            set(season.episodes.values_list("item__episode_number", flat=True)),
+            {1, 2, 3, 4},
         )
-        expect(self.page.get_by_role("main")).to_contain_text(f"Last watched: {today}")
+
+    def test_home_show_more_and_sort_without_navigation(self):
+        """Retry a batch, then keep expanded sections when sorting and tracking."""
+        for i in range(24):
+            _create_home_season(self.user, str(2000 + i), [1, 2, 3])
+        self.page.goto(f"{self.live_server_url}/?sort=recent", wait_until="domcontentloaded")
+        time_origin = self.page.evaluate("performance.timeOrigin")
+        grid = self.page.locator("#media-grid-season > div")
+        pager = self.page.locator("#home-pager-season")
+        more = pager.get_by_role("button", name="Show more TV Seasons")
+        expect(grid).to_have_count(14)
+
+        self.page.route(
+            "**/*load_media_type=season*",
+            lambda route: route.fulfill(status=503, body="Try again"),
+            times=1,
+        )
+        more.click()
+        expect(pager.get_by_role("alert")).to_contain_text("Could not load more")
+        expect(grid).to_have_count(14)
+        more.click()
+        expect(grid).to_have_count(22)
+        expect(pager.get_by_role("alert")).to_be_hidden()
+
+        self.page.locator("#home-sort-button").click()
+        self.page.evaluate("""() => {
+          window.scrollTo(0, 60);
+          document.addEventListener('htmx:beforeRequest', event => {
+            if (event.detail.elt.matches('[data-home-sort-option]')) {
+              window.sortScrollPosition = window.scrollY;
+            }
+          }, { once: true });
+        }""")
+        self.page.get_by_role("link", name="Title", exact=True).click()
+        expect(self.page.locator("#home-sort-button")).to_have_text("Title")
+        expect(self.page).to_have_url(f"{self.live_server_url}/?sort=title")
+        expect(grid).to_have_count(22)
+        expect(grid.first.get_by_role("link", name="Show 2000 S1")).to_be_visible()
+        scroll_position = self.page.evaluate("window.sortScrollPosition")
+        self.assertGreater(scroll_position, 0)
+        self.page.wait_for_function("window.scrollY === window.sortScrollPosition", timeout=5000)
+
+        grid.first.get_by_role("button", name="Watch next episode").click()
+        expect(grid.first.get_by_text("1 / 3", exact=True)).to_be_visible()
+        expect(grid).to_have_count(22)
+        more.click()
+        expect(grid).to_have_count(24)
+        expect(more).to_have_count(0)
+
+        ids = self.page.locator('[id^="progress-season-"]').evaluate_all(
+            "(nodes) => nodes.map((node) => node.id)",
+        )
+        self.assertEqual(len(set(ids)), 24)
+        self.assertEqual(self.page.evaluate("performance.timeOrigin"), time_origin)
 
     def test_tv_completed(self):
         """Test the completed status of a TV show."""

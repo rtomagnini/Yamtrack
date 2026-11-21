@@ -10,6 +10,7 @@ from django.utils import timezone
 from app.models import (
     TV,
     Anime,
+    BasicMedia,
     Episode,
     Item,
     MediaTypes,
@@ -19,171 +20,469 @@ from app.models import (
     Status,
 )
 from app.templatetags import app_tags
+from events.calendar import date_parser
+from events.models import Event
 from users.models import HomeSortChoices
 
 
+def _create_home_season(
+    user,
+    media_id,
+    episode_numbers,
+    *,
+    watched=(),
+    source=Sources.MANUAL.value,
+):
+    fields = {"media_id": media_id, "source": source, "title": f"Show {media_id}"}
+    tv_item = Item.objects.create(**fields, media_type=MediaTypes.TV.value)
+    tv = TV.objects.bulk_create(
+        [TV(user=user, item=tv_item, status=Status.IN_PROGRESS.value)]
+    )[0]
+    season_item = Item.objects.create(
+        **fields, media_type=MediaTypes.SEASON.value, season_number=1
+    )
+    season = Season.objects.bulk_create(
+        [
+            Season(
+                user=user,
+                item=season_item,
+                related_tv=tv,
+                status=Status.IN_PROGRESS.value,
+            ),
+        ]
+    )[0]
+    episodes = Item.objects.bulk_create(
+        [
+            Item(
+                **fields,
+                media_type=MediaTypes.EPISODE.value,
+                season_number=1,
+                episode_number=number,
+            )
+            for number in episode_numbers
+        ]
+    )
+    Episode.objects.bulk_create(
+        [
+            Episode(item=episode, related_season=season, end_date=timezone.now())
+            for episode in episodes
+            if episode.episode_number in watched
+        ]
+    )
+    return season
+
+
 class HomeViewTests(TestCase):
-    """Test the home view."""
+    """Test Home sections and their progress controls."""
 
     def setUp(self):
-        """Create a user and log in."""
-        self.credentials = {"username": "test", "password": "12345"}
-        self.user = get_user_model().objects.create_user(**self.credentials)
-        self.client.login(**self.credentials)
-
-        # Create a season for the TV show
-        season_item = Item.objects.create(
-            media_id="1668",
-            source=Sources.TMDB.value,
-            media_type=MediaTypes.SEASON.value,
-            title="Test TV Show",
-            image="http://example.com/image.jpg",
-            season_number=1,
+        self.user = get_user_model().objects.create_user(username="test")
+        self.client.force_login(self.user)
+        self.season = _create_home_season(
+            self.user, "1668", range(1, 7), watched=(1, 2, 4)
         )
-        season = Season.objects.create(
-            item=season_item,
-            user=self.user,
-            status=Status.IN_PROGRESS.value,
-        )
-
-        # Create episodes for the season
-        for i in range(1, 6):  # Create 5 episodes
-            episode_item = Item.objects.create(
-                media_id="1668",
-                source=Sources.TMDB.value,
-                media_type=MediaTypes.EPISODE.value,
-                title="Test TV Show",
-                image="http://example.com/image.jpg",
-                season_number=1,
-                episode_number=i,
-            )
-            Episode.objects.create(
-                item=episode_item,
-                related_season=season,
-                end_date=timezone.now() - timezone.timedelta(days=i),
-            )
-
-        # Create anime
-        anime_item = Item.objects.create(
-            media_id="1",
-            source=Sources.MAL.value,
-            media_type=MediaTypes.ANIME.value,
-            title="Test Anime",
-            image="http://example.com/image.jpg",
-        )
-        Anime.objects.create(
-            item=anime_item,
-            user=self.user,
-            status=Status.IN_PROGRESS.value,
-            progress=10,
+        self.progress_url = reverse(
+            "progress_edit", args=[MediaTypes.SEASON.value, self.season.pk]
         )
 
     def test_home_view(self):
-        """Test the home view displays in-progress media."""
-        response = self.client.get(reverse("home"))
+        manager = BasicMedia.objects
+        with patch.object(
+            manager, "get_media_list", wraps=manager.get_media_list
+        ) as query:
+            response = self.client.get(reverse("home"))
 
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "app/home.html")
-
-        # Check that both media items are in the context
-        self.assertIn("list_by_type", response.context)
-        self.assertIn(MediaTypes.SEASON.value, response.context["list_by_type"])
-        self.assertIn(MediaTypes.ANIME.value, response.context["list_by_type"])
-
-        # Check that sort choices are in the context
-        self.assertIn("sort_choices", response.context)
         self.assertEqual(response.context["sort_choices"], HomeSortChoices.choices)
+        self.assertEqual(
+            sum(
+                call.kwargs["media_type"] == MediaTypes.SEASON.value
+                for call in query.call_args_list
+            ),
+            1,
+        )
+        season = response.context["list_by_type"][MediaTypes.SEASON.value]["items"][0]
+        self.assertEqual(season.progress, 3)
+        self.assertEqual(season.max_progress, 6)
+        self.assertEqual(season.pending_episode_numbers, [3, 5, 6])
+        self.assertContains(response, "3 / 6")
 
-        # Verify Season progress is calculated correctly (5 episodes)
-        season = response.context["list_by_type"][MediaTypes.SEASON.value]
-        self.assertEqual(len(season["items"]), 1)
-        self.assertEqual(season["items"][0].progress, 5)
+    def test_home_poster_loading_and_responsive_sizes(self):
+        tmdb_poster = "https://image.tmdb.org/t/p/w500/test.jpg"
+        custom_poster = "https://example.com/custom.jpg"
+        Item.objects.filter(pk=self.season.item_id).update(image=tmdb_poster)
+        second = _create_home_season(self.user, "2000", [1])
+        Item.objects.filter(pk=second.item_id).update(image=custom_poster)
+        third = _create_home_season(self.user, "3000", [1])
+        Item.objects.filter(pk=third.item_id).update(image=tmdb_poster)
+
+        response = self.client.get(reverse("home"), {"sort": "title"})
+
+        self.assertContains(response, 'loading="eager"', count=2)
+        self.assertContains(response, 'fetchpriority="high"', count=1)
+        self.assertContains(response, 'loading="lazy"', count=1)
+        self.assertContains(response, 'data-sizes="auto"', count=1)
+        self.assertContains(response, 'data-expand="200"', count=1)
+        self.assertContains(response, "https://image.tmdb.org/t/p/w342/test.jpg 342w", count=2)
+        self.assertContains(response, f'src="{custom_poster}"')
+        self.assertNotContains(response, f'srcset="{custom_poster}')
 
     def test_home_view_with_sort(self):
-        """Test the home view with sorting parameter."""
-        response = self.client.get(reverse("home") + "?sort=completion")
+        one_pending = _create_home_season(self.user, "42", [1])
+        for sort, first in [
+            ("completion", self.season),
+            ("episodes_left", one_pending),
+        ]:
+            with self.subTest(sort=sort):
+                response = self.client.get(reverse("home"), {"sort": sort})
+                self.assertEqual(response.context["current_sort"], sort)
+                ordered = response.context["list_by_type"][MediaTypes.SEASON.value][
+                    "items"
+                ]
+                self.assertEqual(ordered[0].pk, first.pk)
+                self.user.refresh_from_db()
+                self.assertEqual(self.user.home_sort, sort)
 
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.context["current_sort"], "completion")
+    def test_home_reads_calendar_releases_with_tmdb_unavailable(self):
+        season = _create_home_season(
+            self.user, "97", [1], watched=(1,), source=Sources.TMDB.value,
+        )
+        season.broadcast_time = datetime.time(20)
+        Season.objects.filter(pk=season.pk).update(broadcast_time=season.broadcast_time)
+        local_now = timezone.localtime()
+        local_date = local_now.date()
+        Event.objects.bulk_create([
+            Event(
+                item=season.item, content_number=2,
+                datetime=datetime.datetime.min.replace(tzinfo=datetime.UTC),
+            ),
+            Event(
+                item=season.item, content_number=3,
+                datetime=date_parser(local_date.isoformat()),
+            ),
+            Event(
+                item=season.item, content_number=4,
+                datetime=date_parser((local_date + datetime.timedelta(days=1)).isoformat()),
+            ),
+        ])
 
-        # Check that user preference was updated
-        self.user.refresh_from_db()
-        self.assertEqual(self.user.home_sort, "completion")
+        with patch("app.providers.tmdb.tv_with_seasons", side_effect=OSError) as tmdb:
+            for hour, pending in [(19, [2]), (21, [2, 3])]:
+                with (
+                    self.subTest(hour=hour),
+                    patch("app.models.timezone.now", return_value=local_now.replace(hour=hour)),
+                ):
+                    response = self.client.get(reverse("home"))
+                    self.assertEqual(response.status_code, 200)
+                    entries = response.context["list_by_type"][MediaTypes.SEASON.value]["items"]
+                    entry = next(media for media in entries if media.pk == season.pk)
+                    self.assertEqual(entry.pending_episode_numbers, pending)
+                    self.assertEqual(entry.max_progress, 1 + len(pending))
+                    self.assertFalse(entry.completes_on_next_episode)
+        tmdb.assert_not_called()
 
-    @patch("app.providers.services.get_media_metadata")
-    def test_home_view_htmx_load_more(self, mock_get_media_metadata):
-        """Test the HTMX load more functionality."""
-        # Mock the API response
-        mock_get_media_metadata.return_value = {
-            "title": "Test TV Show",
-            "image": "http://example.com/image.jpg",
-            "season/1": {
-                "episodes": [{"id": 1}, {"id": 2}, {"id": 3}],  # 3 episodes
-            },
-            "related": {
-                "seasons": [
-                    {"season_number": 1, "image": "http://example.com/image.jpg"},
-                ],  # Only one season
-            },
-        }
-
-        # Create TV shows (just enough to test load more)
-        for i in range(6, 20):  # Create 14 more TV shows (we already have 1)
-            # Create a season for each TV show
-            season_item = Item.objects.create(
-                media_id=str(i),
-                source=Sources.TMDB.value,
-                media_type=MediaTypes.SEASON.value,
-                title=f"Test TV Show {i}",
-                image="http://example.com/image.jpg",
-                season_number=1,
-            )
-            season = Season.objects.create(
-                item=season_item,
-                user=self.user,
-                status=Status.IN_PROGRESS.value,
-            )
-
-            # Create an episode for each season
-            episode_item = Item.objects.create(
-                media_id=str(i),
-                source=Sources.TMDB.value,
-                media_type=MediaTypes.EPISODE.value,
-                title=f"Test TV Show {i}",
-                image="http://example.com/image.jpg",
-                season_number=1,
-                episode_number=1,
-            )
-            Episode.objects.create(
-                item=episode_item,
-                related_season=season,
-                end_date=timezone.now(),
-            )
-
-        # Now test the load more functionality
-        headers = {"HTTP_HX_REQUEST": "true"}
-        response = self.client.get(
-            reverse("home") + "?load_media_type=season",
-            **headers,
+    def test_unsynced_tmdb_season_still_shows_saved_progress(self):
+        season = _create_home_season(
+            self.user, "98", [1], watched=(1,), source=Sources.TMDB.value,
         )
 
+        with patch("app.providers.tmdb.tv_with_seasons", side_effect=OSError) as tmdb:
+            response = self.client.get(reverse("home"))
+
+        tmdb.assert_not_called()
+        self.assertContains(response, f'id="progress-season-{season.pk}"')
+        self.assertContains(response, ">1 watched<")
+        entries = response.context["list_by_type"][MediaTypes.SEASON.value]["items"]
+        entry = next(media for media in entries if media.pk == season.pk)
+        self.assertIsNone(entry.max_progress)
+        self.assertEqual(entry.pending_episode_numbers, [])
+
+    def test_home_view_htmx_load_more(self):
+        for i in range(31):
+            _create_home_season(self.user, str(2000 + i), [1, 2])
+
+        response = self.client.get(reverse("home"), {"sort": "title"})
+        page = response.context["list_by_type"]["season"]
+        self.assertEqual(page["shown"], 14)
+        self.assertContains(response, "Show more")
+        seen = {item.pk for item in page["items"]}
+
+        for batch_size in (8, 8, 2):
+            response = self.client.get(
+                reverse("home"),
+                {
+                    "load_media_type": "season",
+                    "sort": "title",
+                    "offset": page["shown"],
+                    "signature": page["signature"],
+                },
+                headers={"HX-Request": "true"},
+            )
+            self.assertTemplateUsed(response, "app/components/home_more.html")
+            self.assertContains(response, 'hx-swap-oob="beforeend:#media-grid-season"')
+            self.assertContains(response, 'loading="lazy"')
+            self.assertNotContains(response, 'fetchpriority="high"')
+            page = response.context["media_list"]
+            added = {item.pk for item in page["items"]}
+            self.assertEqual(len(added), batch_size)
+            self.assertTrue(seen.isdisjoint(added))
+            seen.update(added)
+            self.assertEqual(page["shown"], len(seen))
+
+        self.assertEqual(len(seen), 32)
+        self.assertNotContains(response, "Show more")
+
+    def test_sort_fragment_and_progress_preserve_sections_loaded_count(self):
+        for i in range(31):
+            _create_home_season(self.user, str(2000 + i), [1, 2])
+
+        response = self.client.get(
+            reverse("home"),
+            {"sort": "title", "shown_season": 22},
+            headers={"HX-Request": "true", "HX-Target": "home-feed"},
+        )
+        self.assertTemplateUsed(response, "app/components/home_sorted.html")
+        self.assertNotContains(response, "<html")
+        self.assertContains(response, 'id="home-sort"')
+        self.assertContains(response, 'hx-swap-oob="outerHTML"')
+        self.assertEqual(response.headers["HX-Replace-Url"], f'{reverse("home")}?sort=title')
+        self.assertEqual(response.context["list_by_type"]["season"]["shown"], 22)
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.home_sort, "title")
+
+        updated = self.client.post(
+            self.progress_url,
+            {
+                "operation": "increase",
+                "episode_number": 3,
+                "home_section": "initial",
+                "shown": 22,
+                "sort": "title",
+            },
+        )
+        self.assertEqual(updated.context["media_list"]["shown"], 22)
+        self.assertEqual(len(updated.context["media_list"]["items"]), 22)
+        self.assertContains(updated, "Show more")
+
+    def test_load_more_refreshes_section_if_a_card_was_added_before_the_offset(self):
+        for i in range(23):
+            _create_home_season(self.user, str(2000 + i), [1, 2])
+        initial = self.client.get(reverse("home"), {"sort": "title"})
+        page = initial.context["list_by_type"]["season"]
+        added = _create_home_season(self.user, "100", [1, 2])
+
+        response = self.client.get(
+            reverse("home"),
+            {"load_media_type": "season", "sort": "title", "offset": 14, "signature": page["signature"]},
+            headers={"HX-Request": "true"},
+        )
+        self.assertEqual(response.headers["HX-Retarget"], "#home-section-season")
+        self.assertTemplateUsed(response, "app/components/home_section.html")
+        refreshed = response.context["media_list"]["items"]
+        self.assertEqual(len(refreshed), 22)
+        self.assertEqual(refreshed[0].pk, added.pk)
+        self.assertEqual(len({item.pk for item in refreshed}), 22)
+
+    def test_progress_fills_the_first_gap_and_rejects_a_stale_retry(self):
+        request = {
+            "operation": "increase",
+            "episode_number": 3,
+            "home_section": "initial",
+        }
+        response = self.client.post(self.progress_url, request)
         self.assertEqual(response.status_code, 200)
-        self.assertTemplateUsed(response, "app/components/home_grid.html")
+        self.assertTemplateUsed(response, "app/components/home_section.html")
+        self.assertContains(response, "4 / 6")
+        self.assertContains(response, f'"return_url": "{reverse("home")}"')
+        self.assertTrue(self.season.episodes.filter(item__episode_number=3).exists())
 
-        # Check that media_list is in the context
-        self.assertIn("media_list", response.context)
+        retry = self.client.post(self.progress_url, request)
+        self.assertEqual(retry.status_code, 409)
+        self.assertFalse(self.season.episodes.filter(item__episode_number=5).exists())
 
-        # Check the structure of media_list
-        self.assertIn("items", response.context["media_list"])
-        self.assertIn("total", response.context["media_list"])
+    def test_last_available_episode_does_not_complete_a_season_with_future_releases(
+        self,
+    ):
+        Item.objects.filter(
+            media_id=self.season.item.media_id,
+            media_type=MediaTypes.EPISODE.value,
+            episode_number__in=[5, 6],
+        ).update(air_date=timezone.localdate() + datetime.timedelta(days=1))
+        response = self.client.post(
+            self.progress_url,
+            {
+                "operation": "increase",
+                "episode_number": 3,
+                "home_section": "initial",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, "home-section-season")
+        self.season.refresh_from_db()
+        self.assertEqual(self.season.status, Status.IN_PROGRESS.value)
+        self.assertFalse(
+            self.season.episodes.filter(item__episode_number__in=[5, 6]).exists()
+        )
 
-        # Since we're loading more (items after the first 14),
-        # we should have at least 1 item in the response
-        self.assertEqual(len(response.context["media_list"]["items"]), 1)
-        self.assertEqual(
-            response.context["media_list"]["total"],
-            15,
-        )  # 15 TV shows total
+    def test_last_episode_requires_a_choice_and_updates_the_section(self):
+        for idx, answer in enumerate(("no", "yes"), start=20):
+            with self.subTest(answer=answer):
+                season = _create_home_season(self.user, str(idx), [1, 4], watched=(4,))
+                url = reverse(
+                    "progress_edit", args=[MediaTypes.SEASON.value, season.pk]
+                )
+                request = {
+                    "operation": "increase",
+                    "episode_number": 1,
+                    "home_section": "initial",
+                }
+
+                prompt = self.client.post(url, request)
+                self.assertTrue(prompt.json()["requires_confirmation"])
+                self.assertEqual(season.episodes.count(), 1)
+
+                result = self.client.post(
+                    url, {**request, "confirm_completion": answer}
+                )
+                self.assertEqual(result.status_code, 200)
+                self.assertNotContains(result, f'id="progress-season-{season.pk}"')
+                season.refresh_from_db()
+                expected = Status.COMPLETED if answer == "yes" else Status.IN_PROGRESS
+                self.assertEqual(season.status, expected)
+                self.assertEqual(
+                    season.episodes.filter(item__episode_number=1).count(), 1
+                )
+
+    def test_tmdb_watch_creates_missing_episode_item_offline(self):
+        season = _create_home_season(
+            self.user,
+            "99",
+            [1],
+            watched=(1,),
+            source=Sources.TMDB.value,
+        )
+        Event.objects.bulk_create([
+            Event(item=season.item, content_number=number, datetime=timezone.now())
+            for number in (1, 2, 3)
+        ])
+        url = reverse("progress_edit", args=[MediaTypes.SEASON.value, season.pk])
+        data = {"operation": "increase", "episode_number": 2, "home_section": "initial"}
+        with (
+            patch("app.providers.tmdb.tv_with_seasons", side_effect=OSError) as tmdb,
+            patch("app.providers.services.get_media_metadata", side_effect=OSError) as provider,
+        ):
+            result = self.client.post(url, data)
+            retry = self.client.post(url, data)
+
+        tmdb.assert_not_called()
+        provider.assert_not_called()
+        self.assertContains(result, "2 / 3")
+        self.assertEqual(retry.status_code, 409)
+        last_watch = season.episodes.get(item__episode_number=2)
+        self.assertIsNotNone(last_watch.end_date)
+        self.assertIsNone(last_watch.item.runtime)
+        self.assertEqual(last_watch.history.count(), 1)
+
+    def test_last_tmdb_episode_respects_the_choice_offline(self):
+        with patch("app.providers.services.get_media_metadata", side_effect=OSError) as provider:
+            for show, answer in enumerate(("no", "yes"), start=100):
+                with self.subTest(answer=answer):
+                    season = _create_home_season(
+                        self.user, str(show), [1], watched=(1,), source=Sources.TMDB.value,
+                    )
+                    Event.objects.bulk_create([
+                        Event(item=season.item, content_number=number, datetime=timezone.now())
+                        for number in (1, 2)
+                    ])
+                    url = reverse("progress_edit", args=[MediaTypes.SEASON.value, season.pk])
+                    data = {
+                        "operation": "increase", "episode_number": 2, "home_section": "initial",
+                    }
+                    self.assertTrue(self.client.post(url, data).json()["requires_confirmation"])
+                    self.assertEqual(season.episodes.count(), 1)
+
+                    result = self.client.post(url, {**data, "confirm_completion": answer})
+                    self.assertNotContains(result, f'id="progress-season-{season.pk}"')
+                    season.refresh_from_db()
+                    status = Status.COMPLETED if answer == "yes" else Status.IN_PROGRESS
+                    self.assertEqual(season.status, status)
+                    self.assertEqual(season.home_completion_pending, answer == "yes")
+                    self.assertEqual(season.related_tv.status, Status.IN_PROGRESS.value)
+                    self.assertEqual(season.episodes.get(item__episode_number=2).history.count(), 1)
+        provider.assert_not_called()
+
+    @override_settings(YOUTUBE_WATCH_SYNC_ENABLED=False)
+    def test_youtube_progress_updates_the_pending_count_after_each_action(self):
+        fields = {
+            "media_id": "42",
+            "source": Sources.YOUTUBE.value,
+            "title": "Example channel",
+        }
+        channel_item = Item.objects.create(
+            **fields, media_type=MediaTypes.YOUTUBE.value
+        )
+        channel = TV.objects.bulk_create(
+            [
+                TV(user=self.user, item=channel_item, status=Status.IN_PROGRESS.value),
+            ]
+        )[0]
+        Item.objects.bulk_create(
+            [
+                Item(
+                    **fields,
+                    media_type=MediaTypes.EPISODE.value,
+                    season_number=2025,
+                    episode_number=i,
+                )
+                for i in (1, 2)
+            ]
+        )
+        url = reverse("progress_edit", args=[MediaTypes.YOUTUBE.value, channel.pk])
+
+        self.assertContains(self.client.get(reverse("home")), "2 videos")
+        watched = self.client.post(
+            url,
+            {
+                "operation": "increase",
+                "pending_videos": 2,
+                "home_section": "initial",
+            },
+        )
+        self.assertEqual(watched.status_code, 200)
+        self.assertContains(watched, 'data-pending-videos="1"')
+        self.assertContains(self.client.get(reverse("home")), 'data-pending-videos="1"')
+        self.assertTrue(
+            Episode.objects.filter(
+                related_season__related_tv=channel,
+                item__episode_number=1,
+            ).exists()
+        )
+
+        undo = self.client.post(
+            url,
+            {
+                "operation": "decrease",
+                "pending_videos": 1,
+                "home_section": "initial",
+            },
+        )
+        self.assertContains(undo, 'data-pending-videos="2"')
+
+        for count in (2, 1):
+            result = self.client.post(
+                url,
+                {
+                    "operation": "increase",
+                    "pending_videos": count,
+                    "home_section": "initial",
+                },
+            )
+            self.assertEqual(result.status_code, 200)
+        self.assertNotContains(result, "home-section-youtube")
+        self.assertNotContains(
+            self.client.get(reverse("home")), 'id="home-section-youtube"'
+        )
 
 
 class MediaListViewTests(TestCase):
@@ -969,38 +1268,15 @@ class ProgressEditSeason(TestCase):
 
     def setUp(self):
         """Prepare the database with a season and an episode."""
-        self.credentials = {"username": "test", "password": "12345"}
-        self.user = get_user_model().objects.create_user(**self.credentials)
-        self.client.login(**self.credentials)
-
-        self.item_season = Item.objects.create(
-            media_id="1668",
-            source=Sources.TMDB.value,
-            media_type=MediaTypes.SEASON.value,
-            title="Friends",
-            image="http://example.com/image.jpg",
-            season_number=1,
+        self.user = get_user_model().objects.create_user(username="test")
+        self.client.force_login(self.user)
+        self.season = _create_home_season(
+            self.user, "1668", [1], watched=(1,), source=Sources.TMDB.value,
         )
-        self.season = Season.objects.create(
-            item=self.item_season,
-            user=self.user,
-            status=Status.IN_PROGRESS.value,
-        )
-
-        item_ep = Item.objects.create(
-            media_id="1668",
-            source=Sources.TMDB.value,
-            media_type=MediaTypes.EPISODE.value,
-            title="Friends",
-            image="http://example.com/image.jpg",
-            season_number=1,
-            episode_number=1,
-        )
-        Episode.objects.create(
-            item=item_ep,
-            related_season=self.season,
-            end_date=datetime.datetime(2023, 6, 1, 0, 0, tzinfo=datetime.UTC),
-        )
+        Event.objects.bulk_create([
+            Event(item=self.season.item, content_number=number, datetime=timezone.now())
+            for number in (1, 2, 3)
+        ])
 
     def test_progress_increase(self):
         """Test the increase of progress for a season."""

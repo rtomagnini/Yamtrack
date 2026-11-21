@@ -6,138 +6,151 @@
 {% endblock title %}
 
 {% block content %}
-  <div class="flex flex-col sm:flex-row justify-between items-center gap-4 mb-8">
-    <h1 class="text-3xl font-bold text-center w-full sm:w-auto">In Progress</h1>
-    <div class="relative" x-data="{ open: false }">
-      <button @click="open = !open"
-              @click.outside="open = false"
-              class="flex items-center gap-2 px-4 py-2 bg-[#39404b] hover:bg-[#454d5a] rounded-md transition-colors cursor-pointer">
-        <svg xmlns="http://www.w3.org/2000/svg"
-             width="24"
-             height="24"
-             viewBox="0 0 24 24"
-             fill="none"
-             stroke="currentColor"
-             stroke-width="2"
-             stroke-linecap="round"
-             stroke-linejoin="round"
-             class="w-4 h-4">
-          <path d="m21 16-4 4-4-4"></path>
-          <path d="M17 20V4"></path>
-          <path d="m3 8 4-4 4 4"></path>
-          <path d="M7 4v16"></path>
-        </svg>
-        <span class="text-sm font-medium">{{ current_sort|no_underscore|title }}</span>
-        <svg xmlns="http://www.w3.org/2000/svg"
-             width="24"
-             height="24"
-             viewBox="0 0 24 24"
-             fill="none"
-             stroke="currentColor"
-             stroke-width="2"
-             stroke-linecap="round"
-             stroke-linejoin="round"
-             class="w-4 h-4 text-gray-400">
-          <path d="m6 9 6 6 6-6"></path>
-        </svg>
-      </button>
-      <div x-show="open"
-           x-transition:enter="transition ease-out duration-100"
-           x-transition:enter-start="transform opacity-0 scale-95"
-           x-transition:enter-end="transform opacity-100 scale-100"
-           x-transition:leave="transition ease-in duration-75"
-           x-transition:leave-start="transform opacity-100 scale-100"
-           x-transition:leave-end="transform opacity-0 scale-95"
-           class="absolute right-0 mt-2 py-1 w-48 bg-[#39404b] rounded-md shadow-lg overflow-hidden z-10 border border-gray-700">
-        {% for value, label in sort_choices %}
-          <a href="{% url 'home' %}?sort={{ value }}"
-             class="block w-full px-4 py-2 text-left text-sm transition-colors {% if current_sort == value %}bg-indigo-600 text-white font-medium{% else %}text-gray-300 hover:bg-[#454d5a] hover:text-white{% endif %}">
-            {{ label }}
-          </a>
-        {% endfor %}
-      </div>
+  <div id="home-browsing">
+    <form id="home-page-state" hidden></form>
+    <div class="flex flex-col sm:flex-row justify-between items-center gap-4 mb-8">
+      <h1 class="text-3xl font-bold text-center w-full sm:w-auto">In Progress</h1>
+      {% include "app/components/home_sort.html" %}
     </div>
-  </div>
 
-  <div class="space-y-8">
-    {# preferred_order comes from the view as a list of media_type keys #}
-    {% for media_type, media_list in preferred_sections %}
-      <div>
-        <h2 class="text-xl font-semibold mb-4">{{ media_type|media_type_readable_plural }}</h2>
-        <div id="media-grid-{{ media_type }}" class="media-grid">
-          {% include "app/components/home_grid.html" with media_list=media_list %}
-        </div>
-
-        {% if media_list.total > items_limit %}
-          <div class="mt-6 flex justify-center">
-            <button hx-get="{% url 'home' %}?sort={{ current_sort }}&load_media_type={{ media_type }}"
-                    hx-target="#media-grid-{{ media_type }}"
-                    hx-swap="beforeend"
-                    hx-indicator="#loading-indicator-{{ media_type }}"
-                    hx-trigger="click"
-                    class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md transition-colors cursor-pointer"
-                    hx-on:click="this.remove()">Load All ({{ media_list.total }})</button>
-            <div id="loading-indicator-{{ media_type }}" class="htmx-indicator text-center hidden">
-              <div class="inline-flex justify-center items-center">
-                <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-500"></div>
-              </div>
-            </div>
-          </div>
-        {% endif %}
-      </div>
-    {% endfor %}
-
-    {# Render remaining types not included in preferred_order #}
-    {% for media_type, media_list in remaining_sections %}
-      <div>
-        <h2 class="text-xl font-semibold mb-4">{{ media_type|media_type_readable_plural }}</h2>
-        <div id="media-grid-{{ media_type }}" class="media-grid">
-          {% include "app/components/home_grid.html" with media_list=media_list %}
-        </div>
-
-        {% if media_list.total > items_limit %}
-          <div class="mt-6 flex justify-center">
-            <button hx-get="{% url 'home' %}?sort={{ current_sort }}&load_media_type={{ media_type }}"
-                    hx-target="#media-grid-{{ media_type }}"
-                    hx-swap="beforeend"
-                    hx-indicator="#loading-indicator-{{ media_type }}"
-                    hx-trigger="click"
-                    class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md transition-colors cursor-pointer"
-                    hx-on:click="this.remove()">Load All ({{ media_list.total }})</button>
-            <div id="loading-indicator-{{ media_type }}" class="htmx-indicator text-center hidden">
-              <div class="inline-flex justify-center items-center">
-                <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-500"></div>
-              </div>
-            </div>
-          </div>
-        {% endif %}
-      </div>
-    {% endfor %}
-
-    {# Show the empty state only if there are no preferred or remaining sections #}
-    {% if not preferred_sections and not remaining_sections %}
-      <div class="flex flex-col items-center justify-center py-32 px-4 bg-[#2a2f35] rounded-lg">
-        <div class="bg-[#39404b] rounded-full p-4 w-16 h-16 mx-auto mb-4 flex items-center justify-center">
-          <svg xmlns="http://www.w3.org/2000/svg"
-               width="24"
-               height="24"
-               viewBox="0 0 24 24"
-               fill="none"
-               stroke="currentColor"
-               stroke-width="2"
-               stroke-linecap="round"
-               stroke-linejoin="round"
-               class="w-8 h-8 text-gray-400">
-            <path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2" />
-          </svg>
-        </div>
-        <h3 class="text-xl font-semibold mb-2">No media in progress</h3>
-        <p class="text-gray-400 text-center max-w-md mb-4">Start tracking your progress by marking items as "In Progress".</p>
-        <div class="pt-4">
-          <a href="{{ 'tv'|sample_search }}"
-             class="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors">Browse Media</a>
-        </div>
-      </div>
-    {% endif %}
+    {% include "app/components/home_feed.html" %}
   </div>
 {% endblock content %}
+
+{% block js %}
+  <script>
+    const homeBrowsing = document.getElementById('home-browsing');
+    const homeRequests = new WeakMap();
+
+    homeBrowsing.addEventListener('htmx:beforeRequest', event => {
+      const { elt, xhr } = event.detail;
+      const sorting = elt.matches('[data-home-sort-option]');
+      const loadingMore = elt.matches('[data-home-load-more]');
+      if (!sorting && !loadingMore) return;
+
+      const section = elt.closest('[data-home-section]');
+      const busySection = sorting
+        ? homeBrowsing.querySelector('[data-progress-busy], [data-loading-more]')
+        : section.dataset.progressBusy || section.dataset.loadingMore;
+      if (homeBrowsing.dataset.sorting || busySection) {
+        event.preventDefault();
+        return;
+      }
+
+      const control = elt.closest(sorting ? '#home-sort' : '[data-home-pager]');
+      const error = control.querySelector('[data-home-error]');
+      const request = {
+        kind: sorting ? 'sort' : 'more',
+        hadFocus: document.activeElement === elt,
+        cards: section?.querySelector('.media-grid').children.length,
+      };
+      homeRequests.set(xhr, request);
+      error.hidden = true;
+      if (sorting) homeBrowsing.dataset.sorting = 'true';
+      else section.dataset.loadingMore = 'true';
+
+      xhr.addEventListener('loadend', () => {
+        if (sorting) delete homeBrowsing.dataset.sorting;
+        else delete section.dataset.loadingMore;
+
+        const ok = xhr.status === 200 && xhr.getResponseHeader('X-Home-Fragment') === request.kind;
+        if (!ok) {
+          error.hidden = false;
+          return;
+        }
+
+        const emptyState = document.getElementById('home-empty-state');
+        emptyState.hidden = Boolean(homeBrowsing.querySelector('[data-home-section]'));
+        requestAnimationFrame(() => {
+          if (request.position) window.scrollTo(...request.position);
+          if (!request.hadFocus) return;
+
+          const updatedSection = section && document.getElementById(section.id);
+          const card = updatedSection?.querySelector('.media-grid').children[request.cards];
+          const focusTarget = sorting ? document.getElementById('home-sort-button')
+            : card?.querySelector('a[title]') || updatedSection || (emptyState.hidden ? null : emptyState);
+          focusTarget?.focus({ preventScroll: true });
+        });
+      }, { once: true });
+    });
+
+    homeBrowsing.addEventListener('htmx:beforeSwap', event => {
+      const { xhr } = event.detail;
+      const request = homeRequests.get(xhr);
+      if (!request) return;
+      if (xhr.getResponseHeader('X-Home-Fragment') !== request.kind) {
+        event.detail.shouldSwap = false;
+        return;
+      }
+      request.position = [window.scrollX, window.scrollY];
+    });
+
+    document.addEventListener('alpine:init', () => {
+      Alpine.data('homeProgress', () => ({
+        busy: false,
+        confirming: false,
+        error: '',
+        async change(operation, answer = '') {
+          const widget = this.$root;
+          const section = widget.closest('[data-home-section]');
+          if (homeBrowsing.dataset.sorting || section.dataset.progressBusy || section.dataset.loadingMore) return;
+
+          const hadFocus = section.contains(document.activeElement);
+          this.busy = true;
+          this.error = '';
+          section.dataset.progressBusy = 'true';
+
+          try {
+            const response = await fetch(widget.dataset.progressUrl, {
+              method: 'POST',
+              headers: { 'X-CSRFToken': widget.dataset.csrfToken },
+              body: new URLSearchParams({
+                operation,
+                confirm_completion: answer,
+                episode_number: widget.dataset.nextEpisode,
+                pending_videos: widget.dataset.pendingVideos,
+                home_section: 'initial',
+                shown: section.querySelector('[data-home-count]').value,
+                sort: section.dataset.sort,
+              }),
+            });
+
+            if (response.headers.get('content-type')?.includes('application/json')) {
+              const data = await response.json();
+              if (response.ok && data.requires_confirmation) {
+                this.confirming = true;
+                this.$nextTick(() => widget.querySelector('[x-show="confirming"] button').focus());
+                return;
+              }
+              throw new Error(data.message);
+            }
+            if (!response.ok || response.redirected) throw new Error();
+
+            const html = await response.text();
+            const progressId = widget.parentElement.id;
+            const restoreFocus = hadFocus && (
+              document.activeElement === document.body || section.contains(document.activeElement)
+            );
+            htmx.swap(section, html, { swapStyle: 'outerHTML' });
+
+            const emptyState = document.getElementById('home-empty-state');
+            emptyState.hidden = Boolean(document.querySelector('[data-home-section]'));
+            if (restoreFocus) {
+              const progress = document.getElementById(progressId);
+              const button = progress?.querySelector(`[data-progress-action="${operation}"]:not([disabled])`)
+                || progress?.querySelector('[data-progress-action]:not([disabled])');
+              const target = button || document.getElementById(section.id)
+                || (emptyState.hidden ? document.querySelector('[data-home-section]') : emptyState);
+              target?.focus({ preventScroll: true });
+            }
+          } catch (error) {
+            this.error = error.message || 'Could not update progress. Refresh the page and try again.';
+          } finally {
+            delete section.dataset.progressBusy;
+            this.busy = false;
+          }
+        },
+      }));
+    });
+  </script>
+{% endblock js %}

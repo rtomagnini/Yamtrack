@@ -1,3 +1,5 @@
+import re
+
 from pathlib import Path
 
 from django import template
@@ -11,6 +13,26 @@ from app import media_type_config
 from app.models import MediaTypes, Sources, Status
 
 register = template.Library()
+
+TMDB_POSTER_URL = re.compile(
+    r"https://image\.tmdb\.org/t/p/(?:original|w\d+(?:_and_h\d+_bestv2)?)/"
+    r"([A-Za-z0-9_.-]+\.(?:jpe?g|png|webp))",
+    re.IGNORECASE,
+)
+HOME_POSTER_WIDTHS = (154, 185, 342, 500, 780)
+
+
+@register.filter
+def home_poster_srcset(image_url):
+    """Return TMDB image variants when the URL supports changing its size."""
+    match = TMDB_POSTER_URL.fullmatch(image_url or "")
+    if not match:
+        return ""
+    path = match[1]
+    return ", ".join(
+        f"https://image.tmdb.org/t/p/w{width}/{path} {width}w"
+        for width in HOME_POSTER_WIDTHS
+    )
 
 
 @register.filter

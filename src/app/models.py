@@ -1,5 +1,8 @@
 ﻿import logging
 
+from datetime import datetime
+from hashlib import blake2s
+
 from django.apps import apps
 from django.conf import settings
 from django.core.validators import (
@@ -120,6 +123,20 @@ class Item(CalendarTriggerMixin, models.Model):
         blank=True,
         help_text="TMDB ID for manual TV shows (used for Plex webhook integration)"
     )
+
+    @staticmethod
+    def episode_metadata_fields(episode):
+        """Return the catalog fields that can be copied onto an episode item."""
+        still_path = episode.get("still_path")
+        image = (
+            f"https://image.tmdb.org/t/p/original{still_path}"
+            if still_path else episode.get("image", settings.IMG_NONE)
+        )
+        return {
+            "air_date": episode.get("air_date") or None,
+            "runtime": episode.get("runtime"),
+            "image": image,
+        }
 
     class Meta:
         """Meta options for the model."""
@@ -518,78 +535,90 @@ class MediaManager(models.Manager):
             models.functions.Lower("item__title"),
         )
 
-    def get_in_progress(self, user, sort_by, items_limit, specific_media_type=None):
+    def get_in_progress(
+        self,
+        user,
+        sort_by,
+        items_limit,
+        specific_media_type=None,
+        *,
+        for_section=False,
+        section_limits=None,
+        offset=None,
+    ):
         """Get a media list of in progress media by type."""
         list_by_type = {}
         media_types = self._get_media_types_to_process(user, specific_media_type)
 
         for media_type in media_types:
-            # For seasons, get only IN_PROGRESS seasons and filter by pending episodes later
-            # For other media types, use IN_PROGRESS status filter
-            if media_type == MediaTypes.SEASON.value:
-                media_list = self.get_media_list(
-                    user=user,
-                    media_type=media_type,
-                    status_filter=Status.IN_PROGRESS.value,  # Only IN_PROGRESS seasons
-                    sort_filter=None,
-                )
-            else:
-                # Get base media list for in-progress media
-                media_list = self.get_media_list(
-                    user=user,
-                    media_type=media_type,
-                    status_filter=Status.IN_PROGRESS.value,
-                    sort_filter=None,
-                )
+            media_list = self.get_media_list(
+                user=user,
+                media_type=media_type,
+                status_filter=Status.IN_PROGRESS.value,
+                sort_filter=None,
+            )
 
             if not media_list:
                 continue
 
             # Annotate with max_progress and next_event
-            self.annotate_max_progress(media_list, media_type)
+            self.annotate_max_progress(media_list, media_type, local_seasons=True)
             self._annotate_next_event(media_list)
 
-            # Filter seasons and YouTube channels to only show those with pending episodes
             if media_type == MediaTypes.SEASON.value:
-                media_list = [media for media in media_list if hasattr(media, 'pending_episode_numbers') and len(media.pending_episode_numbers) > 0]
+                media_list = [
+                    media
+                    for media in media_list
+                    if media.pending_episode_numbers or media.max_progress is None
+                ]
             elif media_type == MediaTypes.YOUTUBE.value:
-                # For YouTube channels, filter out those that are up-to-date (progress == max_progress)
-                media_list = [media for media in media_list if media.progress < media.max_progress]
+                media_list = [media for media in media_list if media.pending_videos]
+
+            if not media_list:
+                continue
 
             # Sort the media list
             sorted_list = self._sort_in_progress_media(media_list, sort_by)
 
-            # Apply pagination
             total_count = len(sorted_list)
-            if specific_media_type:
-                paginated_list = sorted_list[items_limit:]
+            if offset is not None:
+                start, stop = offset, offset + items_limit
+            elif specific_media_type and not for_section:
+                start, stop = items_limit, None
             else:
-                paginated_list = sorted_list[:items_limit]
+                start = 0
+                stop = (section_limits or {}).get(media_type, items_limit)
+
+            paginated_list = sorted_list[start:stop]
+            shown = min(start + len(paginated_list), total_count)
 
             list_by_type[media_type] = {
                 "items": paginated_list,
                 "total": total_count,
+                "shown": shown,
+                "signature": self._home_page_signature(sorted_list[:shown]),
+                "previous_signature": self._home_page_signature(sorted_list[:start]),
             }
 
         return list_by_type
+
+    @staticmethod
+    def _home_page_signature(ordered_media):
+        """Identify the ordered cards that should already be in the browser."""
+        ids = ",".join(str(media.pk) for media in ordered_media)
+        return blake2s(ids.encode(), digest_size=8).hexdigest()
 
     def _get_media_types_to_process(self, user, specific_media_type):
         """Determine which media types to process based on user settings."""
         if specific_media_type:
             return [specific_media_type]
 
-        # Get active types excluding TV, but include Season for better granularity
-        active_types = [
+        # The Home tracks seasons and channels instead of series or individual videos.
+        return [
             media_type
             for media_type in user.get_active_media_types()
-            if media_type != MediaTypes.TV.value
+            if media_type not in {MediaTypes.TV.value, MediaTypes.YOUTUBE_VIDEO.value}
         ]
-        
-        # If TV is active, include Season instead for better episode tracking
-        if MediaTypes.TV.value in user.get_active_media_types():
-            active_types.append(MediaTypes.SEASON.value)
-        
-        return active_types
 
     def _annotate_next_event(self, media_list):
         """Annotate next_event for media items."""
@@ -610,6 +639,11 @@ class MediaManager(models.Manager):
 
     def _sort_in_progress_media(self, media_list, sort_by):
         """Sort in-progress media based on the sort criteria."""
+        def episodes_left(media):
+            if hasattr(media, "pending_videos"):
+                return media.pending_videos
+            return media.max_progress - media.progress if media.max_progress else 0
+
         # Define primary sort functions based on sort_by
         primary_sort_functions = {
             users.models.HomeSortChoices.UPCOMING: lambda x: (
@@ -622,14 +656,14 @@ class MediaManager(models.Manager):
             users.models.HomeSortChoices.COMPLETION: lambda x: (
                 x.max_progress is None,
                 -(
-                    x.progress / x.max_progress * 100
+                    getattr(x, "watched_videos", x.progress) / x.max_progress * 100
                     if x.max_progress and x.max_progress > 0
                     else 0
                 ),
             ),
             users.models.HomeSortChoices.EPISODES_LEFT: lambda x: (
                 x.max_progress is None,
-                (x.max_progress - x.progress if x.max_progress else 0),
+                episodes_left(x),
             ),
             users.models.HomeSortChoices.TITLE: lambda x: x.item.title.lower(),
         }
@@ -644,10 +678,11 @@ class MediaManager(models.Manager):
                     x.progressed_at if x.progressed_at is not None else x.created_at,
                 ),
                 x.item.title.lower(),
+                x.pk,
             ),
         )
 
-    def annotate_max_progress(self, media_list, media_type):
+    def annotate_max_progress(self, media_list, media_type, *, local_seasons=False):
         """Annotate max_progress for all media items."""
         current_datetime = timezone.now()
 
@@ -661,7 +696,9 @@ class MediaManager(models.Manager):
             return
 
         if media_type == MediaTypes.SEASON.value:
-            self._annotate_season_pending_episodes(media_list, current_datetime)
+            self._annotate_season_pending_episodes(
+                media_list, current_datetime, local_only=local_seasons,
+            )
             return
 
         # For other media types, calculate max_progress from events
@@ -691,14 +728,30 @@ class MediaManager(models.Manager):
         """Annotate TV shows with the number of released episodes."""
         # Handle YouTube sources differently
         if tv_list and tv_list[0].item.source == Sources.YOUTUBE.value:
-            # For YouTube, count episode Items directly (YouTube videos are stored as episodes)
-            for tv in tv_list:
-                episode_count = Item.objects.filter(
-                    media_id=tv.item.media_id,
+            totals = dict(
+                Item.objects.filter(
+                    media_id__in=[tv.item.media_id for tv in tv_list],
                     source=Sources.YOUTUBE.value,
-                    media_type=MediaTypes.EPISODE.value
-                ).count()
-                tv.max_progress = episode_count
+                    media_type=MediaTypes.EPISODE.value,
+                )
+                .values("media_id")
+                .annotate(total=Count("pk"))
+                .values_list("media_id", "total"),
+            )
+            for tv in tv_list:
+                watched_ids = {
+                    episode.item_id
+                    for season in tv.seasons.all()
+                    for episode in season.episodes.all()
+                    if episode.end_date is not None
+                    and episode.item is not None
+                    and episode.item.source == Sources.YOUTUBE.value
+                    and episode.item.media_type == MediaTypes.EPISODE.value
+                    and episode.item.media_id == tv.item.media_id
+                }
+                tv.max_progress = totals.get(tv.item.media_id, 0)
+                tv.watched_videos = len(watched_ids)
+                tv.pending_videos = max(tv.max_progress - tv.watched_videos, 0)
             return
         
         # Original logic for TMDB sources
@@ -734,49 +787,126 @@ class MediaManager(models.Manager):
             tv_episodes = released_episodes.get(tv.item.media_id, {})
             tv.max_progress = sum(tv_episodes.values()) if tv_episodes else 0
 
-    def _annotate_season_pending_episodes(self, season_list, current_datetime):
-        """Annotate seasons with count of pending episodes (available but not watched)."""
-        
+    def _annotate_season_pending_episodes(
+        self, season_list, current_datetime, *, local_only=False,
+    ):
+        """Count watched and available episodes and identify pending ones."""
+        local_releases = (
+            self._get_local_season_releases(season_list, current_datetime)
+            if local_only else {}
+        )
         for season in season_list:
-            # Skip seasons that are not In Progress
             if season.status != Status.IN_PROGRESS.value:
                 season.max_progress = 0
                 season.pending_episode_numbers = []
                 continue
-            
-            # Get watched episode numbers from Episode table (unique episodes with end_date)
-            watched_episode_numbers = set(
-                season.episodes.filter(end_date__isnull=False)
-                .values_list('item__episode_number', flat=True)
-                .distinct()
-            )
-            
-            # Handle different sources
-            logger.debug("DEBUG Season source check: season.item.source='%s', Sources.TMDB.value='%s'", 
-                        season.item.source, Sources.TMDB.value)
-            if season.item.source == Sources.TMDB.value:
-                logger.debug("DEBUG: Using TMDB available episodes")
-                # For TMDB: Get available episodes from TMDB API (like in detail pages)
-                available_episode_numbers = self._get_tmdb_available_episodes(
-                    season, current_datetime
+
+            watched = {
+                episode.item.episode_number
+                for episode in season.episodes.all()
+                if episode.end_date is not None and episode.item_id is not None
+            }
+            if local_only:
+                available, catalog = local_releases[season.pk]
+            elif season.item.source == Sources.TMDB.value:
+                available, catalog = self._get_tmdb_available_episodes(
+                    season, current_datetime,
                 )
             else:
-                logger.debug("DEBUG: Using local available episodes for source: %s", season.item.source)
-                # For MANUAL and other sources: Use local database 
-                available_episode_numbers = self._get_local_available_episodes(
-                    season, current_datetime
+                available, catalog = self._get_local_available_episodes(
+                    season, current_datetime,
                 )
-            
-            # Calculate pending episodes
-            pending_episode_numbers = available_episode_numbers - watched_episode_numbers
-            
-            # For display: watched / pending
-            season.max_progress = len(pending_episode_numbers)    # Pending episodes (denominator)
-            season.pending_episode_numbers = sorted(pending_episode_numbers) if pending_episode_numbers else []
-            
-            # Store watched count for the custom progress property
-            season._custom_progress = len(watched_episode_numbers)  # Watched episodes (numerator)
-    
+
+            season.pending_episode_numbers = sorted(available - watched)
+            # Keep already registered watches in the total if release data changes.
+            season.max_progress = (
+                None if local_only and catalog is None else len(available | watched)
+            )
+            season._custom_progress = len(watched)
+            season.completes_on_next_episode = (
+                len(season.pending_episode_numbers) == 1
+                and catalog is not None
+                and catalog <= (watched | set(season.pending_episode_numbers))
+            )
+
+    def _get_local_season_releases(self, seasons, current_datetime):
+        """Read calendar releases and fall back to locally stored episode items."""
+        local_now = timezone.localtime(current_datetime)
+        releases = {}
+        missing = {}
+        for season in seasons:
+            if season.status != Status.IN_PROGRESS.value:
+                continue
+
+            item = season.item
+            key = (item.source, item.media_id, item.season_number)
+            calendar_episodes = {
+                event.content_number: event
+                for event in item.prefetched_events
+                if event.content_number is not None
+            }
+            if item.source == Sources.TMDB.value and calendar_episodes:
+                available = {
+                    number
+                    for number, event in calendar_episodes.items()
+                    if self._is_home_release_available(
+                        event, season.broadcast_time, local_now,
+                    )
+                }
+                releases[season.pk] = available, set(calendar_episodes)
+            else:
+                missing[season.pk] = key, season.broadcast_time
+
+        if not missing:
+            return releases
+
+        keys = {key for key, _ in missing.values()}
+        fields = Item.objects.filter(
+            media_type=MediaTypes.EPISODE.value,
+            source__in={key[0] for key in keys},
+            media_id__in={key[1] for key in keys},
+            season_number__in={key[2] for key in keys},
+        ).values_list("source", "media_id", "season_number", "episode_number", "air_date")
+        local_episodes = {key: {} for key in keys}
+        for source, media_id, season_number, number, air_date in fields:
+            key = (source, media_id, season_number)
+            if key in local_episodes:
+                local_episodes[key][number] = air_date
+
+        for season_pk, (key, broadcast_time) in missing.items():
+            is_tmdb = key[0] == Sources.TMDB.value
+            episode_dates = local_episodes[key]
+            latest_available_date = local_now.date()
+            if is_tmdb and broadcast_time and local_now.time() < broadcast_time:
+                latest_available_date -= timezone.timedelta(days=1)
+            available = {
+                number
+                for number, air_date in episode_dates.items()
+                if air_date is None or air_date <= latest_available_date
+            }
+            catalog = None if is_tmdb else set(episode_dates)
+            releases[season_pk] = available, catalog
+        return releases
+
+    @staticmethod
+    def _is_home_release_available(event, broadcast_time, local_now):
+        if event.datetime.year == datetime.min.year:
+            # The calendar stores missing dates as the minimum datetime.
+            return True
+        if event.is_max_datetime:
+            return False
+        if event.is_sentinel_time:
+            air_date = event.datetime.date()
+        elif broadcast_time is not None:
+            air_date = timezone.localtime(event.datetime).date()
+        else:
+            return event.datetime <= local_now
+
+        return air_date < local_now.date() or (
+            air_date == local_now.date()
+            and (broadcast_time is None or broadcast_time <= local_now.time())
+        )
+
     def _get_local_available_episodes(self, season, current_datetime):
         """Get available episodes from local database (for MANUAL sources)."""
         episode_items = Item.objects.filter(
@@ -786,45 +916,54 @@ class MediaManager(models.Manager):
             season_number=season.item.season_number
         )
         
-        # Filter available episodes: air_date <= today OR air_date IS NULL
-        available_episode_items = episode_items.filter(
-            Q(air_date__lte=current_datetime) | Q(air_date__isnull=True)
-        )
-        
-        return set(available_episode_items.values_list('episode_number', flat=True).distinct())
+        today = timezone.localtime(current_datetime).date()
+        available = set()
+        catalog = set()
+        for number, air_date in episode_items.values_list("episode_number", "air_date"):
+            catalog.add(number)
+            if air_date is None or air_date <= today:
+                available.add(number)
+        return available, catalog
     
     def _get_tmdb_available_episodes(self, season, current_datetime):
-        """Get available episodes from TMDB API (for TMDB sources), considering broadcast_time if set."""
+        """Get the TMDB episode catalog and filter by the local broadcast time."""
         try:
             from app.providers import tmdb
-            from datetime import datetime, time
+
+            current_local = timezone.localtime(current_datetime)
 
             # Get season metadata from TMDB using the correct function
             tv_data = tmdb.tv_with_seasons(
                 season.item.media_id,
-                [season.item.season_number]
+                [season.item.season_number],
             )
 
             season_key = f"season/{season.item.season_number}"
             if season_key not in tv_data:
-                # Fallback to local database if season not found
-                return self._get_local_available_episodes(season, current_datetime)
+                available, _ = self._get_local_available_episodes(
+                    season, current_datetime,
+                )
+                return available, None
 
             season_metadata = tv_data[season_key]
 
             # Filter episodes by air date and broadcast_time
             available_episode_numbers = set()
+            catalog = set()
             for episode in season_metadata.get("episodes", []):
                 episode_number = episode.get("episode_number")
                 air_date_str = episode.get("air_date")
 
                 if episode_number:
+                    catalog.add(episode_number)
                     # If no air_date, always available
                     if not air_date_str:
                         available_episode_numbers.add(episode_number)
                     else:
                         try:
-                            air_date = datetime.fromisoformat(air_date_str).replace(tzinfo=current_datetime.tzinfo)
+                            air_date = datetime.fromisoformat(air_date_str).replace(
+                                tzinfo=current_local.tzinfo,
+                            )
                             # If broadcast_time is set, combine with air_date
                             if season.broadcast_time:
                                 # Use the season's broadcast_time (as time object)
@@ -832,21 +971,22 @@ class MediaManager(models.Manager):
                                     hour=season.broadcast_time.hour,
                                     minute=season.broadcast_time.minute,
                                     second=season.broadcast_time.second or 0,
-                                    microsecond=0
+                                    microsecond=0,
                                 )
                             else:
                                 air_datetime = air_date
-                            if air_datetime <= current_datetime:
+                            if air_datetime <= current_local:
                                 available_episode_numbers.add(episode_number)
                         except (ValueError, TypeError, AttributeError):
                             # If air_date parsing fails, include the episode
                             available_episode_numbers.add(episode_number)
 
-            return available_episode_numbers
-
         except Exception:
             # If TMDB API fails, fallback to local database
-            return self._get_local_available_episodes(season, current_datetime)
+            available, _ = self._get_local_available_episodes(season, current_datetime)
+            return available, None
+        else:
+            return available_episode_numbers, catalog
 
     def get_media(
         self,
@@ -872,6 +1012,9 @@ class MediaManager(models.Manager):
         user,
         media_type,
         instance_id,
+        *,
+        lock=False,
+        local_seasons=False,
     ):
         """Get user media object with prefetch_related applied."""
         model = apps.get_model(app_label="app", model_name=self._get_model_name_for_media_type(media_type))
@@ -881,10 +1024,12 @@ class MediaManager(models.Manager):
             instance_id,
         )
 
-        queryset = model.objects.filter(**params)
+        queryset = model.objects.filter(**params).select_related("item")
+        if lock:
+            queryset = queryset.select_for_update(of=("self",))
 
         queryset = self._apply_prefetch_related(queryset, media_type)
-        self.annotate_max_progress(queryset, media_type)
+        self.annotate_max_progress(queryset, media_type, local_seasons=local_seasons)
 
         return queryset[0]
 
@@ -1002,6 +1147,7 @@ class Media(models.Model):
             "user",
             "related_tv",
             "created_at",
+            "home_completion_pending",
         ],
     )
 
@@ -1422,6 +1568,7 @@ class Season(Media):
     )
 
     tracker = FieldTracker()
+    home_completion_pending = models.BooleanField(default=False)
 
     broadcast_time = models.TimeField(
         null=True,
@@ -1580,18 +1727,31 @@ class Season(Media):
         else:
             logger.info("No more episodes to watch - all episodes have been seen.")
 
-    def watch(self, episode_number, end_date, auto_complete=True):
+    def watch(
+        self,
+        episode_number,
+        end_date,
+        auto_complete=True,  # noqa: FBT002
+        *,
+        complete_season=False,
+        from_home=False,
+    ):
         """Create or add a repeat to an episode of the season."""
-        item = self.get_episode_item(episode_number)
+        item = self.get_episode_item(
+            episode_number, {"episodes": []} if from_home else None,
+        )
 
-        episode = Episode.objects.create(
+        episode = Episode(
             related_season=self,
             item=item,
             end_date=end_date,
         )
         
-        # Save with auto_complete parameter
-        episode.save(auto_complete=auto_complete)
+        episode.save(
+            auto_complete=auto_complete,
+            complete_season=complete_season,
+            from_home=from_home,
+        )
         
         logger.info(
             "%s created successfully.",
@@ -1725,27 +1885,14 @@ class Season(Media):
                     [self.item.season_number],
                 )
 
-        image = settings.IMG_NONE
-        air_date = None
-        runtime = None
-        for episode in season_metadata["episodes"]:
-            if episode["episode_number"] == int(episode_number):
-                if episode.get("still_path"):
-                    image = (
-                        f"https://image.tmdb.org/t/p/original{episode['still_path']}"
-                    )
-                elif "image" in episode:
-                    # for manual seasons
-                    image = episode["image"]
-                else:
-                    image = settings.IMG_NONE
-                # If TMDB provides air_date/runtime, use them when creating the Item
-                if episode.get("air_date"):
-                    air_date = episode.get("air_date")
-                # Store runtime as integer minutes when available
-                if episode.get("runtime") is not None:
-                    runtime = episode.get("runtime")
-                break
+        metadata = next(
+            (
+                episode for episode in season_metadata["episodes"]
+                if episode["episode_number"] == int(episode_number)
+            ),
+            {},
+        )
+        fields = Item.episode_metadata_fields(metadata)
 
         item, _ = Item.objects.get_or_create(
             media_id=self.item.media_id,
@@ -1755,20 +1902,16 @@ class Season(Media):
             episode_number=episode_number,
             defaults={
                 "title": self.item.title,
-                "image": image,
-                "air_date": air_date,
-                "runtime": runtime,
+                **fields,
             },
         )
 
         # If the Item already existed but missing air_date/runtime, update it
         updated_fields = []
-        if item.air_date is None and air_date is not None:
-            item.air_date = air_date
-            updated_fields.append("air_date")
-        if item.runtime is None and runtime is not None:
-            item.runtime = runtime
-            updated_fields.append("runtime")
+        for field in ("air_date", "runtime"):
+            if getattr(item, field) is None and fields[field] is not None:
+                setattr(item, field, fields[field])
+                updated_fields.append(field)
 
         if updated_fields:
             item.save(update_fields=updated_fields)
@@ -1811,14 +1954,26 @@ class Episode(models.Model):
         """Save the episode instance."""
         # Extract the auto_complete parameter from kwargs
         auto_complete = kwargs.pop('auto_complete', True)
+        complete_season = kwargs.pop("complete_season", False)
+        from_home = kwargs.pop("from_home", False)
         
         super().save(*args, **kwargs)
 
         # Skip TMDB metadata fetching for YouTube and Manual episodes
         if self.item.source in [Sources.YOUTUBE.value, Sources.MANUAL.value]:
+            if complete_season and self.item.source == Sources.MANUAL.value:
+                self.related_season.status = Status.COMPLETED.value
+                self.related_season.save(update_fields=["status"])
             return
 
         season_number = self.item.season_number
+        if from_home:
+            self._update_tracking_status(
+                completed=complete_season,
+                defer_tv_completion=complete_season,
+            )
+            return
+
         tv_with_seasons_metadata = providers.services.get_media_metadata(
             "tv_with_seasons",
             self.item.media_id,
@@ -1831,43 +1986,44 @@ class Episode(models.Model):
         # clear prefetch cache to get the updated episodes
         self.related_season.refresh_from_db()
 
-        season_just_completed = False
-        if self.item.episode_number == max_progress and auto_complete:
-            self.related_season.status = Status.COMPLETED.value
+        completed = complete_season or (
+            auto_complete and self.item.episode_number == max_progress
+        )
+        last_season = (
+            tv_with_seasons_metadata["related"]["seasons"][-1]["season_number"]
+            if completed else None
+        )
+        self._update_tracking_status(completed=completed, last_season=last_season)
+
+    def _update_tracking_status(
+        self, *, completed, last_season=None, defer_tv_completion=False,
+    ):
+        season = self.related_season
+        tv = season.related_tv
+        if completed:
+            season.status = Status.COMPLETED.value
+            season.home_completion_pending = defer_tv_completion
             bulk_update_with_history(
-                [self.related_season],
+                [season],
+                Season,
+                fields=["status", "home_completion_pending"],
+            )
+            if last_season == self.item.season_number:
+                tv.status = Status.COMPLETED.value
+                bulk_update_with_history([tv], TV, fields=["status"])
+            return
+
+        if season.status != Status.IN_PROGRESS.value:
+            season.status = Status.IN_PROGRESS.value
+            bulk_update_with_history(
+                [season],
                 Season,
                 fields=["status"],
             )
-            season_just_completed = True
 
-        elif self.related_season.status != Status.IN_PROGRESS.value:
-            self.related_season.status = Status.IN_PROGRESS.value
-            bulk_update_with_history(
-                [self.related_season],
-                Season,
-                fields=["status"],
-            )
-
-        if season_just_completed:
-            last_season = tv_with_seasons_metadata["related"]["seasons"][-1][
-                "season_number"
-            ]
-            # mark the TV show as completed if it's the last season
-            if season_number == last_season:
-                self.related_season.related_tv.status = Status.COMPLETED.value
-                bulk_update_with_history(
-                    [self.related_season.related_tv],
-                    TV,
-                    fields=["status"],
-                )
-        elif self.related_season.related_tv.status != Status.IN_PROGRESS.value:
-            self.related_season.related_tv.status = Status.IN_PROGRESS.value
-            bulk_update_with_history(
-                [self.related_season.related_tv],
-                TV,
-                fields=["status"],
-            )
+        if tv.status != Status.IN_PROGRESS.value:
+            tv.status = Status.IN_PROGRESS.value
+            bulk_update_with_history([tv], TV, fields=["status"])
 
 
 class Manga(Media):

@@ -1,6 +1,7 @@
 ﻿import logging
 
 from copy import deepcopy
+from urllib.parse import urlencode
 
 from django.apps import apps
 from django.conf import settings
@@ -9,7 +10,6 @@ from django.core.cache import cache
 from django.core.paginator import Paginator
 from django.db import IntegrityError, transaction
 from django.db import models
-from django.db.models import prefetch_related_objects
 from django.http import Http404, HttpResponse, HttpResponseBadRequest, JsonResponse
 from django.shortcuts import redirect, render
 from django.urls import reverse
@@ -17,6 +17,7 @@ from django.utils import timezone
 from django.utils.dateparse import parse_date
 from django.utils.timezone import datetime
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
+from django.views.decorators.vary import vary_on_headers
 from django.contrib.auth.decorators import login_required
 
 from app import helpers, history_processor
@@ -26,51 +27,40 @@ from app.forms import EpisodeTrackingForm, ManualItemForm, get_form_class
 from app.models import TV, BasicMedia, Episode, Item, MediaTypes, Season, Sources, Status, GameSession, Game
 from app.providers import manual, services, tmdb, youtube
 from app.templatetags import app_tags
+from integrations.youtube_watched import queue_watched
 from users.models import HomeSortChoices, MediaSortChoices, MediaStatusChoices
 
 logger = logging.getLogger(__name__)
+HOME_ITEMS_LIMIT = 14
+HOME_MORE_LIMIT = 8
+STALE_PROGRESS_MESSAGE = "Progress changed. Refresh the page and try again."
 
 
 @require_GET
+@vary_on_headers("HX-Request", "HX-Target")
 def home(request):
     """Home page with media items in progress."""
-    sort_by = request.user.update_preference("home_sort", request.GET.get("sort"))
+    is_htmx = request.headers.get("HX-Request") == "true"
     media_type_to_load = request.GET.get("load_media_type")
-    items_limit = 14
+    if is_htmx and media_type_to_load:
+        return _home_load_more(request, media_type_to_load)
 
+    sort_by = request.user.update_preference("home_sort", request.GET.get("sort"))
+    sort_fragment = is_htmx and request.headers.get("HX-Target") == "home-feed"
+    section_limits = {
+        media_type: _home_count(request.GET.get(f"shown_{media_type}"))
+        for media_type in request.user.get_active_media_types()
+    } if sort_fragment else None
     list_by_type = BasicMedia.objects.get_in_progress(
         request.user,
         sort_by,
-        items_limit,
-        media_type_to_load,
+        HOME_ITEMS_LIMIT,
+        section_limits=section_limits,
     )
-
-    # Add pending video counts before the HTMX response returns, so the
-    # additional YouTube channels loaded from Home get the same values.
-    for media_list in list_by_type.get(MediaTypes.YOUTUBE.value, {}).get('items', []):
-        try:
-            max_progress = getattr(media_list, 'max_progress', None)
-            progress = getattr(media_list, 'progress', None)
-            if max_progress is not None and progress is not None:
-                pending = max_progress - progress
-                media_list.pending_videos = pending if pending > 0 else 0
-            else:
-                media_list.pending_videos = 0
-        except Exception:
-            media_list.pending_videos = 0
-
-    # If this is an HTMX request to load more items for a specific media type
-    if request.headers.get("HX-Request") and media_type_to_load:
-        context = {
-            "media_list": list_by_type.get(media_type_to_load, []),
-        }
-        return render(request, "app/components/home_grid.html", context)
-
     context = {
         "list_by_type": list_by_type,
         "current_sort": sort_by,
         "sort_choices": HomeSortChoices.choices,
-        "items_limit": items_limit,
     }
     # Preferred order for sections on the Home page
     context["preferred_order"] = [
@@ -94,14 +84,193 @@ def home(request):
 
     context["preferred_sections"] = preferred_sections
     context["remaining_sections"] = remaining_sections
+    if sort_fragment:
+        response = render(request, "app/components/home_sorted.html", context)
+        response.headers["X-Home-Fragment"] = "sort"
+        response.headers["HX-Replace-Url"] = (
+            f"{reverse('home')}?{urlencode({'sort': sort_by})}"
+        )
+        return response
     return render(request, "app/home.html", context)
+
+
+def _home_count(value):
+    try:
+        return max(HOME_ITEMS_LIMIT, int(value))
+    except (TypeError, ValueError):
+        return HOME_ITEMS_LIMIT
+
+
+def _home_load_more(request, media_type):
+    if (
+        media_type not in request.user.get_active_media_types()
+        or media_type in {MediaTypes.TV.value, MediaTypes.YOUTUBE_VIDEO.value}
+    ):
+        raise Http404
+
+    sort = request.GET.get("sort")
+    if sort not in HomeSortChoices.values:
+        sort = request.user.home_sort
+    offset = _home_count(request.GET.get("offset"))
+    media = BasicMedia.objects.get_in_progress(
+        request.user, sort, HOME_MORE_LIMIT, media_type, offset=offset,
+    ).get(media_type)
+    signature = request.GET.get("signature")
+    context = {"media_type": media_type, "current_sort": sort, "media_list": media}
+    if signature and (not media or signature != media["previous_signature"]):
+        # The ordered prefix changed in another tab or in a background update.
+        context["media_list"] = BasicMedia.objects.get_in_progress(
+            request.user, sort, offset + HOME_MORE_LIMIT, media_type, for_section=True,
+        ).get(media_type)
+        response = render(request, "app/components/home_section.html", context)
+        response.headers["HX-Retarget"] = f"#home-section-{media_type}"
+    else:
+        response = render(request, "app/components/home_more.html", context)
+    response.headers["X-Home-Fragment"] = "more"
+    return response
+
+
+def _update_season_progress(season, request, operation):
+    if operation == "decrease":
+        latest_watch = (
+            season.episodes.filter(end_date__isnull=False, item__isnull=False)
+            .order_by("-end_date", "-pk")
+            .first()
+        )
+        if latest_watch:
+            latest_watch.delete()
+        return None
+
+    if not season.pending_episode_numbers:
+        return None
+
+    next_episode = season.pending_episode_numbers[0]
+    expected = request.POST.get("episode_number")
+    if expected and expected != str(next_episode):
+        return JsonResponse({"message": STALE_PROGRESS_MESSAGE}, status=409)
+
+    answer = request.POST.get("confirm_completion")
+    if season.completes_on_next_episode and answer not in {"yes", "no"}:
+        return JsonResponse({"requires_confirmation": True})
+
+    season.watch(
+        next_episode,
+        timezone.now().replace(second=0, microsecond=0),
+        auto_complete=False,
+        complete_season=season.completes_on_next_episode and answer == "yes",
+        from_home=True,
+    )
+    return None
+
+
+def _update_youtube_progress(channel, operation):
+    watches = Episode.objects.filter(
+        related_season__related_tv=channel,
+        item__media_id=channel.item.media_id,
+        item__source=Sources.YOUTUBE.value,
+        item__media_type=MediaTypes.EPISODE.value,
+        end_date__isnull=False,
+    )
+    if operation == "decrease":
+        latest_watch = (
+            watches.select_related("item").order_by("-end_date", "-pk").first()
+        )
+        if latest_watch:
+            item = latest_watch.item
+            latest_watch.delete()
+            if not watches.filter(item=item).exists():
+                queue_watched(item, channel.user, deleted=True)
+        return
+
+    video = (
+        Item.objects.filter(
+            media_id=channel.item.media_id,
+            source=Sources.YOUTUBE.value,
+            media_type=MediaTypes.EPISODE.value,
+        )
+        .exclude(pk__in=watches.values("item_id"))
+        .order_by(
+            models.F("air_date").asc(nulls_last=True),
+            "season_number",
+            "episode_number",
+            "pk",
+        )
+        .first()
+    )
+    if video:
+        season_item, _ = Item.objects.get_or_create(
+            media_id=video.media_id,
+            source=video.source,
+            media_type=MediaTypes.SEASON.value,
+            season_number=video.season_number,
+            defaults={"title": channel.item.title, "image": channel.item.image},
+        )
+        season, _ = Season.objects.get_or_create(
+            related_tv=channel,
+            item=season_item,
+            defaults={"user": channel.user, "status": Status.IN_PROGRESS.value},
+        )
+        Episode.objects.create(
+            related_season=season, item=video, end_date=timezone.now(),
+        )
+        queue_watched(video, channel.user)
+
+
+def _update_home_episodic_progress(request, media_type, instance_id, operation):
+    section = request.POST.get("home_section")
+    with transaction.atomic():
+        try:
+            media = BasicMedia.objects.get_media_prefetch(
+                request.user, media_type, instance_id, lock=True,
+                local_seasons=True,
+            )
+        except IndexError as error:
+            raise Http404 from error
+
+        if media_type == MediaTypes.SEASON.value:
+            response = _update_season_progress(media, request, operation)
+            if response is not None:
+                return response
+        else:
+            expected = request.POST.get("pending_videos")
+            if expected and expected != str(media.pending_videos):
+                return JsonResponse({"message": STALE_PROGRESS_MESSAGE}, status=409)
+            _update_youtube_progress(media, operation)
+
+    if section in {"initial", "all"}:
+        sort = request.POST.get("sort")
+        if sort not in HomeSortChoices.values:
+            sort = request.user.home_sort
+        media_list = BasicMedia.objects.get_in_progress(
+            request.user,
+            sort,
+            _home_count(request.POST.get("shown")),
+            media_type,
+            for_section=True,
+        )
+        return render(request, "app/components/home_section.html", {
+            "media_type": media_type,
+            "media_list": media_list.get(media_type),
+            "current_sort": sort,
+        })
+
+    media = BasicMedia.objects.get_media_prefetch(
+        request.user, media_type, instance_id, local_seasons=True,
+    )
+    return render(request, "app/components/progress_changer.html", {"media": media})
 
 
 @require_POST
 def progress_edit(request, media_type, instance_id):
     """Increase or decrease the progress of a media item from home page."""
-    operation = request.POST["operation"]
-    confirm_completion = request.POST.get("confirm_completion")
+    operation = request.POST.get("operation")
+    if operation not in {"increase", "decrease"}:
+        return HttpResponseBadRequest("Unknown progress operation.")
+    if media_type in {MediaTypes.SEASON.value, MediaTypes.YOUTUBE.value}:
+        return _update_home_episodic_progress(
+            request, media_type, instance_id, operation,
+        )
+
     reading_time = request.POST.get("reading_time", 0)  # For comics
     play_time = request.POST.get("play_time", 0)  # For games
     percentage_progress = request.POST.get("percentage_progress", None)  # For games
@@ -112,50 +281,7 @@ def progress_edit(request, media_type, instance_id):
         instance_id,
     )
 
-    # Special handling for season increase operation
-    if operation == "increase" and media_type == MediaTypes.SEASON.value:
-        # Get season metadata to check if this will be the last episode
-        season_metadata = services.get_media_metadata(
-            MediaTypes.SEASON.value,
-            media.item.media_id,
-            media.item.source,
-            [media.item.season_number],
-        )
-        episodes = season_metadata["episodes"]
-        max_episodes = len(episodes)
-        current_progress = media.progress
-        
-        # Check if incrementing will complete the season
-        next_episode_number = None
-        if current_progress == 0:
-            next_episode_number = episodes[0]["episode_number"]
-        else:
-            next_episode_number = tmdb.find_next_episode(current_progress, episodes)
-        
-        is_last_episode = next_episode_number == max_episodes
-        
-        # If it's the last episode and no confirmation yet, ask for confirmation
-        if is_last_episode and confirm_completion not in ["yes", "no"]:
-            return JsonResponse({
-                "requires_confirmation": True,
-                "message": "This is the last episode of the season. Do you want to mark the season as completed?",
-                "season_data": {
-                    "media_type": media_type,
-                    "instance_id": instance_id,
-                    "operation": operation,
-                }
-            })
-        
-        # Handle the increase with auto_complete logic
-        if is_last_episode:
-            auto_complete = confirm_completion == "yes"
-            # Manually call watch instead of increase_progress to control auto_complete
-            now = timezone.now().replace(second=0, microsecond=0)
-            if next_episode_number:
-                media.watch(next_episode_number, now, auto_complete=auto_complete)
-        else:
-            media.increase_progress()
-    elif operation == "increase":
+    if operation == "increase":
         # For comics, always increment progress (issues read)
         if media_type == MediaTypes.COMIC.value:
             try:
@@ -262,11 +388,6 @@ def progress_edit(request, media_type, instance_id):
             media.increase_progress()
     elif operation == "decrease":
         media.decrease_progress()
-
-    if media_type == MediaTypes.SEASON.value:
-        # clear prefetch cache to get the updated episodes
-        media.refresh_from_db()
-        prefetch_related_objects([media], "episodes")
 
     context = {
         "media": media,
