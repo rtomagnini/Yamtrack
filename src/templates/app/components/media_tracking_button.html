@@ -3,10 +3,10 @@
 <div class="mt-3" x-data="{ trackOpen: false }"
      {% if media_type == MediaTypes.SEASON.value %}id="season-tracker-control"{% endif %}>
   {% if current_instance %}
-    <div class="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
-      <span class="theme-selected rounded-full px-2.5 py-1 font-medium">{{ current_instance.status|media_status_readable }}</span>
+    <div class="media-tracking-summary mb-3 flex flex-wrap items-center text-sm">
+      <span class="media-tracking-status theme-selected rounded-full font-medium">{{ current_instance.status|media_status_readable }}</span>
       {% if media_type != MediaTypes.MOVIE.value %}
-        <span class="text-gray-300" data-tracking-progress>
+        <span class="media-tracking-progress text-gray-300" data-tracking-progress>
           {% if media_type == MediaTypes.SEASON.value %}
             {{ watched_episode_count }}{% if season_episode_count %} / {{ season_episode_count }}{% endif %} watched
           {% elif media_type == MediaTypes.YOUTUBE.value %}
@@ -28,7 +28,7 @@
     </div>
   {% endif %}
 
-  <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
+  <div class="media-tracking-actions flex flex-wrap items-center">
     <button type="button"
             class="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium transition-colors cursor-pointer"
             hx-get="{% media_view_url 'track_modal' media %}"

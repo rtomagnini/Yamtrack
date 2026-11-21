@@ -20,6 +20,10 @@
     .media-overview-heading { grid-area: heading; }
     .media-overview-heading h1 { overflow-wrap: anywhere; }
     .media-overview-description { grid-area: description; }
+    .media-tracking-summary { gap: .375rem .75rem; }
+    .media-tracking-status { padding: .25rem .625rem; }
+    .media-tracking-progress { font-variant-numeric: tabular-nums; }
+    .media-tracking-actions { gap: .5rem .75rem; }
     @media (min-width: 48rem) {
       .media-overview {
         grid-template: "poster heading" auto "poster description" 1fr / minmax(0, min(25%, 250px)) minmax(0, 1fr);
@@ -94,11 +98,13 @@
 
     <div class="media-overview-description">
       {# Genres #}
-      <div class="flex flex-wrap gap-2 mb-4">
-        {% for genre in media.genres %}
-          <span class="px-3 py-1 bg-violet-600 text-white rounded-full text-sm">{{ genre }}</span>
-        {% endfor %}
-      </div>
+      {% if media.genres %}
+        <div class="flex flex-wrap gap-2 mb-4">
+          {% for genre in media.genres %}
+            <span class="px-3 py-1 theme-raised text-gray-300 rounded-full text-xs">{{ genre }}</span>
+          {% endfor %}
+        </div>
+      {% endif %}
 
       {# Description #}
       <div class="mb-6">
