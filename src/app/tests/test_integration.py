@@ -68,9 +68,12 @@ class IntegrationTest(StaticLiveServerTestCase):
             query.press("Enter")
             expect(page).to_have_url(search_url)
 
-            page.goto(f"{self.live_server_url}{reverse('statistics')}")
-            expect(query).to_be_visible()
-            expect(refresh).to_have_count(0)
+        tv_list = reverse("medialist", args=[MediaTypes.TV.value])
+        self.page.goto(f"{self.live_server_url}{tv_list}")
+        expect(self.page.get_by_title("Recargar página", exact=True)).to_have_count(1)
+        expect(self.page.locator(".app-header-tools").get_by_role(
+            "button", name="Recargar página",
+        )).to_be_visible()
 
     @patch("app.providers.services.get_media_metadata", side_effect=OSError)
     def test_season_progress_edit(self, provider):
