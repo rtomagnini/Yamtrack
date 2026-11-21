@@ -84,7 +84,7 @@
           confirmedDate: '',
           inputDateTime: '{% if TRACK_TIME %}{% now "Y-m-d\TH:i" %}{% else %}{% now "Y-m-d" %}{% endif %}',
           inputType: '{% if TRACK_TIME %}datetime-local{% else %}date{% endif %}',
-          async submitEpisode(answer = '', quick = null) {
+          async submitEpisode(answer = '') {
             const form = this.$refs.watchDateForm;
             const refresh = form.hasAttribute('data-season-refresh')
               ? document.getElementById('season-watch-refresh') : null;
@@ -93,13 +93,8 @@
             this.busy = true;
             if (refresh) refresh.dataset.busy = 'true';
             this.error = '';
-            if (quick) {
-              quick.button.disabled = true;
-              quick.error.hidden = true;
-            }
-
             const formData = new FormData(form);
-            const watchDate = answer ? this.confirmedDate : quick ? '' : this.inputDateTime;
+            const watchDate = answer ? this.confirmedDate : this.inputDateTime;
             formData.set('end_date', watchDate);
             if (answer) formData.set('confirm_completion', answer);
 
@@ -132,13 +127,11 @@
               saved = true;
               window.location.reload();
             } catch {
-              if (quick) quick.error.hidden = false;
-              else this.error = 'Could not save the watch. Try again.';
+              this.error = 'Could not save the watch. Try again.';
             } finally {
               if (refresh) delete refresh.dataset.busy;
               if (!saved) {
                 this.busy = false;
-                if (quick) quick.button.disabled = false;
               }
             }
           }
@@ -150,7 +143,6 @@
             <form x-ref="watchDateForm" data-watch-date-form
                   {% if detail_media_type == 'season' %}data-season-refresh{% endif %}
                   @submit.prevent="submitEpisode()"
-                  @watch-now="submitEpisode('', $event.detail)"
                   action="{% url 'episode_save' %}?next={{ request.get_full_path|urlencode }}"
                   method="post">
               {% csrf_token %}
