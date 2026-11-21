@@ -2,7 +2,7 @@
 
 {% if media_type == MediaTypes.SEASON.value %}<div id="season-tracking-history">{% endif %}
 {# Your History #}
-{% if user_medias|length > 1 or current_instance.start_date or current_instance.end_date or current_instance.progress and media.media_type != MediaTypes.MOVIE.value %}
+{% if user_medias|length > 1 or current_instance.start_date or current_instance.end_date or current_instance.progress and media_type != MediaTypes.MOVIE.value and media_type != MediaTypes.TV.value and media_type != MediaTypes.SEASON.value %}
   <div class="flex items-center justify-between mb-4">
     <h2 class="text-xl font-bold">Your History</h2>
 
@@ -44,37 +44,25 @@
   </div>
 
   <div class="space-y-4 mb-6">
-    <div class="theme-surface p-4 rounded-lg text-center md:text-start">
-      <div class="@container flex flex-col gap-y-1">
-        {% if current_instance.start_date %}
-          <div class="flex @max-[210px]:flex-col justify-between text-sm">
-            <span class="text-gray-400">Started:</span>
-            <span class="text-gray-200">{{ current_instance.start_date|date_tracker_format }}</span>
-          </div>
-        {% endif %}
+    {% if current_instance.start_date or current_instance.end_date %}
+      <div class="theme-surface p-4 rounded-lg text-center md:text-start">
+        <div class="@container flex flex-col gap-y-1">
+          {% if current_instance.start_date %}
+            <div class="flex @max-[210px]:flex-col justify-between text-sm">
+              <span class="text-gray-400">Started:</span>
+              <span class="text-gray-200">{{ current_instance.start_date|date_tracker_format }}</span>
+            </div>
+          {% endif %}
 
-        {% if current_instance.end_date %}
-          <div class="flex @max-[210px]:flex-col justify-between text-sm">
-            <span class="text-gray-400">Ended:</span>
-            <span class="text-gray-200">{{ current_instance.end_date|date_tracker_format }}</span>
-          </div>
-        {% endif %}
-
-        {% if media_type != MediaTypes.MOVIE.value %}
-          <div class="flex @max-[210px]:flex-col justify-between text-sm">
-            <span class="text-gray-400">Progress:</span>
-            <span class="text-gray-200">
-              {% if media_type == MediaTypes.GAME.value and current_instance.percentage_progress %}
-                <span class="text-green-400 font-semibold">{{ current_instance.percentage_progress }}%</span>
-                <span class="text-gray-500 mx-1">•</span>
-              {% endif %}
-              {{ current_instance.formatted_progress }}
-              {% if current_instance.max_progress %}/ {{ current_instance.max_progress }}{% endif %}
-            </span>
-          </div>
-        {% endif %}
+          {% if current_instance.end_date %}
+            <div class="flex @max-[210px]:flex-col justify-between text-sm">
+              <span class="text-gray-400">Ended:</span>
+              <span class="text-gray-200">{{ current_instance.end_date|date_tracker_format }}</span>
+            </div>
+          {% endif %}
+        </div>
       </div>
-    </div>
+    {% endif %}
 
     {% if user_medias|length > 1 %}
       <div x-data="{ showRepeats: false }">

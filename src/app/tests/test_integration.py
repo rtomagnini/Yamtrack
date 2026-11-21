@@ -3,6 +3,7 @@ from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.contrib.staticfiles.testing import StaticLiveServerTestCase
+from django.test import override_settings
 from django.urls import reverse
 from django.utils import timezone
 from playwright.sync_api import expect, sync_playwright
@@ -322,6 +323,7 @@ class IntegrationTest(StaticLiveServerTestCase):
                 "media_type": "season",
                 "source": Sources.TMDB.value,
                 "season_number": 1,
+                "season_title": "Season 1",
                 "episodes": [
                     {
                         "episode_number": number, "name": f"Episode {number}",
@@ -333,6 +335,7 @@ class IntegrationTest(StaticLiveServerTestCase):
             },
         }
 
+    @override_settings(TRACK_TIME=True)
     def test_mark_episode_watched_from_season_details(self):
         season = _create_home_season(
             self.user, "101", [1, 2, 3], watched=(1,), source=Sources.TMDB.value,
@@ -352,22 +355,31 @@ class IntegrationTest(StaticLiveServerTestCase):
             self.page.goto(url, wait_until="domcontentloaded")
             navigation = self.page.evaluate("performance.timeOrigin")
             self.page.evaluate("window.nextEpisodeCard = document.getElementById('season-episode-3')")
-            started_at = timezone.now()
-            watch = self.page.get_by_role("button", name="Mark episode 2 watched")
+            tracker = self.page.locator(".media-overview-heading #season-tracker-control")
+            progress = tracker.locator("[data-tracking-progress]")
+            expect(tracker.get_by_role("button", name="Edit tracking")).to_be_visible()
+            expect(progress).to_have_text("1 / 3 watched")
+            watch = self.page.get_by_role("button", name="Track episode 2", exact=True)
             watch.click()
+            date = self.page.locator("#season-episode-2 input[name=end_date]")
+            expect(date).to_have_attribute("type", "datetime-local")
+            date.fill("2024-01-02T14:30")
+            self.page.get_by_role("button", name="Add watch", exact=True).click()
             expect(watch).to_have_count(0)
             tracked = season.episodes.get(item__episode_number=2)
-            self.assertGreaterEqual(tracked.end_date, started_at)
-            expect(self.page.locator("#season-tracking-history")).to_contain_text("2 / 3")
+            self.assertEqual(timezone.localtime(tracked.end_date).strftime("%Y-%m-%dT%H:%M"), "2024-01-02T14:30")
+            expect(progress).to_have_text("2 / 3 watched")
             self.assertTrue(self.page.evaluate(
                 "window.nextEpisodeCard === document.getElementById('season-episode-3')",
             ))
 
-            self.page.get_by_role("button", name="Mark episode 3 watched").click()
+            watch_last = self.page.get_by_role("button", name="Track episode 3", exact=True)
+            watch_last.click()
+            self.page.get_by_role("button", name="Add watch", exact=True).click()
             expect(self.page.get_by_role("heading", name="Complete Season?")).to_be_visible()
             self.assertFalse(season.episodes.filter(item__episode_number=3).exists())
             self.page.get_by_role("button", name="No, keep as In Progress").click()
-            expect(self.page.get_by_role("button", name="Mark episode 3 watched")).to_have_count(0)
+            expect(watch_last).to_have_count(0)
             self.assertTrue(season.episodes.filter(item__episode_number=3).exists())
             expect(self.page).to_have_url(url)
             self.assertEqual(self.page.evaluate("performance.timeOrigin"), navigation)
@@ -406,8 +418,9 @@ class IntegrationTest(StaticLiveServerTestCase):
                 fail_refresh_once,
                 times=1,
             )
-            watch = self.page.get_by_role("button", name="Mark episode 6 watched")
+            watch = self.page.get_by_role("button", name="Track episode 6", exact=True)
             watch.click()
+            self.page.get_by_role("button", name="Add watch", exact=True).click()
             expect(self.page.get_by_text("Watch saved. The episode list could not refresh.")).to_be_visible()
             self.assertEqual(season.episodes.filter(item__episode_number=6).count(), 1)
             self.page.evaluate("""() => {

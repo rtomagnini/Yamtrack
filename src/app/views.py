@@ -617,6 +617,12 @@ def season_details(request, source, media_id, title, season_number):  # noqa: AR
         display_metadata(episode, request.user)
         for episode in season_metadata["episodes"]
     ]
+    watched_numbers = {
+        episode.item.episode_number
+        for episode in episodes_in_db
+        if episode.end_date is not None
+    }
+    listed_numbers = {episode["episode_number"] for episode in season_metadata["episodes"]}
 
     # Filter episodes by watched status if requested
     episode_filter = request.GET.get("filter", "all")
@@ -655,6 +661,8 @@ def season_details(request, source, media_id, title, season_number):  # noqa: AR
         "media_type": MediaTypes.SEASON.value,
         "user_medias": user_medias,
         "current_instance": current_instance,
+        "watched_episode_count": len(watched_numbers),
+        "season_episode_count": len(watched_numbers | listed_numbers),
         "current_filter": episode_filter,
         "current_sort": sort_order,
         "episodes_page": episodes_page,

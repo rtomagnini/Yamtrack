@@ -8,61 +8,59 @@
   - Yamtrack
 {% endblock title %}
 
+{% block extra_head %}
+  <style>
+    .media-overview {
+      display: grid;
+      grid-template: "poster heading" auto "description description" auto / 4.5rem minmax(0, 1fr);
+      align-items: start;
+      gap: 1rem;
+    }
+    .media-overview-poster { grid-area: poster; }
+    .media-overview-heading { grid-area: heading; }
+    .media-overview-heading h1 { overflow-wrap: anywhere; }
+    .media-overview-description { grid-area: description; }
+    @media (min-width: 48rem) {
+      .media-overview {
+        grid-template: "poster heading" auto "poster description" 1fr / minmax(0, min(25%, 250px)) minmax(0, 1fr);
+        column-gap: 2.5rem;
+      }
+    }
+  </style>
+{% endblock extra_head %}
+
 {% block content %}
-  {# Top section #}
-  <div class="flex flex-col md:flex-row gap-8 md:gap-10 mb-12 md:mb-8">
-    <div class="w-full md:w-1/4 max-w-[250px] mx-auto md:mx-0">
-      <img alt="{{ media.title }}"
-           class="w-full rounded-lg shadow-lg theme-surface object-cover"
-           src="{{ media.image }}">
-
-      {% include "app/components/media_tracking_button.html" %}
-
-      {% if media_type == MediaTypes.MOVIE.value %}
-        <a href="{% url 'metadata_edit' media.source media_type media.media_id %}?next={{ request.get_full_path|urlencode }}"
-           class="mt-4 p-3 rounded-lg w-full block text-center bg-violet-600 hover:opacity-80 text-white transition duration-300 cursor-pointer">Edit metadata</a>
-      {% endif %}
-    </div>
-
-    {# Media details #}
-    <div class="md:w-3/4">
+  <div class="media-overview mb-8">
+    <div class="media-overview-heading">
       {% if media.media_type == MediaTypes.SEASON.value %}
-        <h2 class="text-xl font-semibold cursor-pointer hover:text-indigo-500 transition-colors duration-200 mb-2 text-gray-400 text-center md:text-start">
-          <a href="{% url 'media_details' source=media.source media_type=MediaTypes.TV.value media_id=media.media_id title=media.title|slug %}">{{ media.title }}</a>
-        </h2>
+        <a class="text-sm font-semibold hover:text-indigo-400 text-gray-400"
+           href="{% url 'media_details' source=media.source media_type=MediaTypes.TV.value media_id=media.media_id title=media.title|slug %}">{{ media.title }}</a>
 
-        <div class="flex flex-col md:flex-row gap-y-4 md:gap-y-0 items-center justify-between mb-6">
-          <h1 class="text-3xl font-bold">{{ media.season_title }}</h1>
-
+        <div class="mt-1">
           {# Season dropdown #}
           <div class="relative"
                x-data="{ open: false }"
                @click.away="open = false"
                @keydown.escape.window="open = false">
-            <button @click="open = !open"
-                    class="flex items-center space-x-2 px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-md transition-colors duration-200 cursor-pointer">
-              <span class="text-sm font-medium">{{ media.season_title }}</span>
-              <svg xmlns="http://www.w3.org/2000/svg"
-                   width="16"
-                   height="16"
-                   viewBox="0 0 24 24"
-                   fill="none"
-                   stroke="currentColor"
-                   stroke-width="2"
-                   stroke-linecap="round"
-                   stroke-linejoin="round"
-                   :class="{ 'rotate-180': open }">
-                <path d="m6 9 6 6 6-6"></path>
-              </svg>
-            </button>
-            <div x-show="open"
+            <h1>
+              <button type="button" @click="open = !open" :aria-expanded="open"
+                      class="flex items-center gap-2 text-left text-2xl md:text-3xl font-bold hover:text-indigo-400 cursor-pointer">
+                <span>{{ media.season_title }}</span>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+                     stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                     class="shrink-0" :class="{ 'rotate-180': open }" aria-hidden="true">
+                  <path d="m6 9 6 6 6-6"></path>
+                </svg>
+              </button>
+            </h1>
+            <div x-cloak x-show="open"
                  x-transition:enter="transition ease-out duration-200"
                  x-transition:enter-start="opacity-0 transform scale-95"
                  x-transition:enter-end="opacity-100 transform scale-100"
                  x-transition:leave="transition ease-in duration-150"
                  x-transition:leave-start="opacity-100 transform scale-100"
                  x-transition:leave-end="opacity-0 transform scale-95"
-                 class="absolute right-1/2 md:right-0 translate-x-1/2 md:translate-x-0 mt-2 w-64 theme-surface rounded-md shadow-lg overflow-hidden z-10">
+                 class="absolute left-0 mt-2 w-48 xs:w-64 theme-raised rounded-md shadow-lg overflow-hidden z-10">
               <div class="max-h-[300px] overflow-y-auto">
                 {% for tv_season in tv.related.seasons %}
                   <a href="{% url 'season_details' source=media.source media_id=media.media_id title=media.title|slug season_number=tv_season.season_number %}"
@@ -84,9 +82,17 @@
           </div>
         </div>
       {% else %}
-        <h1 class="text-3xl font-bold mb-4 text-center md:text-start">{{ media.title }}</h1>
+        <h1 class="text-2xl md:text-3xl font-bold break-words">{{ media.title }}</h1>
       {% endif %}
 
+      {% include "app/components/media_tracking_button.html" %}
+    </div>
+
+    <img alt="{{ media.title }}"
+         class="media-overview-poster w-full rounded-lg theme-surface object-cover"
+         src="{{ media.image }}">
+
+    <div class="media-overview-description">
       {# Genres #}
       <div class="flex flex-wrap gap-2 mb-4">
         {% for genre in media.genres %}
