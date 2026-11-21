@@ -12,8 +12,7 @@
             },
         ],
     }
-    # Include TV SHOW (tmdb/manual), YouTube, Movies, Comics, Games, and Books
-    media_types = [MediaTypes.TV.value, MediaTypes.YOUTUBE.value, MediaTypes.MOVIE.value, MediaTypes.COMIC.value, MediaTypes.GAME.value, MediaTypes.BOOK.value]
+    media_types = [MediaTypes.TV.value, MediaTypes.YOUTUBE.value, MediaTypes.MOVIE.value, MediaTypes.COMIC.value, MediaTypes.MANGA.value, MediaTypes.GAME.value, MediaTypes.BOOK.value]
     total_minutes = 0
     media_type_minutes = {}
     for media_type in media_types:
@@ -31,6 +30,11 @@
                     minutes = ComicSession.objects.filter(**session_filters).aggregate(total=models.Sum("minutes"))["total"] or 0
                 else:
                     minutes = queryset.aggregate(total=models.Sum("reading_time"))["total"] or 0
+            elif media_type == MediaTypes.MANGA.value:
+                minutes = (
+                    manga_sessions(user, start_date, end_date).aggregate(total=models.Sum("minutes"))["total"]
+                    if user else queryset.aggregate(total=models.Sum("reading_time"))["total"]
+                ) or 0
             elif media_type == MediaTypes.GAME.value:
                 # For games, sum minutes from GameSession filtered by date
                 if user:
@@ -260,8 +264,7 @@ def get_watch_time_timeseries(user, start_date, end_date):
         data.setdefault(key, 0)
         data[key] += movie.metadata_runtime or 0
 
-    # Agrupar y sumar minutes de ComicSession
-    for session in comic_sessions:
+    for session in itertools.chain(comic_sessions, manga_sessions(user, chart_start_date, end_date)):
         dt = timezone.localtime(session.session_date)
         if group == 'day':
             key = dt.date()
@@ -335,6 +338,7 @@ import heapq
 import itertools
 import logging
 from collections import defaultdict
+from types import SimpleNamespace
 
 from dateutil.relativedelta import relativedelta
 from django.apps import apps
@@ -354,6 +358,7 @@ from app.models import (
     ComicSession,
     Episode,
     GameSession,
+    MangaSession,
     MediaManager,
     MediaTypes,
     Movie,
@@ -365,6 +370,16 @@ from app.templatetags import app_tags
 logger = logging.getLogger(__name__)
 
 
+def manga_sessions(user, start_date=None, end_date=None):
+    """Get a user's chapter reads within any provided date bounds."""
+    sessions = MangaSession.objects.filter(manga__user=user)
+    if start_date is not None:
+        sessions = sessions.filter(session_date__gte=start_date)
+    if end_date is not None:
+        sessions = sessions.filter(session_date__lte=end_date)
+    return sessions
+
+
 def get_consumption_querysets(user):
     """Return the querysets and date fields counted as consumed items."""
     return (
@@ -373,6 +388,7 @@ def get_consumption_querysets(user):
         (ComicSession.objects.filter(comic__user=user), "session_date"),
         (GameSession.objects.filter(game__user=user), "session_date"),
         (BookSession.objects.filter(book__user=user), "session_date"),
+        (manga_sessions(user), "session_date"),
     )
 
 
@@ -407,6 +423,7 @@ def get_user_media(user, start_date, end_date):
         MediaTypes.MOVIE.value,
         MediaTypes.ANIME.value,
         MediaTypes.COMIC.value,
+        MediaTypes.MANGA.value,
         MediaTypes.BOOK.value,
         MediaTypes.GAME.value,
     ]
@@ -419,6 +436,10 @@ def get_user_media(user, start_date, end_date):
                 queryset = model.objects.filter(user=user, progress__gt=0)
             else:
                 queryset = model.objects.filter(user=user, progress__gt=0, progressed_at__range=(start_date, end_date))
+        elif media_type == MediaTypes.MANGA.value:
+            queryset = model.objects.filter(
+                pk__in=manga_sessions(user, start_date, end_date).values("manga_id"),
+            )
         elif media_type == MediaTypes.GAME.value:
             # For games, include all with progress > 0 (time played)
             if start_date is None and end_date is None:
@@ -459,7 +480,9 @@ def get_user_media(user, start_date, end_date):
     
     for media_type, queryset in other_media.items():
         user_media[media_type] = queryset
-        if media_type == MediaTypes.COMIC.value:
+        if media_type == MediaTypes.MANGA.value:
+            media_count[media_type] = manga_sessions(user, start_date, end_date).count()
+        elif media_type == MediaTypes.COMIC.value:
             # For comics, count sessions in date range
             if start_date is None and end_date is None:
                 media_count[media_type] = ComicSession.objects.filter(comic__user=user).count()
@@ -494,16 +517,13 @@ def get_user_media(user, start_date, end_date):
         )
     else:
         querysets = tuple(queryset for queryset, _ in consumption)
-    watched_episodes, watched_movies_qs, comic_sessions, game_sessions, book_sessions = querysets
+    watched_episodes, watched_movies_qs, *session_querysets = querysets
     items_watched = sum(queryset.count() for queryset in querysets)
 
     episode_minutes = watched_episodes.select_related("item").aggregate(total=models.Sum(runtime_expression(user)))["total"] or 0
     movie_minutes = watched_movies_qs.select_related("item").aggregate(total=models.Sum(runtime_expression(user)))["total"] or 0
-    comic_minutes = comic_sessions.aggregate(total=models.Sum("minutes"))["total"] or 0
-    game_minutes = game_sessions.aggregate(total=models.Sum("minutes"))["total"] or 0
-    book_minutes = book_sessions.aggregate(total=models.Sum("minutes"))["total"] or 0
-
-    total_watch_minutes = episode_minutes + movie_minutes + comic_minutes + game_minutes + book_minutes
+    session_minutes = sum(qs.aggregate(total=models.Sum("minutes"))["total"] or 0 for qs in session_querysets)
+    total_watch_minutes = episode_minutes + movie_minutes + session_minutes
 
     return user_media, media_count, items_watched, total_watch_minutes
 
@@ -522,13 +542,13 @@ def get_media_type_distribution(media_count):
         ],
     }
 
-    # Incluir TV, YouTube, Movie, Anime, Comic, Book, Game
     allowed_types = [
         MediaTypes.TV.value,
         MediaTypes.YOUTUBE.value,
         MediaTypes.MOVIE.value,
         MediaTypes.ANIME.value,
         MediaTypes.COMIC.value,
+        MediaTypes.MANGA.value,
         MediaTypes.BOOK.value,
         MediaTypes.GAME.value,
     ]
@@ -556,6 +576,7 @@ def get_status_distribution(user_media, user=None, start_date=None, end_date=Non
         MediaTypes.MOVIE.value,
         MediaTypes.ANIME.value,
         MediaTypes.COMIC.value,
+        MediaTypes.MANGA.value,
         MediaTypes.BOOK.value,
         MediaTypes.GAME.value,
     ]
@@ -569,6 +590,10 @@ def get_status_distribution(user_media, user=None, start_date=None, end_date=Non
             count = 0
         elif media_type in [MediaTypes.TV.value, MediaTypes.YOUTUBE.value]:
             count = queryset.count()
+        elif media_type == MediaTypes.MANGA.value:
+            count = manga_sessions(user, start_date, end_date).count() if user else queryset.aggregate(
+                total=models.Count("sessions"),
+            )["total"]
         elif media_type == MediaTypes.COMIC.value:
             # For comics, count sessions in date range
             if user:
@@ -790,7 +815,19 @@ def get_timeline(user_media, start_date=None, end_date=None, user=None):
 
     # Incluir todos los tipos, incluyendo episodios de TV
     for media_type, queryset in user_media.items():
-        if media_type == MediaTypes.COMIC.value:
+        if media_type == MediaTypes.MANGA.value:
+            if user:
+                for session in manga_sessions(user, start_date, end_date).select_related("manga__item"):
+                    day = timezone.localdate(session.session_date)
+                    month = f"{calendar.month_name[day.month]} {day.year}"
+                    timeline[month].append(SimpleNamespace(
+                        item=display_metadata(session.manga.item, user),
+                        media_type="manga_chapter",
+                        chapter_number=session.chapter_number,
+                        end_date=session.session_date,
+                        runtime=session.minutes,
+                    ))
+        elif media_type == MediaTypes.COMIC.value:
             # For comics, get ComicSession records directly filtered by date
             if user:
                 session_filters = {'comic__user': user}
@@ -1077,6 +1114,11 @@ def calculate_day_of_week_stats(user, start_date, end_date):
         play_time = game.play_time or 0
         day_minutes[day_name] += play_time
         total_minutes += play_time
+
+    for session in manga_sessions(user, start_date, end_date):
+        day_name = timezone.localtime(session.session_date).strftime("%A")
+        day_minutes[day_name] += session.minutes
+        total_minutes += session.minutes
 
     if not total_minutes:
         return None, 0

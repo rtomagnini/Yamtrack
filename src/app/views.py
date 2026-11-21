@@ -24,7 +24,7 @@ from app import helpers, history_processor
 from app import statistics as stats
 from app.metadata import display_metadata, override_for, save_poster_override
 from app.forms import EpisodeTrackingForm, ManualItemForm, get_form_class
-from app.models import TV, BasicMedia, Episode, Item, MediaTypes, Season, Sources, Status, GameSession, Game
+from app.models import TV, BasicMedia, Episode, Item, MangaSession, MediaTypes, Season, Sources, Status, GameSession, Game
 from app.providers import manual, services, tmdb, youtube
 from app.templatetags import app_tags
 from integrations.youtube_watched import queue_watched
@@ -260,6 +260,42 @@ def _update_home_episodic_progress(request, media_type, instance_id, operation):
     return render(request, "app/components/progress_changer.html", {"media": media})
 
 
+@transaction.atomic
+def _record_manga_chapter(request, instance_id):
+    try:
+        minutes = int(request.POST.get("reading_time") or 0)
+    except ValueError:
+        return HttpResponseBadRequest("Enter a whole number of minutes.")
+    if not 0 <= minutes <= 2_147_483_647:
+        return HttpResponseBadRequest("Reading time is out of range.")
+
+    try:
+        manga = BasicMedia.objects.get_media_prefetch(
+            request.user, MediaTypes.MANGA.value, instance_id, lock=True,
+        )
+    except IndexError as error:
+        raise Http404 from error
+    if manga.max_progress and manga.progress >= manga.max_progress:
+        return HttpResponseBadRequest("All chapters are already tracked.")
+    if manga.reading_time + minutes > 2_147_483_647:
+        return HttpResponseBadRequest("Total reading time is out of range.")
+
+    manga.progressed_at = timezone.now()
+    manga.reading_time += minutes
+    previous_progress = manga.progress
+    manga.increase_progress()
+    if manga.progress <= previous_progress:
+        transaction.set_rollback(True)
+        return HttpResponseBadRequest("All chapters are already tracked.")
+    MangaSession.objects.create(
+        manga=manga,
+        chapter_number=manga.progress,
+        minutes=minutes,
+        session_date=manga.progressed_at,
+    )
+    return render(request, "app/components/progress_changer.html", {"media": manga})
+
+
 @require_POST
 def progress_edit(request, media_type, instance_id):
     """Increase or decrease the progress of a media item from home page."""
@@ -271,7 +307,10 @@ def progress_edit(request, media_type, instance_id):
             request, media_type, instance_id, operation,
         )
 
-    reading_time = request.POST.get("reading_time", 0)  # For comics
+    if media_type == MediaTypes.MANGA.value and operation == "increase":
+        return _record_manga_chapter(request, instance_id)
+
+    reading_time = request.POST.get("reading_time", 0)
     play_time = request.POST.get("play_time", 0)  # For games
     percentage_progress = request.POST.get("percentage_progress", None)  # For games
 

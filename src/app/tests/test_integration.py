@@ -7,7 +7,7 @@ from django.urls import reverse
 from django.utils import timezone
 from playwright.sync_api import expect, sync_playwright
 
-from app.models import Sources, Status
+from app.models import Item, Manga, MediaTypes, Sources, Status
 from app.tests.test_views import _create_home_season
 from events.models import Event
 
@@ -189,6 +189,47 @@ class IntegrationTest(StaticLiveServerTestCase):
         self.page.get_by_role("link", name="TV Shows").click()
         self.page.get_by_role("link", name="Table View").click()
         expect(self.page.locator("tbody")).to_contain_text("62")
+
+    @patch("app.providers.services.get_media_metadata", return_value={"max_progress": 100})
+    def test_manga_reading_sessions_from_home(self, _provider):
+        self.user.manga_enabled = True
+        self.user.save(update_fields=["manga_enabled"])
+        item = Item.objects.create(
+            title="Reading Manga", media_id="123", media_type=MediaTypes.MANGA.value,
+            source=Sources.MAL.value,
+        )
+        manga, = Manga.objects.bulk_create([
+            Manga(user=self.user, item=item, progress=7, status=Status.IN_PROGRESS.value),
+        ])
+        self.page.goto(f"{self.live_server_url}/", wait_until="domcontentloaded")
+        card = self.page.locator("#media-grid-manga")
+        increase = card.get_by_role("button", name="Increase progress")
+        minutes = card.get_by_label("Reading time (minutes)")
+        save = card.get_by_role("button", name="OK", exact=True)
+
+        increase.click()
+        minutes.fill("18")
+        save.click()
+        expect(card.get_by_text("8 Chapters", exact=True)).to_be_visible()
+        increase.click()
+        expect(minutes).to_be_visible()
+        save.click()
+        expect(card.get_by_text("9 Chapters", exact=True)).to_be_visible()
+
+        manga.refresh_from_db()
+        self.assertEqual(manga.reading_time, 18)
+        self.assertEqual(
+            list(manga.sessions.order_by("id").values_list("chapter_number", "minutes")),
+            [(8, 18), (9, 0)],
+        )
+        self.page.goto(f"{self.live_server_url}{reverse('statistics')}")
+        count = self.page.get_by_role("heading", name="Items Watched/Read/Played")
+        expect(count.locator("+ p")).to_have_text("2")
+        chapter = self.page.get_by_role("heading", name="Reading Manga Chapter 8")
+        expect(chapter).to_be_visible()
+        expect(self.page.get_by_text("Chapter 9", exact=True)).to_be_visible()
+        expect(chapter.locator("..").get_by_text("18 min", exact=True)).to_be_visible()
+        expect(self.page.locator("#watch-time-bars").get_by_text("18 min", exact=True)).to_be_visible()
 
     def test_season_completed(self):
         """The tracker can close a season without marking pending episodes watched."""

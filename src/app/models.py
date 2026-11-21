@@ -2014,6 +2014,7 @@ class Episode(models.Model):
 class Manga(Media):
     """Model for manga."""
 
+    reading_time = models.PositiveIntegerField(default=0)
     tracker = FieldTracker()
 
 
@@ -2223,6 +2224,18 @@ class ComicSession(models.Model):
 
     def __str__(self):
         return f"{self.comic} session ({self.issues_read} issues, {self.minutes}m on {self.session_date:%Y-%m-%d %H:%M})"
+
+
+class MangaSession(models.Model):
+    """A chapter read on a given date, with optional reading time."""
+
+    manga = models.ForeignKey(Manga, on_delete=models.CASCADE, related_name="sessions")
+    chapter_number = models.PositiveIntegerField()
+    minutes = models.PositiveIntegerField(default=0)
+    session_date = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ["-session_date", "-id"]
 
 
 class BookSession(models.Model):
