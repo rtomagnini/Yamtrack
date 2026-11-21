@@ -64,7 +64,7 @@
           if (restoreFocus) {
             const list = document.getElementById('season-episodes');
             const card = anchorCard || list.querySelector('[data-episode-card]');
-            const focusTarget = card?.querySelector('[data-watch-now], [data-episode-options]')
+            const focusTarget = card?.querySelector('[data-watch-now], button[title="Track Episode"]')
               || list.querySelector('[data-episode-heading]');
             focusTarget?.focus({ preventScroll: true });
           }
