@@ -818,6 +818,7 @@ def track_modal(
             title += f" S{season_number}"
 
     form = get_form_class(media_type)(instance=media, initial=initial_data)
+    form.order_fields(["status", "score"])
     original_poster = None
     if "poster_url" in form.fields:
         poster_item = media.item if media else metadata

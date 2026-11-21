@@ -63,7 +63,7 @@
         </div>
       {% endif %}
 
-      <a href="{{ item|media_url }}" class="absolute inset-0" tabindex="-1" aria-label="{{ item }}"></a>
+      <a href="{{ item|media_url }}" class="absolute inset-0" tabindex="-1" aria-hidden="true"></a>
     </div>
 
     <div class="p-3 space-y-3">
@@ -86,7 +86,7 @@
         </button>
         <div id="home-actions-{{ item.media_type }}-{{ media.pk }}"
              x-cloak x-show="actionsOpen"
-             class="absolute bottom-full inset-x-0 z-20 mb-2 py-1 bg-[#1a1d20] rounded-md shadow-lg border border-gray-700">
+             class="absolute bottom-full left-0 right-0 z-20 mb-2 py-1 bg-[#1a1d20] rounded-md shadow-lg border border-gray-700">
           <button type="button"
                   x-ref="firstAction"
                   title="Add to tracker"

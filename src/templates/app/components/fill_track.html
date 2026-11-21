@@ -33,7 +33,12 @@
 
         {% for field in form %}
           {% if field.name != 'notes' and field.name != 'instance_id' and field.name != 'media_type' and field.name != 'source' and field.name != 'media_id' and field.name != 'season_number' and field.name != 'poster_url' %}
-            <div class="mb-5 {% if field.name == 'status' and total_fields|divisibleby:2 %}sm:col-span-2{% endif %}">
+            <div class="mb-5 {% if field.name == 'status' and total_fields|divisibleby:2 %}sm:col-span-2{% endif %}"
+                 {% if field.name == "status" and form.media_type.value == "season" %}
+                   x-data="{ completed: false }"
+                   x-init="completed = $el.querySelector('[name=status]').value === 'Completed'"
+                   @change="completed = $event.target.value === 'Completed'"
+                 {% endif %}>
               <label class="block text-sm font-medium mb-1 text-gray-300"
                      for="{{ field.id_for_label }}">{{ field.label }}</label>
               <div class="relative">
@@ -90,6 +95,11 @@
                   {{ field|add_class:"w-full p-2 bg-[#39404b] rounded-md text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-[#4a9eff]" }}
                 {% endif %}
               </div>
+              {% if field.name == "status" and form.media_type.value == "season" %}
+                <p x-cloak x-show="completed" class="mt-2 text-sm text-gray-300" role="status">
+                  Your watch history is kept.
+                </p>
+              {% endif %}
             </div>
           {% endif %}
         {% endfor %}
@@ -101,24 +111,11 @@
       <div class="mb-5">
         <label class="block text-sm font-medium mb-1 text-gray-300"
                for="{{ form.notes.id_for_label }}">{{ form.notes.label }}</label>
-        {{ form.notes|add_class:"w-full p-2 bg-[#39404b] rounded-md text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-[#4a9eff]" }}
+        {{ form.notes|attr:"rows:3"|add_class:"w-full p-2 bg-[#39404b] rounded-md text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-[#4a9eff]" }}
       </div>
     {% endif %}
 
-    {% if form.poster_url %}
-      <div class="mb-5" x-data="{ poster: '{{ form.poster_url.value|default_if_none:''|escapejs }}', originalPoster: '{{ original_poster|escapejs }}' }">
-        <label class="block text-sm font-medium mb-1 text-gray-300" for="{{ form.poster_url.id_for_label }}">{{ form.poster_url.label }}</label>
-        {{ form.poster_url|add_class:"w-full p-2 bg-[#39404b] rounded-md text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-[#4a9eff]" }}
-        <p class="text-sm text-gray-400 mt-2">{{ form.poster_url.help_text }}</p>
-        <div class="flex items-start gap-4 mt-3">
-          <img :src="poster || originalPoster" alt="{{ form.poster_preview_label }}" class="h-36 rounded-md object-contain bg-[#39404b]">
-          <button type="button" @click="poster = ''" x-show="poster" x-cloak
-                  class="text-sm text-violet-400 hover:text-violet-300 cursor-pointer">{{ form.poster_restore_label }}</button>
-        </div>
-      </div>
-    {% endif %}
-
-    <div class="flex flex-row-reverse justify-between mt-6">
+    <div class="flex justify-end mt-6">
       <button type="submit"
               formaction="{% url 'media_save' %}?next={{ return_url }}"
               class="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 cursor-pointer">
@@ -128,10 +125,31 @@
           Add
         {% endif %}
       </button>
-      <button type="submit"
-              formaction="{% url 'media_delete' %}?next={{ return_url }}"
-              class="px-4 py-2 rounded-md transition duration-300 {% if media %}bg-red-700 text-white hover:bg-red-800 cursor-pointer{% else %}bg-gray-600 text-gray-300 cursor-not-allowed{% endif %}"
-              {% if not media %}disabled{% endif %}>Delete</button>
     </div>
+
+    {% if form.poster_url or media %}
+      <details class="mt-4 pt-4 border-t border-gray-600" @invalid.capture="$el.open = true">
+        <summary class="text-sm text-gray-300 hover:text-white cursor-pointer">More options</summary>
+        <div class="mt-4 space-y-4">
+          {% if form.poster_url %}
+            <div x-data="{ poster: '{{ form.poster_url.value|default_if_none:''|escapejs }}', originalPoster: '{{ original_poster|escapejs }}' }">
+              <label class="block text-sm font-medium mb-1 text-gray-300" for="{{ form.poster_url.id_for_label }}">{{ form.poster_url.label }}</label>
+              {{ form.poster_url|add_class:"w-full p-2 bg-[#39404b] rounded-md text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-[#4a9eff]" }}
+              <p class="text-sm text-gray-400 mt-2">{{ form.poster_url.help_text }}</p>
+              <div class="flex items-start gap-4 mt-3">
+                <img :src="poster || originalPoster" alt="{{ form.poster_preview_label }}" loading="lazy" class="h-36 rounded-md object-contain bg-[#39404b]">
+                <button type="button" @click="poster = ''" x-show="poster" x-cloak
+                        class="text-sm text-violet-400 hover:text-violet-300 cursor-pointer">{{ form.poster_restore_label }}</button>
+              </div>
+            </div>
+          {% endif %}
+          {% if media %}
+            <button type="submit"
+                    formaction="{% url 'media_delete' %}?next={{ return_url }}"
+                    class="px-4 py-2 bg-red-700 text-white hover:bg-red-800 rounded-md cursor-pointer">Delete</button>
+          {% endif %}
+        </div>
+      </details>
+    {% endif %}
   </form>
 </div>
