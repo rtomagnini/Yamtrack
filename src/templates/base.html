@@ -37,6 +37,7 @@
         align-items: center;
         flex: 1;
         min-width: 0;
+        overflow: hidden;
         border-radius: 999px;
         background: #272c31;
       }
@@ -54,10 +55,13 @@
         margin-inline-end: .5rem;
         padding-inline-start: .5rem;
         border-inline-start: 1px solid #424a53;
-        background: #272c31;
+        background: transparent;
         color: #e5e7eb;
         font-size: .875rem;
         cursor: pointer;
+      }
+      .app-header-search select option {
+        background: #272c31;
       }
       .app-header-icon {
         flex: none;
