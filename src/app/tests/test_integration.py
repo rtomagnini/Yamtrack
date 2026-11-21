@@ -207,7 +207,20 @@ class IntegrationTest(StaticLiveServerTestCase):
         self.assertEqual(season.status, Status.COMPLETED.value)
         self.assertEqual(list(watches.all()), before)
 
-        metadata = {
+        metadata = self._season_metadata(season, 12)
+        details = reverse("season_details", args=[Sources.TMDB.value, "101", "show-101", 1])
+        with (
+            patch("app.providers.services.get_media_metadata", return_value=metadata),
+            patch("app.providers.tmdb.fetch_season_multilingual", return_value={}),
+        ):
+            self.page.goto(f"{self.live_server_url}{details}?filter=unwatched", wait_until="domcontentloaded")
+            expect(self.page.get_by_role("heading", level=2, name="Episode 3", exact=True)).to_be_visible()
+            expect(self.page.get_by_role("heading", level=2, name="Episode 12", exact=True)).to_be_visible()
+            expect(self.page.get_by_role("heading", level=2, name="Episode 1", exact=True)).to_have_count(0)
+
+    @staticmethod
+    def _season_metadata(season, episode_count):
+        return {
             "title": season.item.title,
             "season/1": {
                 "title": season.item.title,
@@ -221,19 +234,42 @@ class IntegrationTest(StaticLiveServerTestCase):
                         "air_date": "2020-01-01", "still_path": None,
                         "overview": "", "runtime": 30,
                     }
-                    for number in range(1, 13)
+                    for number in range(1, episode_count + 1)
                 ],
             },
         }
+
+    def test_mark_episode_watched_from_season_details(self):
+        season = _create_home_season(
+            self.user, "101", [1, 2, 3], watched=(1,), source=Sources.TMDB.value,
+        )
+        metadata = self._season_metadata(season, 3)
+
+        def get_metadata(media_type, *args):
+            return metadata["season/1"] if media_type == "season" else metadata
+
         details = reverse("season_details", args=[Sources.TMDB.value, "101", "show-101", 1])
         with (
-            patch("app.providers.services.get_media_metadata", return_value=metadata),
+            patch("app.providers.services.get_media_metadata", side_effect=get_metadata),
             patch("app.providers.tmdb.fetch_season_multilingual", return_value={}),
         ):
             self.page.goto(f"{self.live_server_url}{details}?filter=unwatched", wait_until="domcontentloaded")
-            expect(self.page.get_by_role("heading", level=2, name="Episode 3", exact=True)).to_be_visible()
-            expect(self.page.get_by_role("heading", level=2, name="Episode 12", exact=True)).to_be_visible()
-            expect(self.page.get_by_role("heading", level=2, name="Episode 1", exact=True)).to_have_count(0)
+            started_at = timezone.now()
+            watch = self.page.get_by_role("button", name="Mark episode 2 watched")
+            watch.click()
+            expect(watch).to_have_count(0)
+            tracked = season.episodes.get(item__episode_number=2)
+            self.assertGreaterEqual(tracked.end_date, started_at)
+
+            self.page.get_by_role("button", name="Mark episode 3 watched").click()
+            expect(self.page.get_by_role("heading", name="Complete Season?")).to_be_visible()
+            self.assertFalse(season.episodes.filter(item__episode_number=3).exists())
+            self.page.get_by_role("button", name="No, keep as In Progress").click()
+            expect(self.page.get_by_role("button", name="Mark episode 3 watched")).to_have_count(0)
+            self.assertTrue(season.episodes.filter(item__episode_number=3).exists())
+
+        season.refresh_from_db()
+        self.assertEqual(season.status, Status.IN_PROGRESS.value)
 
     def test_tv_manual(self):
         """Test the manual creation of a TV show."""

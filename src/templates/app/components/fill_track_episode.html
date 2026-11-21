@@ -2,7 +2,7 @@
 
 
 {# Track Episode Modal #}
-<div x-show="trackOpen"
+<div x-cloak x-show="trackOpen"
      @keydown.escape.window="trackOpen = false"
      class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
   <div class="w-[400px] max-h-[90vh] px-4 md:px-0 relative z-60"
@@ -77,88 +77,73 @@
           <div class="border-t border-gray-600 my-6"></div>
         {% endif %}
 
-        <div x-data="{ 
-          showConfirmation: false, 
-          confirmationData: null,
+        <div x-data="{
+          showConfirmation: false,
+          busy: false,
+          error: '',
+          confirmedDate: '',
           inputDateTime: '{% if TRACK_TIME %}{% now "Y-m-d\TH:i" %}{% else %}{% now "Y-m-d" %}{% endif %}',
           inputType: '{% if TRACK_TIME %}datetime-local{% else %}date{% endif %}',
-          async submitEpisode(confirmCompletion = false) {
-            const formData = new FormData();
-            formData.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
-            formData.append('media_id', '{{ media.media_id }}');
-            formData.append('season_number', '{{ media.season_number }}');
-            formData.append('source', '{{ media.source }}');
-            formData.append('episode_number', '{{ episode.episode_number }}');
-            formData.append('end_date', this.inputDateTime);
-            if (confirmCompletion) {
-              formData.append('confirm_completion', 'true');
+          async submitEpisode(answer = '', quick = null) {
+            if (this.busy) return;
+            this.busy = true;
+            this.error = '';
+            if (quick) {
+              quick.button.disabled = true;
+              quick.error.hidden = true;
             }
 
+            const form = this.$refs.watchDateForm;
+            const formData = new FormData(form);
+            const watchDate = answer ? this.confirmedDate : quick ? '' : this.inputDateTime;
+            formData.set('end_date', watchDate);
+            if (answer) formData.set('confirm_completion', answer);
+
+            let saved = false;
             try {
-              const response = await fetch('{% url 'episode_save' %}?next={{ request.path }}', {
+              const response = await fetch(form.action, {
                 method: 'POST',
                 body: formData,
-                headers: {
-                  'X-Requested-With': 'XMLHttpRequest'
-                }
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
               });
-
+              if (!response.ok) throw new Error();
               if (response.headers.get('content-type')?.includes('application/json')) {
                 const data = await response.json();
-                if (data.requires_confirmation) {
-                  this.showConfirmation = true;
-                  this.confirmationData = data;
-                  return;
-                }
+                if (!data.requires_confirmation) throw new Error();
+                this.confirmedDate = data.episode_data?.end_date ?? watchDate;
+                this.showConfirmation = true;
+                this.trackOpen = true;
+                this.$nextTick(() => this.$refs.keepInProgress.focus());
+                return;
               }
 
-              // If we get here, it was successful or there was an error
-              if (response.ok) {
-                window.location.reload();
-              } else {
-                console.error('Error saving episode');
+              saved = true;
+              window.location.reload();
+            } catch {
+              if (quick) quick.error.hidden = false;
+              else this.error = 'Could not save the watch. Try again.';
+            } finally {
+              if (!saved) {
+                this.busy = false;
+                if (quick) quick.button.disabled = false;
               }
-            } catch (error) {
-              console.error('Error:', error);
-            }
-          },
-          async submitEpisodeWithConfirmation(choice) {
-            const formData = new FormData();
-            formData.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
-            formData.append('media_id', '{{ media.media_id }}');
-            formData.append('season_number', '{{ media.season_number }}');
-            formData.append('source', '{{ media.source }}');
-            formData.append('episode_number', '{{ episode.episode_number }}');
-            formData.append('end_date', this.inputDateTime);
-            formData.append('confirm_completion', choice);
-
-            try {
-              const response = await fetch('{% url 'episode_save' %}?next={{ request.path }}', {
-                method: 'POST',
-                body: formData,
-                headers: {
-                  'X-Requested-With': 'XMLHttpRequest'
-                }
-              });
-
-              // Always reload on success or error after confirmation
-              if (response.ok) {
-                window.location.reload();
-              } else {
-                console.error('Error saving episode');
-                window.location.reload(); // Reload anyway to show current state
-              }
-            } catch (error) {
-              console.error('Error:', error);
-              window.location.reload(); // Reload anyway to show current state
             }
           }
-        }">
-          
+        }" x-init="$watch('trackOpen', open => { if (!open) showConfirmation = false })">
+          <p x-cloak x-show="error" x-text="error" role="alert" class="text-sm text-red-300"></p>
+
           {# Normal episode form #}
           <div x-show="!showConfirmation">
-            <form @submit.prevent="submitEpisode()" method="post">
+            <form x-ref="watchDateForm" data-watch-date-form
+                  @submit.prevent="submitEpisode()"
+                  @watch-now="submitEpisode('', $event.detail)"
+                  action="{% url 'episode_save' %}?next={{ request.get_full_path|urlencode }}"
+                  method="post">
               {% csrf_token %}
+              <input type="hidden" name="media_id" value="{{ media.media_id }}">
+              <input type="hidden" name="season_number" value="{{ media.season_number }}">
+              <input type="hidden" name="source" value="{{ media.source }}">
+              <input type="hidden" name="episode_number" value="{{ episode.episode_number }}">
               
               <label class="block text-sm font-medium text-gray-300 mb-2">Watch Date</label>
 
@@ -195,7 +180,7 @@
               {# djlint:on #}
 
               <div class="flex justify-end-safe gap-3 mt-6">
-                <button type="submit"
+                <button type="submit" :disabled="busy"
                         class="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors cursor-pointer">
                   Add watch
                 </button>
@@ -214,11 +199,11 @@
             <p class="text-gray-300 mb-6">This is the last episode of the season. Do you want to mark the season as completed?</p>
             
             <div class="flex justify-center gap-3">
-              <button @click="submitEpisodeWithConfirmation('no')"
+              <button type="button" x-ref="keepInProgress" :disabled="busy" @click="submitEpisode('no')"
                       class="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 transition-colors cursor-pointer">
                 No, keep as In Progress
               </button>
-              <button @click="submitEpisodeWithConfirmation('yes')"
+              <button type="button" :disabled="busy" @click="submitEpisode('yes')"
                       class="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors cursor-pointer">
                 Yes, Mark as Completed
               </button>

@@ -769,7 +769,21 @@
                       </div>
                       <div class="flex space-x-2">
                         {# Track Episode #}
-                        <div x-data="{ trackOpen: false }">
+                        <div class="flex items-start gap-2" x-data="{ trackOpen: false }">
+                          {% if media_type == MediaTypes.SEASON.value and not episode.history %}
+                            <button type="button"
+                                    title="Mark watched"
+                                    aria-label="Mark episode {{ episode.episode_number }} watched"
+                                    @click="$root.querySelector('[data-watch-date-form]').dispatchEvent(new CustomEvent('watch-now', {
+                                      detail: { button: $el, error: $refs.watchNowError }
+                                    }))"
+                                    class="p-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md cursor-pointer disabled:opacity-50">
+                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <path d="m5 12 4 4L19 6"></path>
+                              </svg>
+                            </button>
+                            <p x-ref="watchNowError" hidden role="alert" class="text-xs text-red-300">Could not save. Try again.</p>
+                          {% endif %}
                           <button @click="trackOpen = true"
                                   title="Track Episode"
                                   class="p-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full transition duration-300 cursor-pointer">
