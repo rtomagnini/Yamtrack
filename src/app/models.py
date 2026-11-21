@@ -1600,49 +1600,34 @@ class Season(Media):
         if self.related_tv_id is None:
             self.related_tv = self.get_tv()
 
+        update_fields = kwargs.get("update_fields")
+        status_changed = self.tracker.has_changed("status") and (
+            update_fields is None or "status" in update_fields
+        )
+        if status_changed and self.home_completion_pending:
+            # An explicit status change supersedes the deferred Home decision.
+            self.home_completion_pending = False
+            if update_fields is not None:
+                kwargs["update_fields"] = {*update_fields, "home_completion_pending"}
+
         super(Media, self).save(*args, **kwargs)
 
-        if self.tracker.has_changed("status"):
-            if self.status == Status.COMPLETED.value:
-                # Skip TMDB metadata fetching for YouTube and Manual sources
-                if self.item.source in [Sources.YOUTUBE.value, Sources.MANUAL.value]:
-                    return
-                    
-                season_metadata = providers.services.get_media_metadata(
-                    MediaTypes.SEASON.value,
-                    self.item.media_id,
-                    self.item.source,
-                    [self.item.season_number],
-                )
-                episodes_to_create = self.get_remaining_eps(season_metadata)
-                if episodes_to_create:
-                    bulk_create_with_history(
-                        episodes_to_create,
-                        Episode,
-                    )
+        if not status_changed:
+            return
 
-            elif (
-                self.status == Status.DROPPED.value
-                and self.related_tv.status != Status.DROPPED.value
-            ):
-                self.related_tv.status = Status.DROPPED.value
-                bulk_update_with_history(
-                    [self.related_tv],
-                    TV,
-                    fields=["status"],
-                )
+        if (
+            self.status == Status.DROPPED.value
+            and self.related_tv.status != Status.DROPPED.value
+        ) or (
+            self.status == Status.IN_PROGRESS.value
+            and self.related_tv.status != Status.IN_PROGRESS.value
+        ):
+            self.related_tv.status = self.status
+            bulk_update_with_history([self.related_tv], TV, fields=["status"])
 
-            elif (
-                self.status == Status.IN_PROGRESS.value
-                and self.related_tv.status != Status.IN_PROGRESS.value
-            ):
-                self.related_tv.status = Status.IN_PROGRESS.value
-                bulk_update_with_history(
-                    [self.related_tv],
-                    TV,
-                    fields=["status"],
-                )
-
+        if self.status != Status.COMPLETED.value or self.item.source not in {
+            Sources.YOUTUBE.value, Sources.MANUAL.value,
+        }:
             self.item.fetch_releases(delay=True)
 
     @property
@@ -1844,7 +1829,7 @@ class Season(Media):
         return tv
 
     def get_remaining_eps(self, season_metadata):
-        """Return episodes needed to complete a season."""
+        """Build watch records for the whole-series completion flow."""
         latest_watched_ep_num = Episode.objects.filter(related_season=self).aggregate(
             latest_watched_ep_num=Max("item__episode_number"),
         )["latest_watched_ep_num"]

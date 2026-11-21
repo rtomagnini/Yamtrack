@@ -1397,12 +1397,16 @@ class SeasonModel(TestCase):
         )
 
     def test_season_save(self):
-        """Test the custom save method of the Season model."""
+        """Closing a watched season preserves exactly its existing history."""
+        watches = self.season.episodes.values_list("pk", "item_id", "end_date")
+        before = list(watches)
+
         self.season.status = Status.COMPLETED.value
         self.season.save(update_fields=["status"])
 
-        # check if all episodes are created
-        self.assertEqual(self.season.episodes.count(), 24)
+        self.season.refresh_from_db()
+        self.assertEqual(self.season.status, Status.COMPLETED.value)
+        self.assertEqual(list(watches.all()), before)
 
     @patch("app.models.Season.get_episode_item")
     def test_watch_method(self, mock_get_episode_item):
@@ -1606,28 +1610,18 @@ class SeasonStatusTests(TestCase):
         )
 
     @patch("app.models.providers.services.get_media_metadata")
-    def test_completed_status_creates_remaining_episodes(self, mock_get_metadata):
-        """Test setting status to COMPLETED creates remaining episodes."""
-        mock_metadata = {
-            "episodes": [
-                {"episode_number": 1, "image": "img1.jpg"},
-                {"episode_number": 2, "image": "img2.jpg"},
-                {"episode_number": 3, "image": "img3.jpg"},
-            ],
-            "image": "season_img.jpg",
+    def test_completed_status_without_watches(self, mock_get_metadata):
+        """An unwatched season can be closed with an empty history."""
+        mock_get_metadata.return_value = {
+            "episodes": [{"episode_number": number} for number in range(1, 13)],
         }
-        mock_get_metadata.return_value = mock_metadata
-
         self.season.status = Status.COMPLETED.value
         self.season.save()
 
-        # Verify all episodes were created
-        self.assertEqual(self.season.episodes.count(), 3)
-        # Should have episodes 1, 2, and 3
-        episode_numbers = set(
-            self.season.episodes.values_list("item__episode_number", flat=True),
-        )
-        self.assertEqual(episode_numbers, {1, 2, 3})
+        self.season.refresh_from_db()
+        self.assertEqual(self.season.status, Status.COMPLETED.value)
+        self.assertFalse(self.season.episodes.exists())
+        mock_get_metadata.assert_not_called()
 
     def test_dropped_status_updates_tv_status(self):
         """Test setting status to DROPPED updates TV status."""
@@ -1661,44 +1655,16 @@ class SeasonStatusTests(TestCase):
             # TV save shouldn't have been called
             mock_tv_save.assert_not_called()
 
-    @patch("app.models.providers.services.get_media_metadata")
-    def test_completed_status_noop_if_no_remaining_episodes(self, mock_get_metadata):
-        """Test COMPLETED status does nothing if no remaining episodes."""
-        mock_metadata = {
-            "episodes": [
-                {"episode_number": 1, "image": "img1.jpg"},
-            ],
-            "image": "season_img.jpg",
-        }
-        mock_get_metadata.return_value = mock_metadata
+    def test_explicit_completion_supersedes_pending_home_completion(self):
+        """Calendar reconciliation must respect the latest explicit status change."""
+        Season.objects.filter(pk=self.season.pk).update(home_completion_pending=True)
+        self.season.refresh_from_db()
+        self.season.status = Status.COMPLETED.value
+        self.season.save(update_fields=["status"])
 
-        # Create all episodes already
-        ep_item = Item.objects.create(
-            media_id="123",
-            source=Sources.TMDB.value,
-            media_type=MediaTypes.EPISODE.value,
-            title="Test Episode",
-            image="http://example.com/image.jpg",
-            season_number=1,
-            episode_number=1,
-        )
-        Episode.objects.bulk_create(
-            [
-                Episode(
-                    item=ep_item,
-                    related_season=self.season,
-                    end_date=timezone.now(),
-                ),
-            ],
-        )
-
-        # Track if bulk_create was called
-        with patch("app.models.bulk_create_with_history") as mock_bulk_create:
-            self.season.status = Status.COMPLETED.value
-            self.season.save()
-
-            # bulk_create shouldn't have been called
-            mock_bulk_create.assert_not_called()
+        self.season.refresh_from_db()
+        self.assertEqual(self.season.status, Status.COMPLETED.value)
+        self.assertFalse(self.season.home_completion_pending)
 
     def test_get_tv_creates_tv_if_not_exists(self):
         """Test get_tv creates TV instance if it doesn't exist."""

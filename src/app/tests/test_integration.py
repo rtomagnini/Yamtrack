@@ -3,10 +3,11 @@ from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.contrib.staticfiles.testing import StaticLiveServerTestCase
+from django.urls import reverse
 from django.utils import timezone
 from playwright.sync_api import expect, sync_playwright
 
-from app.models import Sources
+from app.models import Sources, Status
 from app.tests.test_views import _create_home_season
 from events.models import Event
 
@@ -158,21 +159,52 @@ class IntegrationTest(StaticLiveServerTestCase):
         expect(self.page.locator("tbody")).to_contain_text("62")
 
     def test_season_completed(self):
-        """Test the completed status of a season."""
-        self.page.get_by_placeholder("Search tv shows...").fill("breaking bad")
-        self.page.get_by_role("button").nth(1).click()
-        expect(self.page.locator("h2")).to_contain_text("Search Results")
-        self.page.get_by_role("link", name="Breaking Bad", exact=True).click()
-        expect(self.page.get_by_role("main")).to_contain_text("Breaking Bad")
-        self.page.get_by_role("link", name="Season 1").click()
-        expect(self.page.get_by_role("main")).to_contain_text("Season 1")
-        self.page.get_by_role("button", name="Add to tracker").click()
-        expect(self.page.locator("#track-season-1396-1")).to_contain_text("Score")
-        self.page.get_by_role("button", name="Add", exact=True).click()
-        self.page.get_by_role("link", name="TV Seasons").click()
-        self.page.get_by_role("link", name="Table View").click()
-        expect(self.page.locator("tbody")).to_contain_text("Completed")
-        expect(self.page.locator("tbody")).to_contain_text("7")
+        """The tracker can close a season without marking pending episodes watched."""
+        season = _create_home_season(
+            self.user, "101", range(1, 13), watched=(1, 2), source=Sources.TMDB.value,
+        )
+        watches = season.episodes.values_list("pk", "item__episode_number", "end_date")
+        before = list(watches)
+        with patch("app.providers.services.get_media_metadata", side_effect=OSError) as provider:
+            self.page.goto(f"{self.live_server_url}/", wait_until="domcontentloaded")
+            card = self.page.locator("#media-grid-season > div")
+            card.get_by_title("Add to tracker").click()
+            self.page.get_by_label("Status", exact=True).select_option(Status.COMPLETED.value)
+            self.page.get_by_role("button", name="Update", exact=True).click()
+            expect(card).to_have_count(0)
+        provider.assert_not_called()
+
+        season.refresh_from_db()
+        self.assertEqual(season.status, Status.COMPLETED.value)
+        self.assertEqual(list(watches.all()), before)
+
+        metadata = {
+            "title": season.item.title,
+            "season/1": {
+                "title": season.item.title,
+                "media_id": season.item.media_id,
+                "media_type": "season",
+                "source": Sources.TMDB.value,
+                "season_number": 1,
+                "episodes": [
+                    {
+                        "episode_number": number, "name": f"Episode {number}",
+                        "air_date": "2020-01-01", "still_path": None,
+                        "overview": "", "runtime": 30,
+                    }
+                    for number in range(1, 13)
+                ],
+            },
+        }
+        details = reverse("season_details", args=[Sources.TMDB.value, "101", "show-101", 1])
+        with (
+            patch("app.providers.services.get_media_metadata", return_value=metadata),
+            patch("app.providers.tmdb.fetch_season_multilingual", return_value={}),
+        ):
+            self.page.goto(f"{self.live_server_url}{details}?filter=unwatched", wait_until="domcontentloaded")
+            expect(self.page.get_by_role("heading", level=2, name="Episode 3", exact=True)).to_be_visible()
+            expect(self.page.get_by_role("heading", level=2, name="Episode 12", exact=True)).to_be_visible()
+            expect(self.page.get_by_role("heading", level=2, name="Episode 1", exact=True)).to_have_count(0)
 
     def test_tv_manual(self):
         """Test the manual creation of a TV show."""
