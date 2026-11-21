@@ -68,6 +68,10 @@ class IntegrationTest(StaticLiveServerTestCase):
             query.press("Enter")
             expect(page).to_have_url(search_url)
 
+            page.goto(f"{self.live_server_url}{reverse('statistics')}")
+            expect(query).to_be_visible()
+            expect(refresh).to_have_count(0)
+
     @patch("app.providers.services.get_media_metadata", side_effect=OSError)
     def test_season_progress_edit(self, provider):
         """Track pending episodes from the Home without a page reload."""
