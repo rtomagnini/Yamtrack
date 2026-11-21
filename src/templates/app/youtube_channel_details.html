@@ -11,7 +11,7 @@
   <div class="flex flex-col md:flex-row gap-8 md:gap-10 mb-12 md:mb-8">
     <div class="w-full md:w-1/4 max-w-[250px] mx-auto md:mx-0">
       <img alt="{{ media.title }}"
-           class="w-full rounded-lg shadow-lg bg-[#2a2f35] object-cover"
+           class="w-full rounded-lg shadow-lg theme-surface object-cover"
            src="{{ media.image }}">
 
       <div x-data="{ trackOpen: false }">
@@ -106,7 +106,7 @@
       {% if current_instance.notes %}
         <div class="mb-6">
           <div class="border-t border-gray-700 pt-4">
-            <div class="bg-[#2a2f35] p-4 rounded-lg">
+            <div class="theme-surface p-4 rounded-lg">
               <h3 class="text-sm font-semibold text-gray-200 mb-2">Your Notes</h3>
               <p class="text-gray-300 text-sm">{{ current_instance.notes|linebreaksbr|safe }}</p>
             </div>
@@ -132,7 +132,7 @@
         {# Year Filter #}
         <div class="relative" x-data="{ yearOpen: false }">
           <button @click="yearOpen = !yearOpen"
-                  class="px-4 py-2 bg-[#2a2f35] text-white rounded-md hover:bg-gray-600 transition-colors cursor-pointer flex items-center justify-between min-w-[120px]">
+                  class="px-4 py-2 theme-surface text-white rounded-md hover:bg-gray-600 transition-colors cursor-pointer flex items-center justify-between min-w-[120px]">
             <span>{{ current_year|default:"All Years" }}</span>
             <svg class="w-4 h-4 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
@@ -147,7 +147,7 @@
                x-transition:leave="transition ease-in duration-75"
                x-transition:leave-start="opacity-100 scale-100"
                x-transition:leave-end="opacity-0 scale-95"
-               class="absolute right-0 mt-2 w-40 bg-[#2a2f35] rounded-md shadow-lg z-10">
+               class="absolute right-0 mt-2 w-40 theme-surface rounded-md shadow-lg z-10">
             <div class="max-h-60 overflow-y-auto">
               <a href="?{% url_replace year='all' %}"
                  class="block px-4 py-2 text-sm hover:bg-gray-600 transition-colors cursor-pointer {% if current_year == 'all' %}bg-gray-700{% endif %}">
@@ -166,7 +166,7 @@
         {# Status Filter #}
         <div class="relative" x-data="{ filterOpen: false }">
           <button @click="filterOpen = !filterOpen"
-                  class="px-4 py-2 bg-[#2a2f35] text-white rounded-md hover:bg-gray-600 transition-colors cursor-pointer flex items-center justify-between min-w-[120px]">
+                  class="px-4 py-2 theme-surface text-white rounded-md hover:bg-gray-600 transition-colors cursor-pointer flex items-center justify-between min-w-[120px]">
             <span>
               {% if current_filter == "watched" %}Watched
               {% elif current_filter == "unwatched" %}Unwatched
@@ -185,7 +185,7 @@
                x-transition:leave="transition ease-in duration-75"
                x-transition:leave-start="opacity-100 scale-100"
                x-transition:leave-end="opacity-0 scale-95"
-               class="absolute right-0 mt-2 w-32 bg-[#2a2f35] rounded-md shadow-lg z-10">
+               class="absolute right-0 mt-2 w-32 theme-surface rounded-md shadow-lg z-10">
             <a href="?{% url_replace filter='all' %}"
                class="block px-4 py-2 text-sm hover:bg-gray-600 transition-colors cursor-pointer {% if current_filter == 'all' %}bg-gray-700{% endif %}">
               All Videos
@@ -204,7 +204,7 @@
         {# Sort Order #}
         <div class="relative" x-data="{ sortOpen: false }">
           <button @click="sortOpen = !sortOpen"
-                  class="px-4 py-2 bg-[#2a2f35] text-white rounded-md hover:bg-gray-600 transition-colors cursor-pointer flex items-center justify-between min-w-[120px]">
+                  class="px-4 py-2 theme-surface text-white rounded-md hover:bg-gray-600 transition-colors cursor-pointer flex items-center justify-between min-w-[120px]">
             <span>
               {% if current_sort == "asc" %}Oldest First
               {% else %}Newest First{% endif %}
@@ -222,7 +222,7 @@
                x-transition:leave="transition ease-in duration-75"
                x-transition:leave-start="opacity-100 scale-100"
                x-transition:leave-end="opacity-0 scale-95"
-               class="absolute right-0 mt-2 w-32 bg-[#2a2f35] rounded-md shadow-lg z-10">
+               class="absolute right-0 mt-2 w-32 theme-surface rounded-md shadow-lg z-10">
             <a href="?{% url_replace sort='desc' %}"
                class="block px-4 py-2 text-sm hover:bg-gray-600 transition-colors cursor-pointer {% if current_sort == 'desc' %}bg-gray-700{% endif %}">
               Newest First
@@ -240,7 +240,7 @@
     {% if media.videos %}
       <div class="grid gap-4">
         {% for video in media.videos %}
-          <div class="bg-[#2a2f35] rounded-lg p-4 hover:bg-gray-600 transition-colors" data-video-card>
+          <div class="theme-surface rounded-lg p-4 hover:bg-gray-600 transition-colors" data-video-card>
             <div class="flex gap-4">
               {# Video Thumbnail #}
               <div class="flex-shrink-0">
@@ -319,7 +319,7 @@
                        @click.away="confirmDelete = false"
                        class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
                        style="display: none;">
-                    <div class="bg-[#1e2328] rounded-lg p-6 max-w-md w-full mx-4 shadow-xl"
+                    <div class="theme-dialog p-6 max-w-md w-full mx-4 shadow-xl"
                          @click.stop>
                       <h3 class="text-lg font-semibold mb-4">Delete Video?</h3>
                       {% include "app/components/tubearchivist_delete_notice.html" %}

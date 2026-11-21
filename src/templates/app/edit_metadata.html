@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Edit metadata - Yamtrack{% endblock %}
 {% block content %}
-<div class="max-w-2xl mx-auto bg-[#2a2f35] rounded-lg p-6">
+<div class="max-w-2xl mx-auto theme-surface rounded-lg p-6">
   <h1 class="text-2xl font-bold mb-2">Edit metadata</h1>
   <p class="text-gray-400 mb-6">Your changes are kept when metadata is synced. Leave a field empty to use its original value.</p>
   <form method="post" class="space-y-6" x-data="{ image: '{{ form.image.value|default_if_none:''|escapejs }}' }">

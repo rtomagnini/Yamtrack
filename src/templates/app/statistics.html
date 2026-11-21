@@ -19,7 +19,7 @@
   <div x-data="dateRangePicker()" x-init="init()" class="relative mb-8">
     <!-- Trigger Button -->
     <button @click="toggleDropdown()"
-            class="flex items-center gap-2 px-4 py-2.5 bg-[#2a2f35] hover:bg-[#343a40] rounded-lg transition-all duration-200 border border-gray-700 shadow-sm cursor-pointer">
+            class="flex items-center gap-2 px-4 py-2.5 theme-surface theme-hover-field rounded-lg transition-all duration-200 border border-gray-700 shadow-sm cursor-pointer">
       <svg xmlns="http://www.w3.org/2000/svg"
            width="24"
            height="24"
@@ -56,7 +56,7 @@
          x-show="isOpen"
          x-transition
          @click.outside="isOpen = false"
-         class="absolute z-20 mt-2 w-[340px] bg-[#2a2f35] rounded-lg shadow-lg border border-gray-700 overflow-hidden transition-all duration-200 animate-in fade-in-50 slide-in-from-top-5">
+         class="absolute z-20 mt-2 w-[340px] theme-raised rounded-lg shadow-lg border border-gray-700 overflow-hidden transition-all duration-200 animate-in fade-in-50 slide-in-from-top-5">
 
       <!-- Tabs -->
       <div class="flex border-b border-gray-700">
@@ -74,7 +74,7 @@
         <div class="grid grid-cols-2 gap-2">
           <template x-for="range in predefinedRanges" :key="range.name">
             <button @click="selectPredefinedRange(range.name)"
-                    :class="{'bg-indigo-600 text-white': selectedRange === range.name, 'hover:bg-[#39404b] text-gray-200': selectedRange !== range.name}"
+                    :class="{'theme-selected': selectedRange === range.name, 'theme-hover-field text-gray-200': selectedRange !== range.name}"
                     class="flex items-center justify-between p-3 rounded-md text-left text-sm transition-all cursor-pointer">
               <span x-text="range.name"></span>
               <svg x-show="selectedRange === range.name"
@@ -103,19 +103,19 @@
               <label class="block text-sm font-medium mb-2 text-gray-300">Start Date</label>
               <input x-model="startDate"
                      @change="updateDateRange()"
-                     class="w-full p-2.5 bg-[#39404b] rounded-md text-white border border-gray-600 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-sm [color-scheme:dark]"
+                     class="w-full p-2.5 theme-field rounded-md text-white border border-gray-600 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-sm [color-scheme:dark]"
                      type="date">
             </div>
             <div>
               <label class="block text-sm font-medium mb-2 text-gray-300">End Date</label>
               <input x-model="endDate"
                      @change="updateDateRange()"
-                     class="w-full p-2.5 bg-[#39404b] rounded-md text-white border border-gray-600 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-sm [color-scheme:dark]"
+                     class="w-full p-2.5 theme-field rounded-md text-white border border-gray-600 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-sm [color-scheme:dark]"
                      type="date">
             </div>
           </div>
 
-          <div class="flex items-center justify-center py-2 px-3 bg-[#343a40] rounded-md">
+          <div class="flex items-center justify-center py-2 px-3 theme-field rounded-md">
             <span class="text-sm text-gray-300" x-text="formatDisplayDate(startDate)"></span>
             <svg xmlns="http://www.w3.org/2000/svg"
                  width="24"
@@ -163,7 +163,7 @@
   <div class="space-y-8">
     <!-- Statistics Cards -->
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-      <div class="bg-[#2a2f35] rounded-lg p-6 flex items-center">
+      <div class="theme-surface rounded-lg p-6 flex items-center">
         <div class="bg-indigo-600/20 p-4 rounded-full mr-4">
           <svg xmlns="http://www.w3.org/2000/svg"
                width="24"
@@ -186,7 +186,7 @@
           </p>
         </div>
       </div>
-      <div class="bg-[#2a2f35] rounded-lg p-6 flex items-center">
+      <div class="theme-surface rounded-lg p-6 flex items-center">
         <div class="bg-yellow-600/20 p-4 rounded-full mr-4">
           <!-- Clock icon -->
           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-8 h-8 text-yellow-400">
@@ -201,7 +201,7 @@
           </p>
         </div>
       </div>
-      <div class="bg-[#2a2f35] rounded-lg p-6 flex items-center">
+      <div class="theme-surface rounded-lg p-6 flex items-center">
         <div class="bg-emerald-600/20 p-4 rounded-full mr-4">
           <svg xmlns="http://www.w3.org/2000/svg"
                width="24"
@@ -229,7 +229,7 @@
           {% endif %}
         </div>
       </div>
-      <div class="bg-[#2a2f35] rounded-lg p-6 flex items-center">
+      <div class="theme-surface rounded-lg p-6 flex items-center">
         <div class="bg-red-600/20 p-4 rounded-full mr-4">
           <svg xmlns="http://www.w3.org/2000/svg"
                width="24"
@@ -262,7 +262,7 @@
     </div>
 
     <!-- Activity History Section -->
-    <div class="bg-[#2a2f35] rounded-lg p-6 max-w-[calc(100svw-4rem)]">
+    <div class="theme-surface rounded-lg p-6 max-w-[calc(100svw-4rem)]">
       <h2 class="text-xl font-semibold mb-4 text-center">Activity History</h2>
       <div class="overflow-x-auto flex flex-col justify-center"
            x-data="{ graphTooWide: false }"
@@ -300,7 +300,7 @@
                       <div class="w-4 h-4 rounded-sm border border-gray-600 opacity-40"
                            title="{{ day.date }}: Future day"></div>
                     {% else %}
-                      <div class="w-4 h-4 rounded-sm transition-colors duration-200 hover:ring-2 hover:ring-white {% if day.level == 0 %}bg-[#2f353e]{% elif day.level == 1 %}bg-indigo-700{% elif day.level == 2 %}bg-indigo-600{% elif day.level == 3 %}bg-indigo-500{% elif day.level == 4 %}bg-indigo-400{% endif %}"
+                      <div class="w-4 h-4 rounded-sm transition-colors duration-200 hover:ring-2 hover:ring-white {% if day.level == 0 %}theme-raised{% elif day.level == 1 %}bg-indigo-700{% elif day.level == 2 %}bg-indigo-600{% elif day.level == 3 %}bg-indigo-500{% elif day.level == 4 %}bg-indigo-400{% endif %}"
                            title="{{ day.date }}: {{ day.count }} item{{ day.count|pluralize }}"></div>
                     {% endif %}
                   {% endfor %}
@@ -314,7 +314,7 @@
         <div class="flex items-center gap-2 pl-6 text-xs text-gray-400"
              :class="graphTooWide ? 'mb-5 mt-2' : 'mt-4'">
           <span>0{% if not activity_data.max_items %} items{% endif %}</span>
-          <div class="w-4 h-4 rounded-sm bg-[#2f353e]"></div>
+          <div class="w-4 h-4 rounded-sm theme-raised"></div>
           {% if activity_data.max_items %}
             {% for level in activity_data.legend_levels %}
               <div class="w-4 h-4 rounded-sm {% if level == 1 %}bg-indigo-700{% elif level == 2 %}bg-indigo-600{% elif level == 3 %}bg-indigo-500{% elif level == 4 %}bg-indigo-400{% endif %}"></div>
@@ -327,14 +327,14 @@
 
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
       <!-- Media Type Distribution Section -->
-      <div class="bg-[#2a2f35] rounded-lg p-6">
+      <div class="theme-surface rounded-lg p-6">
         <h2 class="text-xl font-semibold mb-4">Media Type Distribution</h2>
 
         {% if media_type_distribution.labels %}
           <ul id="media-type-bars" class="statistics-bar-list statistics-distribution" role="list"></ul>
         {% else %}
           <div class="flex flex-col items-center justify-center py-16">
-            <div class="bg-[#39404b] rounded-full p-4 w-16 h-16 mx-auto mb-4 flex items-center justify-center">
+            <div class="theme-field rounded-full p-4 w-16 h-16 mx-auto mb-4 flex items-center justify-center">
               <svg xmlns="http://www.w3.org/2000/svg"
                    width="24"
                    height="24"
@@ -356,14 +356,14 @@
       </div>
 
       <!-- Watch Time Distribution Section -->
-      <div class="bg-[#2a2f35] rounded-lg p-6">
+      <div class="theme-surface rounded-lg p-6">
         <h2 class="text-xl font-semibold mb-4">Watch Time Distribution</h2>
 
         {% if watch_time_distribution_pie_chart_data.labels %}
           <ul id="watch-time-bars" class="statistics-bar-list statistics-distribution" role="list"></ul>
         {% else %}
           <div class="flex flex-col items-center justify-center py-16">
-            <div class="bg-[#39404b] rounded-full p-4 w-16 h-16 mx-auto mb-4 flex items-center justify-center">
+            <div class="theme-field rounded-full p-4 w-16 h-16 mx-auto mb-4 flex items-center justify-center">
               <svg xmlns="http://www.w3.org/2000/svg"
                    width="24"
                    height="24"
@@ -384,7 +384,7 @@
       </div>
 
       <!-- Status Distribution by Media Type Section -->
-      <div class="bg-[#2a2f35] rounded-lg p-6">
+      <div class="theme-surface rounded-lg p-6">
         <h2 class="text-xl font-semibold mb-4">Status Distribution by Media Type</h2>
 
         {% if media_type_distribution.labels %}
@@ -393,7 +393,7 @@
           </div>
         {% else %}
           <div class="flex flex-col items-center justify-center py-16">
-            <div class="bg-[#39404b] rounded-full p-4 w-16 h-16 mx-auto mb-4 flex items-center justify-center">
+            <div class="theme-field rounded-full p-4 w-16 h-16 mx-auto mb-4 flex items-center justify-center">
               <svg xmlns="http://www.w3.org/2000/svg"
                    width="24"
                    height="24"
@@ -415,7 +415,7 @@
         {% endif %}
       </div>
 
-      <section id="most-watched" class="statistics-ranking bg-[#2a2f35] rounded-lg p-6" aria-labelledby="most-watched-title">
+      <section id="most-watched" class="statistics-ranking theme-surface rounded-lg p-6" aria-labelledby="most-watched-title">
         <h2 id="most-watched-title" class="text-xl font-semibold mb-4">Most Watched Shows</h2>
         <div class="statistics-ranking-groups">
           {% include "app/components/statistics_ranking.html" with heading="TV Shows" heading_id="top-tv-shows" unit="Episodes" entries=top_tv_shows empty_message="No TV shows watched" only %}
@@ -426,7 +426,7 @@
 
 
     <!-- Watch Time Over Time Section -->
-    <div class="bg-[#2a2f35] rounded-lg p-6">
+    <div class="theme-surface rounded-lg p-6">
       <h2 class="text-xl font-semibold mb-4">Watch Time Over Time</h2>
       <div class="relative h-80">
         <canvas id="watchTimeChart" role="img" aria-label="Watch time over time"></canvas>
@@ -437,7 +437,7 @@
     </div>
 
     <!-- Media Timeline Section -->
-    <div class="bg-[#2a2f35] rounded-lg p-6">
+    <div class="theme-surface rounded-lg p-6">
       <h2 class="text-xl font-semibold mb-6 md:mb-10">Media Timeline</h2>
 
       {% if timeline %}
@@ -447,12 +447,12 @@
               <h3 class="text-2xl font-semibold text-center mb-6">{{ month_year }}</h3>
               <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-8 w-full">
                 {% for media in media_list %}
-                  <div class="bg-[#39404b] p-3 rounded-xl hover:ring-2 hover:ring-indigo-500 transition-all duration-200 w-full flex flex-row gap-3 items-start min-h-0">
+                  <div class="theme-field p-3 rounded-xl hover:ring-2 hover:ring-indigo-500 transition-all duration-200 w-full flex flex-row gap-3 items-start min-h-0">
                     <a href="{{ media.item|media_url }}" class="w-auto flex-shrink-0">
                       {% if media.item.media_type == 'movie' or media.item.media_type == 'manga' or media.item.media_type == 'comic' or media.media_type == 'comic_issue' or media.item.media_type == 'game' or media.media_type == 'game_session' or media.item.media_type == 'book' or media.media_type == 'book_session' %}
-                        <div style="aspect-ratio:2/3; width:96px; max-width:96px;" class="overflow-hidden rounded-lg bg-[#3e454d] flex-shrink-0">
+                        <div style="aspect-ratio:2/3; width:96px; max-width:96px;" class="overflow-hidden rounded-lg theme-field flex-shrink-0">
                       {% else %}
-                        <div style="aspect-ratio:16/9; width:128px; max-width:128px;" class="overflow-hidden rounded-lg bg-[#3e454d] flex-shrink-0">
+                        <div style="aspect-ratio:16/9; width:128px; max-width:128px;" class="overflow-hidden rounded-lg theme-field flex-shrink-0">
                       {% endif %}
                         <img alt="{{ media.item }}"
                              class="lazyload w-full h-full object-cover hover:opacity-80 transition-opacity"
@@ -504,7 +504,7 @@
         </div>
       {% else %}
         <div class="flex flex-col items-center justify-center py-16">
-          <div class="bg-[#39404b] rounded-full p-4 w-16 h-16 mx-auto mb-4 flex items-center justify-center">
+          <div class="theme-field rounded-full p-4 w-16 h-16 mx-auto mb-4 flex items-center justify-center">
             <svg xmlns="http://www.w3.org/2000/svg"
                  width="24"
                  height="24"

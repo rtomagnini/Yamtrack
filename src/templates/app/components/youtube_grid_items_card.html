@@ -1,6 +1,6 @@
 {# Single card partial for HTMX update #}
-<div class="bg-[#2a2f35] rounded-lg overflow-hidden shadow-lg flex flex-col" data-video-card id="video-{{ video.pk }}">
-  <div class="relative aspect-video bg-[#3e454d]">
+<div class="theme-surface rounded-lg overflow-hidden shadow-lg flex flex-col" data-video-card id="video-{{ video.pk }}">
+  <div class="relative aspect-video theme-field">
     <img alt="{{ video.title }}" class="w-full h-full object-cover" src="{{ video.image }}" loading="lazy" />
   </div>
   <div class="p-4 flex-1 flex flex-col">
@@ -59,7 +59,7 @@
           </svg>
         </button>
         <div x-show="confirmDelete" x-cloak @click.away="confirmDelete = false" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" style="display: none;">
-          <div class="bg-[#1e2328] rounded-lg p-6 max-w-md w-full mx-4 shadow-xl" @click.stop>
+          <div class="theme-dialog p-6 max-w-md w-full mx-4 shadow-xl" @click.stop>
             <h3 class="text-lg font-semibold mb-4">Delete Video?</h3>
             {% include "app/components/tubearchivist_delete_notice.html" %}
             <p class="text-gray-300 mb-6">Are you sure you want to delete '{{ video.title }}'? This action cannot be undone.</p>

@@ -7,7 +7,7 @@
      class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
   <div class="w-[400px] max-h-[90vh] px-4 md:px-0 relative z-60"
        @click.outside="trackOpen = false">
-    <div class="bg-[#2a2f35] p-6 rounded-lg max-h-[70svh] overflow-y-auto">
+    <div class="theme-dialog p-6 max-h-[70svh] overflow-y-auto">
       <div class="flex items-center justify-between mb-4">
         <h2 class="text-xl font-bold text-white">Track Episode</h2>
         <button class="text-gray-400 hover:text-white transition-colors cursor-pointer"
@@ -28,7 +28,7 @@
       </div>
 
       {# Episode preview data #}
-      <div class="bg-[#343a40] rounded-lg p-4 mb-6">
+      <div class="theme-field rounded-lg p-4 mb-6">
         <div class="flex items-start gap-4">
           <img alt="{{ episode.title }}"
                class="w-20 h-20 rounded object-cover flex-shrink-0"
@@ -58,7 +58,7 @@
             <div class="max-h-[200px] overflow-y-auto space-y-2">
 
               {% for entry in episode.history %}
-                <div class="flex items-center justify-between bg-[#343a40] rounded-md p-3 border border-gray-600">
+                <div class="flex items-center justify-between theme-field rounded-md p-3 border border-gray-600">
                   <div class="text-sm text-white">{{ entry.end_date|date_tracker_format|default_if_none:"No date provided" }}</div>
                   <form method="post"
                         action="{% url 'media_delete' %}?next={{ request.path }}">
@@ -155,7 +155,7 @@
 
               {# djlint:off #}
               <div class="relative">
-                <input class="w-full p-3 bg-[#343a40] rounded-md text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-[#4a9eff] appearance-none"
+                <input class="w-full p-3 theme-field rounded-md text-white border border-gray-600 focus:outline-none focus:ring-2 theme-focus appearance-none"
                        x-bind:type="inputType"
                        name="end_date"
                        onfocus="this.showPicker?.()"
@@ -163,7 +163,7 @@
                 {% if episode.air_date %}
                   <button type="button"
                           @click="inputDateTime = inputType === 'datetime-local' ? '{{ episode.air_date }}T{% now "H:i" %}' : '{{ episode.air_date }}'"
-                          class="absolute right-2 top-1/2 -translate-y-1/2 flex items-center text-sm text-indigo-400 hover:text-indigo-300 transition-colors bg-[#2a2f35] px-2 py-1 rounded cursor-pointer">
+                          class="absolute right-2 top-1/2 -translate-y-1/2 flex items-center text-sm text-indigo-400 hover:text-indigo-300 transition-colors theme-surface px-2 py-1 rounded cursor-pointer">
                     <svg xmlns="http://www.w3.org/2000/svg"
                          width="24"
                          height="24"

@@ -66,7 +66,7 @@
     {% if media.episodes %}
     <div class="space-y-6">
       {% for episode in episodes_page|default:media.episodes %}
-        <div class="bg-[#2a2f35] rounded-lg overflow-hidden shadow-lg" data-episode-card
+        <div class="theme-surface rounded-lg overflow-hidden shadow-lg" data-episode-card
            {% if media_type == MediaTypes.SEASON.value %}
              id="season-episode-{{ episode.episode_number }}"
              data-watch-count="{{ episode.history|length }}"

@@ -1,0 +1,46 @@
+:root {
+  --theme-canvas: #191b21;
+  --theme-chrome: #21232b;
+  --theme-surface: #272a34;
+  --theme-raised: #30343f;
+  --theme-field: #373b47;
+  --theme-hover: #414654;
+  --theme-outline: #3d424f;
+  --theme-primary: #5850ce;
+  --theme-primary-hover: #4740b4;
+  --theme-selected: #37345d;
+  --theme-on-selected: #e3dfff;
+  --theme-focus: #a6a4ff;
+
+  --color-indigo-400: var(--theme-focus);
+  --color-indigo-600: var(--theme-primary);
+  --color-indigo-700: var(--theme-primary-hover);
+}
+
+.theme-canvas { background-color: var(--theme-canvas); }
+.theme-chrome { background-color: var(--theme-chrome); }
+.theme-surface { background-color: var(--theme-surface); }
+.theme-raised { background-color: var(--theme-raised); }
+.theme-field { background-color: var(--theme-field); }
+.theme-highlight { background-color: var(--theme-hover); }
+.theme-divider { border-color: var(--theme-outline); }
+
+.theme-dialog {
+  background-color: var(--theme-raised);
+  border-radius: 1rem;
+}
+
+.theme-selected {
+  background-color: var(--theme-selected);
+  color: var(--theme-on-selected);
+}
+
+.theme-focus:focus {
+  --tw-ring-color: var(--theme-focus);
+}
+
+@media (hover: hover) {
+  .theme-hover:hover { background-color: var(--theme-hover); }
+  .theme-hover-surface:hover { background-color: var(--theme-surface); }
+  .theme-hover-field:hover { background-color: var(--theme-field); }
+}

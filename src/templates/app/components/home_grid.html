@@ -3,7 +3,7 @@
 
 {% for media in media_list.items %}
   {% with item=media.item|metadata_for:request.user %}
-  <div class="bg-[#2a2f35] rounded-lg overflow-hidden shadow-lg transition-all duration-300"
+  <div class="theme-surface rounded-lg overflow-hidden shadow-lg transition-all duration-300"
        x-data="{ actionsOpen: false, posterTapped: false, posterHovered: false, trackOpen: false, listsOpen: false, historyOpen: false }"
        x-init="['trackOpen', 'listsOpen', 'historyOpen'].forEach(name => $watch(name, open => {
          if (!open) $refs.actions.focus({ preventScroll: true });
@@ -89,7 +89,7 @@
         </button>
         <div id="home-actions-{{ item.media_type }}-{{ media.pk }}"
              x-cloak x-show="actionsOpen"
-             class="home-card-menu absolute left-2 right-2 z-20 py-1 bg-[#1a1d20] rounded-md shadow-lg border border-gray-700">
+             class="home-card-menu absolute left-2 right-2 z-20 py-1 theme-raised rounded-md shadow-lg border border-gray-700">
           <button type="button"
                   x-ref="firstAction"
                   title="Add to tracker"

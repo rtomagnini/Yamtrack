@@ -2,7 +2,7 @@
 {% load app_tags %}
 
 <!DOCTYPE html>
-<html lang="en" class="scheme-dark bg-[#212529]">
+<html lang="en" class="scheme-dark theme-canvas">
   <head>
     {# Required meta tags #}
     <meta charset="UTF-8">
@@ -22,6 +22,8 @@
     <link rel="stylesheet"
           type="text/css"
           href="{% static 'css/main.css' %}{% get_static_file_mtime 'css/main.css' %}">
+    <link rel="stylesheet"
+          href="{% static 'css/theme.css' %}{% get_static_file_mtime 'css/theme.css' %}">
     <style>
       .app-header-tools {
         display: flex;
@@ -39,7 +41,7 @@
         min-width: 0;
         overflow: hidden;
         border-radius: 999px;
-        background: #272c31;
+        background: var(--theme-surface);
       }
       .app-header-search input {
         width: 100%;
@@ -54,14 +56,14 @@
         min-height: 2.75rem;
         margin-inline-end: .5rem;
         padding-inline-start: .5rem;
-        border-inline-start: 1px solid #424a53;
+        border-inline-start: 1px solid var(--theme-outline);
         background: transparent;
         color: #e5e7eb;
         font-size: .875rem;
         cursor: pointer;
       }
       .app-header-search select option {
-        background: #272c31;
+        background: var(--theme-surface);
       }
       .app-header-icon {
         flex: none;
@@ -75,16 +77,16 @@
         margin: auto;
       }
       .app-header-refresh {
-        background: #272c31;
+        background: var(--theme-surface);
       }
       .app-header-icon:hover {
-        background: #343a40;
+        background: var(--theme-hover);
         color: white;
       }
       .app-header-search input:focus-visible,
       .app-header-search select:focus-visible,
       .app-header-icon:focus-visible {
-        outline: 2px solid #818cf8;
+        outline: 2px solid var(--theme-focus);
         outline-offset: -2px;
       }
     </style>
@@ -113,17 +115,17 @@
     <link rel="shortcut icon" href="{% static "favicon/favicon.ico" %}{% get_static_file_mtime "favicon/favicon.ico" %}">
     
     <!-- Theme and App Config -->
-    <meta name="msapplication-TileColor" content="#181a1b">
+    <meta name="msapplication-TileColor" content="#191b21">
     <meta name="msapplication-config"
           content="{% static "favicon/browserconfig.xml" %}">
-    <meta name="theme-color" content="#181a1b">
+    <meta name="theme-color" content="#191b21">
 
   </head>
 
   <body>
     {% block body %}
       {# Main container for the layout #}
-      <div class="flex min-h-screen bg-[#212529] text-gray-100"
+      <div class="flex min-h-screen theme-canvas text-gray-100"
            x-data="{ isMobileMenuOpen: false }">
 
         {# Mobile menu overlay #}
@@ -132,23 +134,23 @@
              @click="isMobileMenuOpen = false"></div>
 
         {# Sidebar #}
-        <aside class="fixed top-0 left-0 z-40 h-screen w-64 bg-[#1a1d20] transform transition-transform duration-300 ease-in-out border-r border-[#2c3136] -translate-x-full lg:translate-x-0 lg:sticky flex flex-col"
+        <aside class="fixed top-0 left-0 z-40 h-screen w-64 theme-chrome transform transition-transform duration-300 ease-in-out border-r theme-divider -translate-x-full lg:translate-x-0 lg:sticky flex flex-col"
                :class="isMobileMenuOpen ? 'translate-x-0' : ''">
-          <div class="h-16 border-b border-[#2c3136] flex items-center px-6">
+          <div class="h-16 border-b theme-divider flex items-center px-6">
             <h1 class="text-2xl font-semibold text-gray-100">Yamtrack</h1>
           </div>
           <nav class="p-4 flex-1 overflow-y-auto">
             <ul class="space-y-1 mb-6">
               <li>
                 <a href="{% url 'home' %}"
-                   class="flex items-center space-x-3 px-4 py-2 rounded-md transition-colors duration-200 text-sm {% if request.path == "/" %}text-white bg-[#2c3136]{% else %}text-gray-400 hover:text-white hover:bg-[#23272b]{% endif %}">
+                   class="flex items-center space-x-3 px-4 py-2 rounded-md transition-colors duration-200 text-sm {% if request.path == "/" %}theme-selected{% else %}text-gray-400 hover:text-white theme-hover-surface{% endif %}">
                   {% icon 'home' is_active=request.path|str_equals:"/" %}
                   <span>Home</span>
                 </a>
               </li>
               <li>
                 <a href="{% url 'youtubes' %}"
-                   class="flex items-center space-x-3 px-4 py-2 rounded-md transition-colors duration-200 text-sm {% if request.path|str_equals:'/youtubes' %}text-white bg-[#2c3136]{% else %}text-gray-400 hover:text-white hover:bg-[#23272b]{% endif %}">
+                   class="flex items-center space-x-3 px-4 py-2 rounded-md transition-colors duration-200 text-sm {% if request.path|str_equals:'/youtubes' %}theme-selected{% else %}text-gray-400 hover:text-white theme-hover-surface{% endif %}">
                   {% icon 'youtube' is_active=request.path|str_equals:'/youtubes' %}
                   <span>YT Videos</span>
                 </a>
@@ -157,7 +159,7 @@
         {% for item in sidebar_media_types %}
                 <li>
                   <a href="{% url 'medialist' media_type=item.media_type %}"
-                     class="flex items-center space-x-3 px-4 py-2 rounded-md transition-colors duration-200 text-sm {% if media_type == item.media_type %}text-white bg-[#2c3136]{% else %}text-gray-400 hover:text-white hover:bg-[#23272b]{% endif %}">
+                     class="flex items-center space-x-3 px-4 py-2 rounded-md transition-colors duration-200 text-sm {% if media_type == item.media_type %}theme-selected{% else %}text-gray-400 hover:text-white theme-hover-surface{% endif %}">
                     {% icon item.media_type is_active=media_type|str_equals:item.media_type %}
                     <span>{% if item.media_type == 'youtube' %}YT Channels{% else %}{{ item.display_name }}{% endif %}</span>
                   </a>
@@ -165,12 +167,12 @@
         {% endfor %}
             </ul>
 
-            <div class="border-t border-[#2c3136] pt-4">
+            <div class="border-t theme-divider pt-4">
               <ul class="space-y-1">
                 {% url 'create_entry' as create_entry_url %}
                 <li>
                   <a href="{{ create_entry_url }}"
-                     class="flex items-center space-x-3 px-4 py-2 rounded-md transition-colors duration-200 text-sm {% if request.path == create_entry_url %}text-white bg-[#2c3136]{% else %}text-gray-400 hover:text-white hover:bg-[#23272b]{% endif %}">
+                     class="flex items-center space-x-3 px-4 py-2 rounded-md transition-colors duration-200 text-sm {% if request.path == create_entry_url %}theme-selected{% else %}text-gray-400 hover:text-white theme-hover-surface{% endif %}">
                     {% icon 'create' is_active=request.path|str_equals:create_entry_url %}
                     <span>Create Custom</span>
                   </a>
@@ -179,7 +181,7 @@
                 {% url 'statistics' as statistics_url %}
                 <li>
                   <a href="{{ statistics_url }}"
-                     class="flex items-center space-x-3 px-4 py-2 rounded-md transition-colors duration-200 text-sm {% if request.path == statistics_url %}text-white bg-[#2c3136]{% else %}text-gray-400 hover:text-white hover:bg-[#23272b]{% endif %}">
+                     class="flex items-center space-x-3 px-4 py-2 rounded-md transition-colors duration-200 text-sm {% if request.path == statistics_url %}theme-selected{% else %}text-gray-400 hover:text-white theme-hover-surface{% endif %}">
                     {% icon 'statistics' is_active=request.path|str_equals:statistics_url %}
                     <span>Statistics</span>
                   </a>
@@ -188,7 +190,7 @@
                 {% url 'lists' as lists_url %}
                 <li>
                   <a href="{{ lists_url }}"
-                     class="flex items-center space-x-3 px-4 py-2 rounded-md transition-colors duration-200 text-sm {% if request.path == lists_url %}text-white bg-[#2c3136]{% else %}text-gray-400 hover:text-white hover:bg-[#23272b]{% endif %}">
+                     class="flex items-center space-x-3 px-4 py-2 rounded-md transition-colors duration-200 text-sm {% if request.path == lists_url %}theme-selected{% else %}text-gray-400 hover:text-white theme-hover-surface{% endif %}">
                     {% icon 'lists' is_active=request.path|str_equals:lists_url %}
                     <span>Lists</span>
                   </a>
@@ -197,7 +199,7 @@
                 {% url 'calendar' as calendar_url %}
                 <li>
                   <a href="{{ calendar_url }}"
-                     class="flex items-center space-x-3 px-4 py-2 rounded-md transition-colors duration-200 text-sm {% if request.path == calendar_url %}text-white bg-[#2c3136]{% else %}text-gray-400 hover:text-white hover:bg-[#23272b]{% endif %}">
+                     class="flex items-center space-x-3 px-4 py-2 rounded-md transition-colors duration-200 text-sm {% if request.path == calendar_url %}theme-selected{% else %}text-gray-400 hover:text-white theme-hover-surface{% endif %}">
                     {% icon 'calendar' is_active=request.path|str_equals:calendar_url %}
                     <span>Calendar</span>
                   </a>
@@ -206,7 +208,7 @@
             </div>
           </nav>
 
-          <div class="p-4 border-t border-[#2c3136] mt-auto">
+          <div class="p-4 border-t theme-divider mt-auto">
             <div class="space-y-2">
               {% url 'account' as account_url %}
               {% url 'notifications' as notifications_url %}
@@ -215,7 +217,7 @@
               {% url 'import_data' as import_url %}
               {% url 'export_data' as export_url %}
               <a href="{{ account_url }}"
-                 class="flex items-center space-x-3 px-4 py-2 rounded-md transition-colors duration-200 text-sm {% if request.path == account_url or request.path == notifications_url or request.path == sidebar_url or request.path == integrations_url or request.path == import_url or request.path == export_url %}text-white bg-[#2c3136]{% else %}text-gray-400 hover:text-white hover:bg-[#23272b]{% endif %}">
+                 class="flex items-center space-x-3 px-4 py-2 rounded-md transition-colors duration-200 text-sm {% if request.path == account_url or request.path == notifications_url or request.path == sidebar_url or request.path == integrations_url or request.path == import_url or request.path == export_url %}theme-selected{% else %}text-gray-400 hover:text-white theme-hover-surface{% endif %}">
                 {% if request.path == account_url or request.path == notifications_url or request.path == sidebar_url or request.path == integrations_url or request.path == import_url or request.path == export_url %}
                   {% icon 'settings' is_active=True %}
                 {% else %}
@@ -227,7 +229,7 @@
               <form method="post" action="{% url 'account_logout' %}" class="w-full">
                 {% csrf_token %}
                 <button type="submit"
-                        class="w-full flex items-center space-x-3 px-4 py-2 rounded-md text-gray-400 hover:bg-[#23272b] hover:text-white transition-colors duration-200 text-sm cursor-pointer">
+                        class="w-full flex items-center space-x-3 px-4 py-2 rounded-md text-gray-400 theme-hover-surface hover:text-white transition-colors duration-200 text-sm cursor-pointer">
                   {% icon 'logout' is_active=False %}
                   <span>Logout</span>
                 </button>
@@ -239,7 +241,7 @@
         {# Main content #}
         <div class="flex-1 flex flex-col min-h-screen">
           {# Top bar #}
-          <div class="sticky top-0 z-10 bg-[#1a1d20] border-b border-[#2c3136] shadow-md">
+          <div class="sticky top-0 z-10 theme-chrome border-b theme-divider shadow-md">
             <div class="container mx-auto px-4">
               <div class="flex items-center justify-between lg:justify-center h-16">
                 {# Mobile: sidebar toggle button #}
@@ -320,7 +322,7 @@
             </div>
           </div>
 
-          <main class="flex-1 relative bg-[#212529]">
+          <main class="flex-1 relative theme-canvas">
             <div class="container mx-auto px-8 py-12">
               {% block content %}
               {% endblock content %}
