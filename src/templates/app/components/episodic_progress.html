@@ -3,10 +3,10 @@
      data-csrf-token="{{ csrf_token }}"
      data-next-episode="{{ media.pending_episode_numbers.0|default_if_none:'' }}"
      data-pending-videos="{{ media.pending_videos|default_if_none:'' }}">
-  <div x-show="!confirming" class="flex items-center justify-center space-x-4">
+  <div x-show="!confirming" class="home-progress-controls flex items-center justify-center">
     <button type="button"
             aria-label="Remove last watch"
-            class="p-1 bg-gray-700 hover:bg-gray-600 rounded-md cursor-pointer disabled:opacity-50"
+            class="home-progress-button cursor-pointer disabled:opacity-50"
             {% if not watched %}disabled{% endif %}
             :disabled="busy || {{ watched|yesno:'false,true' }}"
             data-progress-action="decrease"
@@ -28,7 +28,7 @@
     </div>
     <button type="button"
             aria-label="{% if media.item.media_type == MediaTypes.SEASON.value %}Watch next episode{% else %}Watch next video{% endif %}"
-            class="p-1 bg-gray-700 hover:bg-gray-600 rounded-md cursor-pointer disabled:opacity-50"
+            class="home-progress-button cursor-pointer disabled:opacity-50"
             {% if not media.pending_episode_numbers and not media.pending_videos %}disabled{% endif %}
             :disabled="busy || {% if media.pending_episode_numbers or media.pending_videos %}false{% else %}true{% endif %}"
             data-progress-action="increase"

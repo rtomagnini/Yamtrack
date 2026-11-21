@@ -5,6 +5,45 @@
   Home - Yamtrack
 {% endblock title %}
 
+{% block extra_head %}
+  <style>
+    .home-card-actions,
+    .home-progress-button {
+      display: inline-grid;
+      place-items: center;
+      flex: none;
+    }
+    .home-card-actions {
+      width: 2rem;
+      height: 2rem;
+    }
+    .home-progress-controls {
+      gap: .25rem;
+      margin-inline: -.5rem;
+    }
+    .home-progress-button {
+      width: 2.5rem;
+      height: 2.75rem;
+      border-radius: .375rem;
+    }
+    .home-progress-button > svg {
+      width: 1.25rem;
+      height: 1.25rem;
+      padding: .25rem;
+      border-radius: .375rem;
+      background: #374151;
+    }
+    .home-progress-button:not(:disabled):hover > svg {
+      background: #4b5563;
+    }
+    .home-card-actions:focus-visible,
+    .home-progress-button:focus-visible {
+      outline: 2px solid #818cf8;
+      outline-offset: 2px;
+    }
+  </style>
+{% endblock extra_head %}
+
 {% block content %}
   <div id="home-browsing">
     <form id="home-page-state" hidden></form>

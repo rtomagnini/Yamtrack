@@ -140,6 +140,34 @@ class IntegrationTest(StaticLiveServerTestCase):
         self.assertEqual(len(set(ids)), 24)
         self.assertEqual(self.page.evaluate("performance.timeOrigin"), time_origin)
 
+    def test_home_card_actions_support_touch_and_keyboard(self):
+        _create_home_season(self.user, "2000", [1, 2, 3], watched=(1,))
+        with self.browser.new_context(
+            viewport={"width": 390, "height": 844}, is_mobile=True, has_touch=True,
+        ) as context:
+            context.add_cookies(self.page.context.cookies())
+            page = context.new_page()
+            page.goto(f"{self.live_server_url}/", wait_until="domcontentloaded")
+            actions = page.get_by_role("button", name="Actions for Show 2000 S1")
+            expect(actions).to_be_visible()
+            actions.tap()
+            expect(page.get_by_role("button", name="Lists", exact=True)).to_be_visible()
+            expect(page.get_by_role("button", name="History", exact=True)).to_be_visible()
+            page.keyboard.press("Escape")
+            expect(actions).to_be_focused()
+            expect(page.get_by_role("button", name="Edit tracking")).to_be_hidden()
+
+            page.keyboard.press("Enter")
+            edit = page.get_by_role("button", name="Edit tracking")
+            expect(edit).to_be_focused()
+            page.keyboard.press("Enter")
+            expect(page.get_by_label("Status", exact=True)).to_be_visible()
+            page.keyboard.press("Escape")
+            expect(actions).to_be_focused()
+            bounds = page.get_by_role("button", name="Watch next episode").bounding_box()
+            self.assertGreaterEqual(bounds["height"], 44)
+            self.assertGreaterEqual(bounds["width"], 40)
+
     def test_tv_completed(self):
         """Test the completed status of a TV show."""
         self.page.get_by_placeholder("Search tv shows...").click()
@@ -168,6 +196,7 @@ class IntegrationTest(StaticLiveServerTestCase):
         with patch("app.providers.services.get_media_metadata", side_effect=OSError) as provider:
             self.page.goto(f"{self.live_server_url}/", wait_until="domcontentloaded")
             card = self.page.locator("#media-grid-season > div")
+            card.get_by_role("button", name="Actions for Show 101 S1").click()
             card.get_by_title("Add to tracker").click()
             self.page.get_by_label("Status", exact=True).select_option(Status.COMPLETED.value)
             self.page.get_by_role("button", name="Update", exact=True).click()
