@@ -4,7 +4,7 @@
 {% for media in media_list.items %}
   {% with item=media.item|metadata_for:request.user %}
   <div class="theme-surface rounded-lg overflow-hidden shadow-lg transition-all duration-300"
-       x-data="{ actionsOpen: false, posterTapped: false, posterHovered: false, trackOpen: false, listsOpen: false, historyOpen: false }"
+       x-data="{ actionsOpen: false, posterTapped: false, posterHovered: false, posterPointer: '', trackOpen: false, listsOpen: false, historyOpen: false }"
        x-init="['trackOpen', 'listsOpen', 'historyOpen'].forEach(name => $watch(name, open => {
          if (!open) $refs.actions.focus({ preventScroll: true });
        }))">
@@ -69,7 +69,8 @@
 
       <a href="{{ item|media_url }}" class="absolute inset-0" tabindex="-1" aria-hidden="true"
          data-home-poster-link
-         @click="if (!posterTapped && ($event.pointerType === 'touch' || $event.pointerType === 'pen' || (!$event.pointerType && !matchMedia('(hover: hover)').matches))) {
+         @pointerdown="posterPointer = $event.pointerType"
+         @click="if (!posterTapped && (posterPointer === 'touch' || posterPointer === 'pen' || matchMedia('(hover: none), (pointer: coarse)').matches)) {
            $event.preventDefault();
            posterTapped = true;
          }"></a>
@@ -118,9 +119,11 @@
       <a href="{{ item|media_url }}"
          class="block text-center text-sm font-semibold text-white hover:text-indigo-400 line-clamp-1"
          title="{{ item }}">{{ item }}</a>
-      <div id="progress-{{ item.media_type }}-{{ media.id }}">
-        {% include "app/components/progress_changer.html" with media=media csrf_token=csrf_token MediaTypes=MediaTypes only %}
-      </div>
+      {% if item.media_type != MediaTypes.MOVIE.value %}
+        <div id="progress-{{ item.media_type }}-{{ media.id }}">
+          {% include "app/components/progress_changer.html" with media=media csrf_token=csrf_token MediaTypes=MediaTypes only %}
+        </div>
+      {% endif %}
     </div>
 
     {# Track Modal #}
