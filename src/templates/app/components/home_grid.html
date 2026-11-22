@@ -3,12 +3,12 @@
 
 {% for media in media_list.items %}
   {% with item=media.item|metadata_for:request.user %}
-  <div class="theme-surface rounded-lg overflow-hidden shadow-lg transition-all duration-300"
+  <div class="flex flex-col theme-surface rounded-lg overflow-hidden shadow-lg transition-all duration-300"
        x-data="{ actionsOpen: false, posterTapped: false, posterHovered: false, posterPointer: '', trackOpen: false, listsOpen: false, historyOpen: false }"
        x-init="['trackOpen', 'listsOpen', 'historyOpen'].forEach(name => $watch(name, open => {
          if (!open) $refs.actions.focus({ preventScroll: true });
        }))">
-    <div class="relative"
+    <div class="relative shrink-0"
          @pointerenter="posterHovered = $event.pointerType === 'mouse'"
          @pointerleave="posterHovered = false"
          @click.outside="actionsOpen = false; posterTapped = false"
@@ -115,12 +115,12 @@
       </div>
     </div>
 
-    <div class="p-3 space-y-3">
+    <div class="flex flex-1 flex-col gap-3 p-3">
       <a href="{{ item|media_url }}"
-         class="block text-center text-sm font-semibold text-white hover:text-indigo-400 line-clamp-1"
+         class="block text-center text-sm font-semibold text-white hover:text-indigo-400"
          title="{{ item }}">{{ item }}</a>
       {% if item.media_type != MediaTypes.MOVIE.value %}
-        <div id="progress-{{ item.media_type }}-{{ media.id }}">
+        <div id="progress-{{ item.media_type }}-{{ media.id }}" class="mt-auto">
           {% include "app/components/progress_changer.html" with media=media csrf_token=csrf_token MediaTypes=MediaTypes only %}
         </div>
       {% endif %}
