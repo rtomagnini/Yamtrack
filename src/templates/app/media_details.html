@@ -12,10 +12,12 @@
   <style>
     .media-overview {
       display: grid;
-      grid-template: "poster heading" auto "description description" auto / 4.5rem minmax(0, 1fr);
+      grid-template: "poster heading" auto "description description" auto / var(--mobile-poster-width, 4.5rem) minmax(0, 1fr);
       align-items: start;
       gap: 1rem;
     }
+    .media-overview-season { --mobile-poster-width: clamp(5.5rem, 28vw, 8rem); }
+    .media-overview-season-menu { max-width: 100%; }
     .media-overview-poster { grid-area: poster; }
     .media-overview-heading { grid-area: heading; }
     .media-overview-heading h1 { overflow-wrap: anywhere; }
@@ -34,7 +36,7 @@
 {% endblock extra_head %}
 
 {% block content %}
-  <div class="media-overview mb-8">
+  <div class="media-overview mb-8{% if media.media_type == MediaTypes.SEASON.value %} media-overview-season{% endif %}">
     <div class="media-overview-heading">
       {% if media.media_type == MediaTypes.SEASON.value %}
         <a class="text-sm font-semibold hover:text-indigo-400 text-gray-400"
@@ -64,7 +66,7 @@
                  x-transition:leave="transition ease-in duration-150"
                  x-transition:leave-start="opacity-100 transform scale-100"
                  x-transition:leave-end="opacity-0 transform scale-95"
-                 class="absolute left-0 mt-2 w-48 xs:w-64 theme-raised rounded-md shadow-lg overflow-hidden z-10">
+                 class="media-overview-season-menu absolute left-0 mt-2 w-48 xs:w-64 theme-raised rounded-md shadow-lg overflow-hidden z-10">
               <div class="max-h-[300px] overflow-y-auto">
                 {% for tv_season in tv.related.seasons %}
                   <a href="{% url 'season_details' source=media.source media_id=media.media_id title=media.title|slug season_number=tv_season.season_number %}"
