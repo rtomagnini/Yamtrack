@@ -37,7 +37,7 @@
       background: var(--theme-chrome);
     }
     .episode-filters a,
-    .episode-order {
+    .episode-control {
       display: inline-flex;
       align-items: center;
       justify-content: center;
@@ -58,7 +58,7 @@
       font-weight: 600;
       box-shadow: inset 0 0 0 1px rgb(166 164 255 / 20%);
     }
-    .episode-order {
+    .episode-control {
       gap: .375rem;
       padding: .375rem .75rem;
       border: 1px solid var(--theme-outline);
@@ -67,10 +67,10 @@
     }
     @media (hover: hover) {
       .episode-filters a:not([aria-current]):hover,
-      .episode-order:hover { background: var(--theme-raised); color: white; }
+      .episode-control:hover { background: var(--theme-raised); color: white; }
     }
     .episode-filters a:focus-visible,
-    .episode-order:focus-visible { outline: 2px solid var(--theme-focus); outline-offset: -2px; }
+    .episode-control:focus-visible { outline: 2px solid var(--theme-focus); outline-offset: -2px; }
     @media (min-width: 48rem) {
       .media-overview {
         grid-template: "poster heading" auto "poster description" 1fr / minmax(0, min(25%, 250px)) minmax(0, 1fr);

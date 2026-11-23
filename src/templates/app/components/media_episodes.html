@@ -18,7 +18,7 @@
             <select id="youtube-year-filter"
                     name="year"
                     onchange="this.form.submit()"
-                    class="px-3 py-1 rounded-full text-sm bg-gray-700 text-gray-200 border border-gray-600">
+                    class="episode-control cursor-pointer">
               <option value="all" {% if current_year == 'all' %}selected{% endif %}>All years</option>
               {% for year in available_years %}
                 <option value="{{ year.value }}" {% if current_year == year.value %}selected{% endif %}>{{ year.label }}</option>
@@ -36,7 +36,7 @@
         </nav>
 
         <a href="{% if current_sort == 'desc' or not current_sort %}{% querystring sort='asc' page=None %}{% else %}{% querystring sort='desc' page=None %}{% endif %}"
-           class="episode-order"
+           class="episode-control"
            title="{% if current_sort == 'desc' or not current_sort %}Change to ascending order{% else %}Change to descending order{% endif %}">
           <span>Order</span>
           <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
