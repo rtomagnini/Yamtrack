@@ -36,7 +36,9 @@
           <div>
             <h3 class="text-lg font-semibold mb-1 line-clamp-1">{{ episode_title }}</h3>
             <p class="text-sm text-gray-400">Episode {{ episode.episode_number }}</p>
-            {% if episode.history %}
+            {% if episode.skipped %}
+              <p class="text-sm text-gray-400 mt-1">Skipped</p>
+            {% elif episode.history %}
               {% if episode.history|length == 1 %}
                 <p class="text-sm text-gray-400 mt-1">Watched once</p>
               {% else %}
@@ -84,7 +86,7 @@
           confirmedDate: '',
           inputDateTime: '{% if TRACK_TIME %}{% now "Y-m-d\TH:i" %}{% else %}{% now "Y-m-d" %}{% endif %}',
           inputType: '{% if TRACK_TIME %}datetime-local{% else %}date{% endif %}',
-          async submitEpisode(answer = '') {
+          async submitEpisode(answer = '', skipAction = '') {
             const form = this.$refs.watchDateForm;
             const refresh = form.hasAttribute('data-season-refresh')
               ? document.getElementById('season-watch-refresh') : null;
@@ -95,14 +97,17 @@
             this.error = '';
             const formData = new FormData(form);
             const watchDate = answer ? this.confirmedDate : this.inputDateTime;
-            formData.set('end_date', watchDate);
-            if (answer) formData.set('confirm_completion', answer);
+            if (skipAction) formData.set('skip_action', skipAction);
+            else {
+              formData.set('end_date', watchDate);
+              if (answer) formData.set('confirm_completion', answer);
+            }
 
             let saved = false;
             try {
               const headers = { 'X-Requested-With': 'XMLHttpRequest' };
               if (refresh) headers['X-Season-Watch'] = '1';
-              const response = await fetch(form.action, {
+              const response = await fetch(skipAction ? form.dataset.skipUrl : form.action, {
                 method: 'POST',
                 body: formData,
                 headers,
@@ -127,7 +132,7 @@
               saved = true;
               window.location.reload();
             } catch {
-              this.error = 'Could not save the watch. Try again.';
+              this.error = skipAction ? 'Could not update the episode. Try again.' : 'Could not save the watch. Try again.';
             } finally {
               if (refresh) delete refresh.dataset.busy;
               if (!saved) {
@@ -142,6 +147,7 @@
           <div x-show="!showConfirmation">
             <form x-ref="watchDateForm" data-watch-date-form
                   {% if detail_media_type == 'season' %}data-season-refresh{% endif %}
+                  {% if detail_media_type == 'season' and season %}data-skip-url="{% url 'episode_skip' season.id %}"{% endif %}
                   @submit.prevent="submitEpisode()"
                   action="{% url 'episode_save' %}?next={{ request.get_full_path|urlencode }}"
                   method="post">
@@ -151,6 +157,7 @@
               <input type="hidden" name="source" value="{{ media.source }}">
               <input type="hidden" name="episode_number" value="{{ episode.episode_number }}">
               
+              {% if not episode.skipped %}
               <label class="block text-sm font-medium text-gray-300 mb-2">Watch Date</label>
 
               {# djlint:off #}
@@ -191,6 +198,18 @@
                   Add watch
                 </button>
               </div>
+              {% endif %}
+              {% if detail_media_type == 'season' and season and not episode.history %}
+                <div class="{% if not episode.skipped %}mt-4 border-t border-gray-600 pt-3{% endif %}">
+                  {% if episode.skipped %}
+                    <button type="button" :disabled="busy" @click="submitEpisode('', 'restore')"
+                            class="px-4 py-2 theme-field theme-hover rounded-md text-sm cursor-pointer">Restore to unwatched</button>
+                  {% else %}
+                    <button type="button" :disabled="busy" @click="submitEpisode('', 'skip')"
+                            class="text-sm text-gray-300 hover:text-white cursor-pointer">Skip episode</button>
+                  {% endif %}
+                </div>
+              {% endif %}
             </form>
           </div>
 
@@ -202,7 +221,7 @@
               </svg>
             </div>
             <h3 class="text-lg font-medium text-white mb-2">Complete Season?</h3>
-            <p class="text-gray-300 mb-6">This is the last episode of the season. Do you want to mark the season as completed?</p>
+            <p class="text-gray-300 mb-6">Mark the season as completed after saving this watch?</p>
             
             <div class="flex justify-center gap-3">
               <button type="button" x-ref="keepInProgress" :disabled="busy" @click="submitEpisode('no')"

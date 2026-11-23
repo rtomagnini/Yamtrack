@@ -11,7 +11,7 @@ from django.core.paginator import Paginator
 from django.db import IntegrityError, transaction
 from django.db import models
 from django.http import Http404, HttpResponse, HttpResponseBadRequest, JsonResponse
-from django.shortcuts import redirect, render
+from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.dateparse import parse_date
@@ -25,6 +25,7 @@ from app import statistics as stats
 from app.metadata import display_metadata, override_for, save_poster_override
 from app.forms import EpisodeTrackingForm, ItemMetadataForm, ManualItemForm, get_form_class
 from app.models import TV, BasicMedia, Episode, Item, ItemMetadataOverride, MangaSession, MediaTypes, Season, Sources, Status, GameSession, Game
+from app.models import SkippedEpisode
 from app.providers import manual, services, tmdb, youtube
 from app.templatetags import app_tags
 from integrations.youtube_watched import queue_watched
@@ -631,22 +632,30 @@ def season_details(request, source, media_id, title, season_number):  # noqa: AR
     watched_numbers = {
         episode.item.episode_number
         for episode in episodes_in_db
-        if episode.end_date is not None
+        if episode.end_date is not None and episode.item_id is not None
     }
     listed_numbers = {episode["episode_number"] for episode in season_metadata["episodes"]}
 
-    # Filter episodes by watched status if requested
+    skipped_numbers = current_instance.skipped_episode_numbers - watched_numbers if current_instance else set()
+    for episode in season_metadata["episodes"]:
+        episode["skipped"] = episode["episode_number"] in skipped_numbers
+
     episode_filter = request.GET.get("filter", "all")
     if episode_filter == "unwatched":
         season_metadata["episodes"] = [
             episode for episode in season_metadata["episodes"]
-            if not episode.get("history")
+            if not episode.get("history") and not episode["skipped"]
         ]
     elif episode_filter == "watched":
         season_metadata["episodes"] = [
             episode for episode in season_metadata["episodes"]
             if episode.get("history")
         ]
+    elif episode_filter == "skipped":
+        season_metadata["episodes"] = [episode for episode in season_metadata["episodes"] if episode["skipped"]]
+    else:
+        episode_filter = "all"
+        season_metadata["episodes"] = [episode for episode in season_metadata["episodes"] if not episode["skipped"]]
 
     # Sort episodes by episode number
     sort_order = request.GET.get("sort", "asc")
@@ -1024,6 +1033,46 @@ def media_delete(request):
     return helpers.redirect_back(request)
 
 
+@login_required
+@require_POST
+@transaction.atomic
+def episode_skip(request, season_id):
+    """Set or clear a skipped episode for this user's tracked season."""
+    season = get_object_or_404(
+        Season.objects.select_for_update(of=("self",)).select_related("item"),
+        pk=season_id,
+        user=request.user,
+        item__source__in=(Sources.TMDB.value, Sources.MANUAL.value),
+    )
+    try:
+        number = int(request.POST.get("episode_number", ""))
+    except ValueError:
+        return HttpResponseBadRequest("Invalid episode number.")
+    if not 0 < number <= 2_147_483_647:
+        return HttpResponseBadRequest("Invalid episode number.")
+
+    if request.POST.get("skip_action") == "restore":
+        season.skipped_episodes.filter(episode_number=number).delete()
+    elif request.POST.get("skip_action") == "skip":
+        if season.episodes.filter(item__episode_number=number, end_date__isnull=False).exists():
+            return HttpResponseBadRequest("This episode has already been watched.")
+        item = season.item
+        if not Item.objects.filter(
+            source=item.source, media_type=MediaTypes.EPISODE.value, media_id=item.media_id,
+            season_number=item.season_number, episode_number=number,
+        ).exists():
+            metadata = services.get_media_metadata(
+                "tv_with_seasons", item.media_id, item.source, [item.season_number],
+            )
+            episodes = metadata[f"season/{item.season_number}"]["episodes"]
+            if not any(episode["episode_number"] == number for episode in episodes):
+                raise Http404
+        SkippedEpisode.objects.get_or_create(season=season, episode_number=number)
+    else:
+        return HttpResponseBadRequest("Unknown episode action.")
+    return JsonResponse({"saved": True})
+
+
 @require_POST
 def episode_save(request):
     """Handle the creation, deletion, and updating of episodes for a season."""
@@ -1176,31 +1225,39 @@ def episode_save(request):
         season_metadata = tv_with_seasons_metadata[f"season/{season_number}"]
         max_episodes = len(season_metadata["episodes"])
 
-    # Check if this is the last episode and if completion needs confirmation
-    is_last_episode = episode_number == max_episodes
-    
-    if is_last_episode and confirm_completion not in ["yes", "no"]:
-        # Return a JSON response indicating confirmation is needed
-        return JsonResponse({
-            "requires_confirmation": True,
-            "message": "This is the last episode of the season. Do you want to mark the season as completed?",
-            "episode_data": {
-                "media_id": media_id,
-                "season_number": season_number,
-                "episode_number": episode_number,
-                "source": source,
-                "end_date": end_date.isoformat() if hasattr(end_date, 'isoformat') else str(end_date),
-            }
-        })
-
-    # Determine if auto-completion should happen
-    if is_last_episode:
-        auto_complete = confirm_completion == "yes"
-    else:
-        auto_complete = True
-    
     with transaction.atomic():
-        related_season.watch(episode_number, end_date, auto_complete=auto_complete)
+        skipped = set()
+        if source != Sources.YOUTUBE.value:
+            related_season = Season.objects.select_for_update().get(pk=related_season.pk)
+            skipped = related_season.skipped_episode_numbers
+        if skipped:
+            catalog = {episode["episode_number"] for episode in season_metadata["episodes"]}
+            watched = set(
+                related_season.episodes.filter(end_date__isnull=False)
+                .values_list("item__episode_number", flat=True),
+            )
+            is_last_episode = catalog - watched - skipped == {episode_number}
+        else:
+            is_last_episode = episode_number == max_episodes
+
+        if is_last_episode and confirm_completion not in {"yes", "no"}:
+            return JsonResponse({
+                "requires_confirmation": True,
+                "message": "Mark the season as completed after saving this watch?",
+                "episode_data": {
+                    "media_id": media_id,
+                    "season_number": season_number,
+                    "episode_number": episode_number,
+                    "source": source,
+                    "end_date": end_date.isoformat() if hasattr(end_date, "isoformat") else str(end_date),
+                },
+            })
+
+        related_season.watch(
+            episode_number, end_date,
+            auto_complete=not skipped and (not is_last_episode or confirm_completion == "yes"),
+            complete_season=bool(skipped and is_last_episode and confirm_completion == "yes"),
+        )
         if source == Sources.YOUTUBE.value:
             from integrations.youtube_watched import queue_watched
 

@@ -369,6 +369,54 @@ class IntegrationTest(StaticLiveServerTestCase):
             },
         }
 
+    def test_skip_episode_is_reversible_and_home_watches_the_next_available_episode(self):
+        season = _create_home_season(
+            self.user, "101", [1, 2, 3], watched=(1,), source=Sources.TMDB.value,
+        )
+        metadata = self._season_metadata(season, 3)
+        Event.objects.bulk_create([
+            Event(item=season.item, content_number=number, datetime=timezone.now())
+            for number in (1, 2, 3)
+        ])
+        details = reverse("season_details", args=[Sources.TMDB.value, "101", "show-101", 1])
+        with (
+            patch("app.providers.services.get_media_metadata", return_value=metadata),
+            patch("app.providers.tmdb.fetch_season_multilingual", return_value={}),
+            patch("app.providers.tmdb.tv_with_seasons", return_value=metadata),
+        ):
+            page = self.page
+            page.goto(f"{self.live_server_url}{details}?filter=unwatched")
+            episode = page.locator("#season-episode-2")
+            track = episode.get_by_role("button", name="Track episode 2", exact=True)
+            track.click()
+            page.get_by_role("button", name="Skip episode", exact=True).click()
+            expect(episode).to_have_count(0)
+            self.assertEqual(season.episodes.count(), 1)
+
+            page.get_by_role("link", name="Skipped", exact=True).click()
+            expect(episode).to_be_visible()
+            track.click()
+            page.get_by_role("button", name="Restore to unwatched").click()
+            expect(episode).to_have_count(0)
+
+            page.get_by_role("link", name="Unwatched", exact=True).click()
+            expect(episode).to_be_visible()
+            track.click()
+            page.get_by_role("button", name="Skip episode", exact=True).click()
+            expect(episode).to_have_count(0)
+            page.goto(f"{self.live_server_url}/")
+            section = page.locator("#home-section-season")
+            expect(section.get_by_text("1 / 2", exact=True)).to_be_visible()
+            section.get_by_role("button", name="Watch next episode").click()
+            expect(section.get_by_text("Mark this season as completed?")).to_be_visible()
+            section.get_by_role("button", name="Yes", exact=True).click()
+            expect(section).to_have_count(0)
+
+        season.refresh_from_db()
+        self.assertEqual(season.status, Status.COMPLETED.value)
+        self.assertEqual(season.skipped_episode_numbers, {2})
+        self.assertEqual(set(season.episodes.values_list("item__episode_number", flat=True)), {1, 3})
+
     @override_settings(TRACK_TIME=True)
     def test_mark_episode_watched_from_season_details(self):
         season = _create_home_season(
@@ -455,7 +503,7 @@ class IntegrationTest(StaticLiveServerTestCase):
             watch = self.page.get_by_role("button", name="Track episode 6", exact=True)
             watch.click()
             self.page.get_by_role("button", name="Add watch", exact=True).click()
-            expect(self.page.get_by_text("Watch saved. The episode list could not refresh.")).to_be_visible()
+            expect(self.page.get_by_text("Changes saved. The episode list could not refresh.")).to_be_visible()
             self.assertEqual(season.episodes.filter(item__episode_number=6).count(), 1)
             self.page.evaluate("""() => {
               const card = document.getElementById('season-episode-6');

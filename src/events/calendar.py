@@ -590,7 +590,7 @@ def _sync_watched_season(season_item, episodes, last_season_number):
                 season.episodes.filter(end_date__isnull=False)
                 .values_list("item__episode_number", flat=True),
             )
-            if not catalog.keys() <= watched:
+            if not catalog.keys() <= (watched | season.skipped_episode_numbers):
                 season.status = Status.IN_PROGRESS.value
                 bulk_update_with_history([season], Season, fields=["status"])
             elif (

@@ -85,6 +85,16 @@ class HomeViewTests(TestCase):
             "progress_edit", args=[MediaTypes.SEASON.value, self.season.pk]
         )
 
+    def test_cannot_skip_watched_or_another_users_episode(self):
+        url = reverse("episode_skip", args=[self.season.pk])
+        response = self.client.post(url, {"skip_action": "skip", "episode_number": 1})
+        self.assertEqual(response.status_code, 400)
+        another_user = get_user_model().objects.create_user(username="another")
+        self.client.force_login(another_user)
+        response = self.client.post(url, {"skip_action": "skip", "episode_number": 3})
+        self.assertEqual(response.status_code, 404)
+        self.assertFalse(self.season.skipped_episodes.exists())
+
     def test_home_view(self):
         manager = BasicMedia.objects
         with patch.object(

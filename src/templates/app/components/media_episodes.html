@@ -6,7 +6,7 @@
        {% if media_type == MediaTypes.SEASON.value %}id="season-episodes" data-page="{{ episodes_page.number }}"{% endif %}>
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 gap-2">
       <h2 class="text-xl font-bold" {% if media_type == MediaTypes.SEASON.value %}data-episode-heading tabindex="-1"{% endif %}>{% if is_youtube_channel %}Videos{% else %}Episodes{% endif %}</h2>
-      <div class="flex items-center space-x-2">
+      <div class="flex flex-wrap items-center gap-2">
         {% if is_youtube_channel %}
           <form method="get" class="flex items-center gap-2">
             {% for key, value in request.GET.items %}
@@ -27,7 +27,7 @@
           </form>
         {% endif %}
         <!-- Filter buttons -->
-        <div class="flex space-x-2">
+        <div class="flex flex-wrap gap-2">
           <a href="?{% for key, value in request.GET.items %}{% if key != 'filter' and key != 'page' %}{{ key }}={{ value|urlencode }}&{% endif %}{% endfor %}filter=all"
              class="px-3 py-1 rounded-full text-sm {% if current_filter == 'all' or not current_filter %}bg-indigo-600 text-white{% else %}bg-gray-700 text-gray-300 hover:bg-gray-600{% endif %} transition duration-200">
             All
@@ -40,6 +40,12 @@
              class="px-3 py-1 rounded-full text-sm {% if current_filter == 'unwatched' %}bg-indigo-600 text-white{% else %}bg-gray-700 text-gray-300 hover:bg-gray-600{% endif %} transition duration-200">
             Unwatched
           </a>
+          {% if media_type == MediaTypes.SEASON.value and current_instance %}
+            <a href="?{% for key, value in request.GET.items %}{% if key != 'filter' and key != 'page' %}{{ key }}={{ value|urlencode }}&{% endif %}{% endfor %}filter=skipped"
+               class="px-3 py-1 rounded-full text-sm {% if current_filter == 'skipped' %}bg-indigo-600 text-white{% else %}bg-gray-700 text-gray-300 hover:bg-gray-600{% endif %} transition duration-200">
+              Skipped
+            </a>
+          {% endif %}
         </div>
 
         <!-- Sort button -->
@@ -136,7 +142,7 @@
                         {% endif %}
                       </button>
 
-                      {% include "app/components/fill_track_episode.html" with request=request media=media episode=episode episode_title=episode.title csrf_token=csrf_token TRACK_TIME=TRACK_TIME detail_media_type=media_type only %}
+                      {% include "app/components/fill_track_episode.html" with request=request media=media episode=episode episode_title=episode.title csrf_token=csrf_token TRACK_TIME=TRACK_TIME detail_media_type=media_type season=current_instance only %}
 
                     </div>
 
@@ -302,6 +308,8 @@
       <div class="text-center py-8 text-gray-400">
         {% if current_filter == 'watched' %}
           No hay episodios vistos en esta temporada.
+        {% elif current_filter == 'skipped' %}
+          No skipped episodes.
         {% elif current_filter == 'unwatched' %}
           No hay episodios sin ver en esta temporada.
         {% else %}

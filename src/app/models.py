@@ -407,6 +407,7 @@ class MediaManager(models.Manager):
                     "episodes",
                     queryset=Episode.objects.select_related("item"),
                 ),
+                "skipped_episodes",
             )
 
         return base_queryset
@@ -625,12 +626,13 @@ class MediaManager(models.Manager):
         current_time = timezone.now()
 
         for media in media_list:
+            skipped = media.skipped_episode_numbers if media.item.media_type == MediaTypes.SEASON.value else set()
             # Get future events sorted by datetime
             future_events = sorted(
                 [
                     event
                     for event in getattr(media.item, "prefetched_events", [])
-                    if event.datetime > current_time
+                    if event.datetime > current_time and event.content_number not in skipped
                 ],
                 key=lambda e: e.datetime,
             )
@@ -817,16 +819,17 @@ class MediaManager(models.Manager):
                     season, current_datetime,
                 )
 
-            season.pending_episode_numbers = sorted(available - watched)
+            skipped = season.skipped_episode_numbers - watched
+            season.pending_episode_numbers = sorted(available - watched - skipped)
             # Keep already registered watches in the total if release data changes.
             season.max_progress = (
-                None if local_only and catalog is None else len(available | watched)
+                None if local_only and catalog is None else len((available | watched) - skipped)
             )
             season._custom_progress = len(watched)
             season.completes_on_next_episode = (
                 len(season.pending_episode_numbers) == 1
                 and catalog is not None
-                and catalog <= (watched | set(season.pending_episode_numbers))
+                and catalog <= (watched | skipped | set(season.pending_episode_numbers))
             )
 
     def _get_local_season_releases(self, seasons, current_datetime):
@@ -1681,6 +1684,10 @@ class Season(Media):
         ]
         return max(dates) if dates else None
 
+    @property
+    def skipped_episode_numbers(self):
+        return {episode.episode_number for episode in self.skipped_episodes.all()}
+
     def increase_progress(self):
         """Watch the next episode of the season."""
         season_metadata = providers.services.get_media_metadata(
@@ -1694,7 +1701,7 @@ class Season(Media):
         # Find the next unwatched episode instead of using progress (which counts repeats)
         watched_episode_numbers = set(
             episode.item.episode_number for episode in self.episodes.all()
-        )
+        ) | self.skipped_episode_numbers
         
         # Find first episode that hasn't been watched yet
         next_episode_number = None
@@ -1904,6 +1911,18 @@ class Season(Media):
         return item
 
 
+class SkippedEpisode(models.Model):
+    """An episode excluded from a user's tracked season."""
+
+    season = models.ForeignKey(Season, on_delete=models.CASCADE, related_name="skipped_episodes")
+    episode_number = models.PositiveIntegerField()
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["season", "episode_number"], name="unique_skipped_season_episode"),
+        ]
+
+
 class Episode(models.Model):
     """Model for episodes of a season."""
 
@@ -1943,6 +1962,11 @@ class Episode(models.Model):
         from_home = kwargs.pop("from_home", False)
         
         super().save(*args, **kwargs)
+
+        if self.end_date is not None and self.item_id is not None:
+            SkippedEpisode.objects.filter(
+                season_id=self.related_season_id, episode_number=self.item.episode_number,
+            ).delete()
 
         # Skip TMDB metadata fetching for YouTube and Manual episodes
         if self.item.source in [Sources.YOUTUBE.value, Sources.MANUAL.value]:
