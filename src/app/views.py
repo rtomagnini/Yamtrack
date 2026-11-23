@@ -581,6 +581,12 @@ def media_details(request, source, media_type, media_id, title):  # noqa: ARG001
 @vary_on_headers("X-Season-Fragment")
 def season_details(request, source, media_id, title, season_number):  # noqa: ARG001 For URL
     """Return the details page for a season."""
+    if source == Sources.YOUTUBE.value:
+        return redirect(reverse(
+            "youtube_channel_details",
+            kwargs={"source": source, "media_id": media_id, "title": title},
+            query={"year": season_number if 1000 <= season_number <= 9999 else "all", "filter": "all"},
+        ))
     tv_with_seasons_metadata = services.get_media_metadata(
         "tv_with_seasons",
         media_id,
@@ -2076,7 +2082,15 @@ def youtube_channel_details(request, source, media_id, title):  # noqa: ARG001 t
     )
     episodes = known_year_episodes + unknown_year_episodes
 
-    episodes_page = Paginator(episodes, 30).get_page(request.GET.get("page"))
+    paginator = Paginator(episodes, 30)
+    page = request.GET.get("page")
+    video_id = request.GET.get("video")
+    if page is None and video_id:
+        for index, episode in enumerate(episodes):
+            if str(episode["id"]) == video_id:
+                page = index // paginator.per_page + 1
+                break
+    episodes_page = paginator.get_page(page)
     
     # Update channel metadata with filtered episodes
     channel_metadata["episodes"] = episodes

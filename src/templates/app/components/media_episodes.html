@@ -67,7 +67,9 @@
     <div class="space-y-6">
       {% for episode in episodes_page|default:media.episodes %}
         <div class="theme-surface rounded-lg overflow-hidden shadow-lg" data-episode-card
-           {% if media_type == MediaTypes.SEASON.value %}
+           {% if is_youtube_channel %}
+             id="youtube-video-{{ episode.id }}" style="scroll-margin-top: 5rem"
+           {% elif media_type == MediaTypes.SEASON.value %}
              id="season-episode-{{ episode.episode_number }}"
              data-watch-count="{{ episode.history|length }}"
              data-latest-watch="{{ episode.history.0.pk|default:'' }}"

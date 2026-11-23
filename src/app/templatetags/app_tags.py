@@ -266,7 +266,7 @@ def natural_day(value):
 
 
 @register.filter
-def media_url(media):
+def media_url(media, youtube_filter="all"):
     """Return the media URL for both metadata and model object cases."""
     is_dict = isinstance(media, dict)
 
@@ -275,6 +275,20 @@ def media_url(media):
     source = media["source"] if is_dict else media.source
     media_id = media["media_id"] if is_dict else media.media_id
     title = media["title"] if is_dict else media.title
+
+    if source == Sources.YOUTUBE.value and media_type == MediaTypes.EPISODE.value:
+        air_date = media.get("air_date") if is_dict else media.air_date
+        year = str(air_date)[:4] if air_date else "unknown"
+        query = {"filter": youtube_filter, "year": year}
+        video_id = None if is_dict else media.pk
+        if video_id is not None:
+            query["video"] = video_id
+        return reverse(
+            "youtube_channel_details",
+            kwargs={"source": source, "media_id": media_id, "title": slug(title) or "channel"},
+            query=query,
+            fragment=f"youtube-video-{video_id}" if video_id is not None else None,
+        )
 
     if media_type in [MediaTypes.SEASON.value, MediaTypes.EPISODE.value]:
         season_number = media["season_number"] if is_dict else media.season_number

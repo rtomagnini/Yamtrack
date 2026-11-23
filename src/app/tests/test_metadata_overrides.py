@@ -1,6 +1,6 @@
 """Personal metadata must survive syncs and consistently affect watch statistics."""
 
-from datetime import time
+from datetime import date, time
 from unittest.mock import patch
 
 import pytest
@@ -597,6 +597,41 @@ def channel_logo_payload(channel, **changes):
         "media_id": channel.item.media_id, "status": channel.status, "notes": channel.notes,
         **changes,
     }
+
+
+def test_youtube_timeline_opens_the_watched_video_on_its_channel_page(
+    client, user, youtube_channel, provider,
+):
+    provider.return_value = {
+        "source": "youtube", "media_type": "youtube", "media_id": "UCTestChannel",
+        "title": "Channel", "image": youtube_channel.item.image,
+    }
+    season = youtube_channel.seasons.get()
+    videos = Item.objects.bulk_create([
+        Item(source="youtube", media_type="episode", media_id="55", season_number=2026,
+             episode_number=number, title=f"Video {number}", air_date=date(2026, 1, 1))
+        for number in range(2, 33)
+    ])
+    Episode.objects.bulk_create([
+        Episode(item=video, related_season=season, end_date=timezone.now()) for video in videos
+    ])
+    video = videos[-1]
+    client.force_login(user)
+    response = client.get(reverse("statistics"))
+    assert response.status_code == 200
+
+    channel_url = reverse("youtube_channel_details", args=["youtube", "55", "video-32"])
+    target = f"{channel_url}?filter=watched&year=2026&video={video.pk}#youtube-video-{video.pk}"
+    assert response.content.count(target.replace("&", "&amp;").encode()) == 2
+
+    response = client.get(target)
+    assert response.status_code == 200
+    assert response.context["episodes_page"].number == 2
+    assert f'id="youtube-video-{video.pk}"'.encode() in response.content
+
+    legacy = reverse("season_details", args=["youtube", "55", "video-32", 2026])
+    response = client.get(legacy)
+    assert response.url == f"{channel_url}?year=2026&filter=all"
 
 
 def test_youtube_tracking_modal_saves_status_and_logo(client, user, youtube_channel, provider):
