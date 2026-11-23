@@ -9,6 +9,8 @@ from app.models import (
     TV,
     Anime,
     Episode,
+    Game,
+    GameSession,
     Item,
     MediaTypes,
     Movie,
@@ -729,25 +731,19 @@ class StatisticsTests(TestCase):
 
     def test_get_timeline(self):
         """Test the get_timeline function."""
-        # Create user_media dict with our test objects
-        user_media = {
-            MediaTypes.TV.value: TV.objects.filter(user=self.user),
-            MediaTypes.SEASON.value: Season.objects.filter(user=self.user),
-            MediaTypes.MOVIE.value: Movie.objects.filter(user=self.user),
-            MediaTypes.ANIME.value: Anime.objects.filter(user=self.user),
-        }
-        timeline = statistics.get_timeline(user_media)
+        user_media, _, _, _ = statistics.get_user_media(self.user, None, None)
+        timeline = statistics.get_timeline(user_media, user=self.user)
 
         # Check structure - should be a dict with month-year keys
         self.assertIsInstance(timeline, dict)
 
         # Check content
-        self.assertIn("January 2025", timeline)  # Season spans Jan 1-15
+        self.assertIn("January 2025", timeline)  # Two episodes
         self.assertIn("February 2025", timeline)  # Movie on Feb 1
         self.assertIn("March 2025", timeline)  # Anime starts on Mar 1
 
         # Check items in each month
-        self.assertEqual(len(timeline["January 2025"]), 1)  # Season
+        self.assertEqual(len(timeline["January 2025"]), 2)  # Episodes
         self.assertEqual(len(timeline["February 2025"]), 1)  # Movie
         self.assertEqual(len(timeline["March 2025"]), 1)  # Anime
 
@@ -756,6 +752,33 @@ class StatisticsTests(TestCase):
         self.assertEqual(months[0], "March 2025")  # Most recent first
         self.assertEqual(months[1], "February 2025")
         self.assertEqual(months[2], "January 2025")
+
+    def test_timeline_keeps_game_sessions_after_an_earlier_movie(self):
+        start = datetime.datetime(2025, 2, 1, tzinfo=datetime.UTC)
+        end = start + datetime.timedelta(hours=23, minutes=59)
+        Movie.objects.filter(pk=self.movie.pk).update(end_date=start + datetime.timedelta(hours=9))
+        item = Item.objects.create(
+            title="Test Game", media_id="7", media_type=MediaTypes.GAME.value,
+            source=Sources.MANUAL.value,
+        )
+        game, = Game.objects.bulk_create([
+            Game(user=self.user, item=item, status=Status.IN_PROGRESS.value),
+        ])
+        GameSession.objects.bulk_create([
+            GameSession(game=game, minutes=minutes, session_date=start + datetime.timedelta(hours=hour))
+            for minutes, hour in ((30, 11), (20, 16), (40, 25))
+        ])
+
+        user_media, counts, _, _ = statistics.get_user_media(self.user, start, end)
+        timeline = statistics.get_timeline(user_media, start, end, user=self.user)
+        sessions = [
+            entry.runtime
+            for entries in timeline.values()
+            for entry in entries
+            if getattr(entry, "media_type", None) == "game_session"
+        ]
+        self.assertEqual(counts[MediaTypes.GAME.value], 2)
+        self.assertEqual(sessions, [20, 30])
 
     def test_activity_calendar_matches_consumption_summary(self):
         start = datetime.datetime(2025, 1, 1, tzinfo=datetime.UTC)

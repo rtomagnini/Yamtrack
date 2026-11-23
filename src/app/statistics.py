@@ -910,10 +910,10 @@ def get_timeline(user_media, start_date=None, end_date=None, user=None):
             for media in queryset:
                 media.item = display_metadata(media.item, user)
                 # Usar end_date como referencia principal para timeline
-                end_date = getattr(media, 'end_date', None)
-                if end_date is None and hasattr(media, 'item'):
-                    end_date = getattr(media.item, 'end_date', None)
-                if not end_date:
+                consumed_at = getattr(media, 'end_date', None)
+                if consumed_at is None and hasattr(media, 'item'):
+                    consumed_at = getattr(media.item, 'end_date', None)
+                if not consumed_at:
                     continue  # Solo mostrar consumidos (con end_date)
                 # --- AÃ±adir runtime al objeto media si no existe ---
                 if not hasattr(media, 'runtime') or media.runtime is None:
@@ -925,7 +925,7 @@ def get_timeline(user_media, start_date=None, end_date=None, user=None):
                     elif hasattr(media, 'play_time'):
                         # Para games, usar play_time como runtime
                         media.runtime = media.play_time
-                local_end_date = timezone.localdate(end_date)
+                local_end_date = timezone.localdate(consumed_at)
                 year = local_end_date.year
                 month = local_end_date.month
                 month_name = calendar.month_name[month]
