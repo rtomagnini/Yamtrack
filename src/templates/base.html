@@ -35,59 +35,55 @@
       }
       .app-header-search {
         display: grid;
-        grid-template-columns: 2.75rem minmax(0, 1fr) auto;
+        grid-template-columns: minmax(0, 1fr) auto;
         align-items: center;
+        gap: .5rem;
         flex: 1;
         min-width: 0;
-        overflow: hidden;
-        border-radius: 999px;
-        background: var(--theme-surface);
       }
-      .app-header-search input {
-        width: 100%;
-        min-width: 0;
-        height: 2.75rem;
-        padding-inline-end: .25rem;
-        font-size: .875rem;
+      .app-header-query {
+        position: relative;
+      }
+      .app-header-query input {
+        padding-inline: 2.5rem .5rem;
+      }
+      .app-header-query input,
+      .app-header-search select,
+      .app-header-icon {
+        min-height: 2.75rem;
       }
       .app-header-search select {
-        width: clamp(4.25rem, 22vw, 9rem);
-        min-width: 0;
-        min-height: 2.75rem;
-        margin-inline-end: .5rem;
+        width: clamp(5.5rem, 22vw, 9rem);
         padding-inline-start: .5rem;
-        border-inline-start: 1px solid var(--theme-outline);
-        background: transparent;
-        color: #e5e7eb;
-        font-size: .875rem;
+        padding-inline-end: .375rem;
         cursor: pointer;
       }
-      .app-header-search select option {
-        background: var(--theme-surface);
+      .app-header-search-button {
+        position: absolute;
+        inset-block-start: .25rem;
+        inset-inline-start: .25rem;
+        display: grid;
+        place-items: center;
+        width: 2rem;
+        height: 2.25rem;
+        color: #d1d5db;
+        border-radius: .625rem;
+        cursor: pointer;
       }
       .app-header-icon {
         flex: none;
         width: 2.75rem;
-        height: 2.75rem;
-        color: #d1d5db;
-        border-radius: 50%;
+        padding: 0;
         cursor: pointer;
       }
-      .app-header-icon svg {
-        margin: auto;
-      }
-      .app-header-refresh {
-        background: var(--theme-surface);
-      }
-      .app-header-icon:hover {
-        background: var(--theme-hover);
-        color: white;
-      }
-      .app-header-search input:focus-visible,
-      .app-header-search select:focus-visible,
-      .app-header-icon:focus-visible {
+      .app-header-search-button:focus-visible {
         outline: 2px solid var(--theme-focus);
         outline-offset: -2px;
+      }
+      @media (min-width: 64rem) {
+        .app-header-menu {
+          display: none;
+        }
       }
     </style>
 
@@ -243,12 +239,12 @@
           {# Top bar #}
           <div class="sticky top-0 z-10 theme-chrome border-b theme-divider shadow-md">
             <div class="container mx-auto px-4">
-              <div class="flex items-center justify-between lg:justify-center h-16">
+              <div class="flex items-center justify-between lg:justify-center gap-2 h-16">
                 {# Mobile: sidebar toggle button #}
                 <button type="button" aria-label="Main menu"
                         :aria-expanded="isMobileMenuOpen"
                         @click="isMobileMenuOpen = !isMobileMenuOpen"
-                        class="app-header-icon app-header-menu lg:hidden">
+                        class="filter-control app-header-icon app-header-menu">
                   <svg xmlns="http://www.w3.org/2000/svg"
                        width="24"
                        height="24"
@@ -285,20 +281,23 @@
                             this.placeholder = label ? 'Search ' + label + '...' : 'Search...';
                           }
                         }">
-                    <button type="submit" aria-label="Search" class="app-header-icon">
-                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
-                           stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
-                        <circle cx="11" cy="11" r="7"></circle>
-                        <path d="m20 20-4-4"></path>
-                      </svg>
-                    </button>
-                    <input type="search"
-                           name="q"
-                           aria-label="Search query"
-                           value="{{ request.GET.q }}"
-                           placeholder="Search {{ search_type|media_type_readable_plural|lower }}..."
-                           :placeholder="placeholder || undefined">
-                    <select name="media_type" aria-label="Media type"
+                    <div class="app-header-query">
+                      <button type="submit" aria-label="Search" class="app-header-search-button theme-hover">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
+                             stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                          <circle cx="11" cy="11" r="7"></circle>
+                          <path d="m20 20-4-4"></path>
+                        </svg>
+                      </button>
+                      <input type="search"
+                             name="q"
+                             class="filter-search-input"
+                             aria-label="Search query"
+                             value="{{ request.GET.q }}"
+                             placeholder="Search {{ search_type|media_type_readable_plural|lower }}..."
+                             :placeholder="placeholder || undefined">
+                    </div>
+                    <select name="media_type" aria-label="Media type" class="filter-control"
                             x-init="updatePlaceholder($el)"
                             @change="updatePlaceholder($el)">
                       {% for type in search_types %}
@@ -306,7 +305,7 @@
                       {% endfor %}
                     </select>
                   </form>
-                  <button type="button" class="app-header-icon app-header-refresh"
+                  <button type="button" class="filter-control app-header-icon"
                           title="Recargar página" aria-label="Recargar página"
                           onclick="location.reload()">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
