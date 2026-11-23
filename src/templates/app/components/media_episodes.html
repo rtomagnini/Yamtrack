@@ -26,46 +26,27 @@
             </select>
           </form>
         {% endif %}
-        <!-- Filter buttons -->
-        <div class="flex flex-wrap gap-2">
-          <a href="?{% for key, value in request.GET.items %}{% if key != 'filter' and key != 'page' %}{{ key }}={{ value|urlencode }}&{% endif %}{% endfor %}filter=all"
-             class="px-3 py-1 rounded-full text-sm {% if current_filter == 'all' or not current_filter %}bg-indigo-600 text-white{% else %}bg-gray-700 text-gray-300 hover:bg-gray-600{% endif %} transition duration-200">
-            All
-          </a>
-          <a href="?{% for key, value in request.GET.items %}{% if key != 'filter' and key != 'page' %}{{ key }}={{ value|urlencode }}&{% endif %}{% endfor %}filter=watched"
-             class="px-3 py-1 rounded-full text-sm {% if current_filter == 'watched' %}bg-indigo-600 text-white{% else %}bg-gray-700 text-gray-300 hover:bg-gray-600{% endif %} transition duration-200">
-            Watched
-          </a>
-          <a href="?{% for key, value in request.GET.items %}{% if key != 'filter' and key != 'page' %}{{ key }}={{ value|urlencode }}&{% endif %}{% endfor %}filter=unwatched"
-             class="px-3 py-1 rounded-full text-sm {% if current_filter == 'unwatched' %}bg-indigo-600 text-white{% else %}bg-gray-700 text-gray-300 hover:bg-gray-600{% endif %} transition duration-200">
-            Unwatched
-          </a>
+        <nav class="episode-filters" aria-label="{% if is_youtube_channel %}Video filters{% else %}Episode filters{% endif %}">
+          <a href="{% querystring filter='all' page=None %}" {% if current_filter == 'all' or not current_filter %}aria-current="true"{% endif %}>All</a>
+          <a href="{% querystring filter='watched' page=None %}" {% if current_filter == 'watched' %}aria-current="true"{% endif %}>Watched</a>
+          <a href="{% querystring filter='unwatched' page=None %}" {% if current_filter == 'unwatched' %}aria-current="true"{% endif %}>Unwatched</a>
           {% if media_type == MediaTypes.SEASON.value and current_instance %}
-            <a href="?{% for key, value in request.GET.items %}{% if key != 'filter' and key != 'page' %}{{ key }}={{ value|urlencode }}&{% endif %}{% endfor %}filter=skipped"
-               class="px-3 py-1 rounded-full text-sm {% if current_filter == 'skipped' %}bg-indigo-600 text-white{% else %}bg-gray-700 text-gray-300 hover:bg-gray-600{% endif %} transition duration-200">
-              Skipped
-            </a>
+            <a href="{% querystring filter='skipped' page=None %}" {% if current_filter == 'skipped' %}aria-current="true"{% endif %}>Skipped</a>
           {% endif %}
-        </div>
+        </nav>
 
-        <!-- Sort button -->
-        <div class="border-l border-gray-600 pl-2">
-          <a href="?{% for key, value in request.GET.items %}{% if key != 'sort' and key != 'page' %}{{ key }}={{ value|urlencode }}&{% endif %}{% endfor %}sort={% if current_sort == 'desc' or not current_sort %}asc{% else %}desc{% endif %}"
-             class="px-3 py-1 rounded-full text-sm bg-gray-700 text-gray-300 hover:bg-gray-600 transition duration-200 flex items-center space-x-1">
-            <span>Order</span>
+        <a href="{% if current_sort == 'desc' or not current_sort %}{% querystring sort='asc' page=None %}{% else %}{% querystring sort='desc' page=None %}{% endif %}"
+           class="episode-order"
+           title="{% if current_sort == 'desc' or not current_sort %}Change to ascending order{% else %}Change to descending order{% endif %}">
+          <span>Order</span>
+          <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             {% if current_sort == 'desc' or not current_sort %}
-              <!-- Arrow down icon (descending order) -->
-              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M12 5v14M19 12l-7 7-7-7"/>
-              </svg>
+              <path d="M12 5v14M19 12l-7 7-7-7"/>
             {% else %}
-              <!-- Arrow up icon (ascending order) -->
-              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewbox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M12 19V5M5 12l7-7 7 7"/>
-              </svg>
+              <path d="M12 19V5M5 12l7-7 7 7"/>
             {% endif %}
-          </a>
-        </div>
+          </svg>
+        </a>
       </div>
     </div>
 
