@@ -8,7 +8,7 @@ from django.urls import reverse
 from django.utils import timezone
 from playwright.sync_api import expect, sync_playwright
 
-from app.models import Item, Manga, MediaTypes, Sources, Status
+from app.models import Game, Item, Manga, MediaTypes, Sources, Status
 from app.tests.test_views import _create_home_season
 from events.models import Event
 
@@ -260,6 +260,41 @@ class IntegrationTest(StaticLiveServerTestCase):
         expect(self.page.get_by_text("Chapter 9", exact=True)).to_be_visible()
         expect(chapter.locator("..").get_by_text("18 min", exact=True)).to_be_visible()
         expect(self.page.locator("#watch-time-bars").get_by_text("18 min", exact=True)).to_be_visible()
+
+    @patch("app.providers.services.get_media_metadata", side_effect=OSError("Provider unavailable"))
+    def test_two_game_sessions_from_home_reach_the_timeline(self, provider):
+        item = Item.objects.create(
+            title="Session Game", media_id="123", media_type=MediaTypes.GAME.value,
+            source=Sources.IGDB.value,
+        )
+        game, = Game.objects.bulk_create([
+            Game(user=self.user, item=item, status=Status.IN_PROGRESS.value),
+        ])
+        self.page.goto(f"{self.live_server_url}/", wait_until="domcontentloaded")
+        card = self.page.locator("#media-grid-game")
+        increase = card.get_by_role("button", name="Increase progress")
+        minutes = card.get_by_label("Play time (minutes) *", exact=True)
+        save = card.get_by_role("button", name="OK", exact=True)
+
+        increase.click()
+        save.click()
+        expect(card.get_by_role("alert")).to_contain_text("Enter whole numbers")
+        self.assertFalse(game.sessions.exists())
+        for duration, total in (("15", "15min"), ("25", "40min")):
+            if duration == "25":
+                increase.click()
+            minutes.fill(duration)
+            save.click()
+            expect(card.get_by_text(total, exact=True)).to_be_visible()
+
+        game.refresh_from_db()
+        self.assertEqual((game.play_time, game.progress), (40, 40))
+        self.assertEqual(list(game.sessions.order_by("id").values_list("minutes", flat=True)), [15, 25])
+        provider.assert_not_called()
+        self.page.goto(f"{self.live_server_url}{reverse('statistics')}")
+        for number, duration in ((1, 15), (2, 25)):
+            session = self.page.get_by_role("heading", name=f"Session Game Session #{number}")
+            expect(session.locator("..").get_by_text(f"{duration} min", exact=True)).to_be_visible()
 
     def test_season_completed(self):
         """The tracker can close a season without marking pending episodes watched."""

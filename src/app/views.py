@@ -296,6 +296,45 @@ def _record_manga_chapter(request, instance_id):
     return render(request, "app/components/progress_changer.html", {"media": manga})
 
 
+@transaction.atomic
+def _record_game_session(request, instance_id):
+    try:
+        minutes = int(request.POST.get("play_time", ""))
+        percentage = request.POST.get("percentage_progress")
+        percentage = int(percentage) if percentage else None
+    except ValueError:
+        return HttpResponseBadRequest("Enter whole numbers for minutes and progress.")
+
+    max_minutes = 2_147_483_647
+    if not 0 < minutes <= max_minutes:
+        return HttpResponseBadRequest("Enter a valid number of minutes greater than zero.")
+    if percentage is not None and not 0 <= percentage <= 100:
+        return HttpResponseBadRequest("Progress must be between 0 and 100%.")
+
+    try:
+        game = BasicMedia.objects.get_media_prefetch(
+            request.user, MediaTypes.GAME.value, instance_id, lock=True,
+        )
+    except IndexError as error:
+        raise Http404 from error
+    if max(game.play_time, game.progress) + minutes > max_minutes:
+        return HttpResponseBadRequest("Total play time is out of range.")
+
+    game.play_time += minutes
+    game.progress += minutes
+    game.progressed_at = timezone.now()
+    if percentage is not None:
+        game.percentage_progress = percentage
+    game.save(update_fields=["play_time", "progress", "percentage_progress", "progressed_at"])
+    GameSession.objects.create(
+        game=game,
+        minutes=minutes,
+        percentage_progress=game.percentage_progress,
+        session_date=game.progressed_at,
+    )
+    return render(request, "app/components/progress_changer.html", {"media": game})
+
+
 @require_POST
 def progress_edit(request, media_type, instance_id):
     """Increase or decrease the progress of a media item from home page."""
@@ -309,10 +348,11 @@ def progress_edit(request, media_type, instance_id):
 
     if media_type == MediaTypes.MANGA.value and operation == "increase":
         return _record_manga_chapter(request, instance_id)
+    if media_type == MediaTypes.GAME.value and operation == "increase":
+        return _record_game_session(request, instance_id)
 
     reading_time = request.POST.get("reading_time", 0)
-    play_time = request.POST.get("play_time", 0)  # For games
-    percentage_progress = request.POST.get("percentage_progress", None)  # For games
+    percentage_progress = request.POST.get("percentage_progress")
 
     media = BasicMedia.objects.get_media_prefetch(
         request.user,
@@ -388,42 +428,7 @@ def progress_edit(request, media_type, instance_id):
                     )
             except (ValueError, TypeError):
                 pass
-        # For games, accumulate play_time (required from modal) and update progress
-        elif media_type == MediaTypes.GAME.value:
-            try:
-                # play_time is required from the modal
-                time_to_add = int(play_time) if play_time else 0
-                if time_to_add > 0:
-                    media.play_time = (media.play_time or 0) + time_to_add
-                    media.progress = (media.progress or 0) + time_to_add
-                    
-                    # Update percentage_progress if provided
-                    if percentage_progress:
-                        try:
-                            new_percentage = int(percentage_progress)
-                            # Validate range 0-100
-                            if 0 <= new_percentage <= 100:
-                                media.percentage_progress = new_percentage
-                        except (ValueError, TypeError):
-                            pass
-                    
-                    now = timezone.now()
-                    media.progressed_at = now
-                    fields_to_update = ['play_time', 'progress', 'percentage_progress', 'progressed_at']
-                    media.save(update_fields=fields_to_update)
-
-                    GameSession.objects.create(
-                        game=media,
-                        minutes=time_to_add,
-                        percentage_progress=media.percentage_progress,
-                        session_date=now,
-                        source=GameSession.SessionSource.MANUAL,
-                    )
-            except (ValueError, TypeError):
-                pass
-        
-        # Only call increase_progress for non-game/comic/book media types
-        if media_type not in [MediaTypes.GAME.value, MediaTypes.COMIC.value, MediaTypes.BOOK.value]:
+        else:
             media.increase_progress()
     elif operation == "decrease":
         media.decrease_progress()

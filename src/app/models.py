@@ -2045,6 +2045,10 @@ class Game(Media):
     
     tracker = FieldTracker()
 
+    def process_progress(self):
+        """Clamp accumulated minutes without looking up provider metadata."""
+        self.progress = max(0, self.progress)
+
     @property
     def formatted_progress(self):
         """Return progress in hours:minutes format."""
