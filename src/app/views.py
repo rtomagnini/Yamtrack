@@ -23,8 +23,8 @@ from django.contrib.auth.decorators import login_required
 from app import helpers, history_processor
 from app import statistics as stats
 from app.metadata import display_metadata, override_for, save_poster_override
-from app.forms import EpisodeTrackingForm, ManualItemForm, get_form_class
-from app.models import TV, BasicMedia, Episode, Item, MangaSession, MediaTypes, Season, Sources, Status, GameSession, Game
+from app.forms import EpisodeTrackingForm, ItemMetadataForm, ManualItemForm, get_form_class
+from app.models import TV, BasicMedia, Episode, Item, ItemMetadataOverride, MangaSession, MediaTypes, Season, Sources, Status, GameSession, Game
 from app.providers import manual, services, tmdb, youtube
 from app.templatetags import app_tags
 from integrations.youtube_watched import queue_watched
@@ -878,6 +878,19 @@ def track_modal(
         form.initial["poster_url"] = correction.image if correction and correction.image else ""
         original_poster = media.item.image if media else metadata.get("image")
 
+    metadata_form = None
+    if media_type == MediaTypes.MOVIE.value and source in {Sources.TMDB.value, Sources.MANUAL.value}:
+        catalog = media.item if media else metadata
+        correction = override_for(catalog, request.user)
+        metadata_form = ItemMetadataForm(
+            prefix="metadata",
+            initial={field: getattr(correction, field, None) for field in ItemMetadataForm.base_fields},
+        )
+        for field, form_field in metadata_form.fields.items():
+            original = catalog.get(field) if isinstance(catalog, dict) else getattr(catalog, field)
+            if original is not None:
+                form_field.widget.attrs["placeholder"] = original
+
     return render(
         request,
         "app/components/fill_track.html",
@@ -887,6 +900,7 @@ def track_modal(
             "media": media,
             "return_url": request.GET["return_url"],
             "original_poster": original_poster or settings.IMG_NONE,
+            "metadata_form": metadata_form,
         },
     )
 
@@ -923,6 +937,7 @@ def media_save(request):
             defaults={
                 "title": metadata["title"],
                 "image": metadata["image"],
+                **({"runtime": metadata.get("runtime")} if media_type == MediaTypes.MOVIE.value else {}),
             },
         )
         model_name = "tv" if media_type == MediaTypes.YOUTUBE.value else media_type
@@ -932,20 +947,40 @@ def media_save(request):
     # Validate the form and save the instance if it's valid
     form_class = get_form_class(media_type)
     form = form_class(request.POST, instance=instance)
-    if form.is_valid():
+    forms = [form]
+    metadata_form = None
+    if (
+        instance.item.media_type == MediaTypes.MOVIE.value
+        and instance.item.source in {Sources.TMDB.value, Sources.MANUAL.value}
+        and all(f"metadata-{field}" in request.POST for field in ItemMetadataForm.base_fields)
+    ):
+        metadata_form = ItemMetadataForm(request.POST, prefix="metadata")
+        forms.append(metadata_form)
+
+    if all(bound_form.is_valid() for bound_form in forms):
         with transaction.atomic():
             form.save()
             if "poster_url" in form.cleaned_data and "poster_url" in request.POST:
                 save_poster_override(form.instance.item, request.user, form.cleaned_data["poster_url"])
+            if metadata_form is not None:
+                item = form.instance.item
+                corrections = {
+                    field: value if value not in (None, "", getattr(item, field)) else None
+                    for field, value in metadata_form.cleaned_data.items()
+                }
+                overrides = ItemMetadataOverride.objects.filter(user=request.user, item=item)
+                if any(value is not None for value in corrections.values()):
+                    overrides.update_or_create(user=request.user, item=item, defaults=corrections)
+                else:
+                    overrides.delete()
         logger.info("%s saved successfully.", form.instance)
     else:
-        logger.error(form.errors.as_json())
-        for field, errors in form.errors.items():
-            for error in errors:
-                messages.error(
-                    request,
-                    f"{field.replace('_', ' ').title()}: {error}",
-                )
+        for bound_form in forms:
+            if bound_form.errors:
+                logger.error(bound_form.errors.as_json())
+            for field, errors in bound_form.errors.items():
+                for error in errors:
+                    messages.error(request, f"{field.replace('_', ' ').title()}: {error}")
 
     return helpers.redirect_back(request)
 

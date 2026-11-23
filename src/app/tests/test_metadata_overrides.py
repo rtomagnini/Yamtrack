@@ -207,16 +207,53 @@ def test_movie_list_search_and_order_use_corrected_title(user, movie_item):
 
 
 def test_movie_detail_and_form_render_corrected_values(client, user, movie_item, provider):
+    movie, = Movie.objects.bulk_create([Movie(user=user, item=movie_item, status="Planning")])
     ItemMetadataOverride.objects.create(user=user, item=movie_item, title="Custom title", image="https://example.com/custom.jpg", runtime=100)
     client.force_login(user)
-    response = client.get(reverse("media_details", args=["tmdb", "movie", "123", "original"]))
+    details_url = reverse("media_details", args=["tmdb", "movie", "123", "original"])
+    response = client.get(details_url)
     assert response.status_code == 200
     assert response.context["media"]["title"] == "Custom title"
-    assert b"Edit metadata" in response.content
+    assert b"Edit tracking" in response.content
+    assert b"Edit metadata" not in response.content
+    response = client.get(reverse("track_modal", args=["tmdb", "movie", "123"]), {
+        "return_url": details_url, "instance_id": movie.pk,
+    })
+    assert response.status_code == 200
+    assert response.context["metadata_form"]["runtime"].value() == 100
     response = client.get(edit_url())
     assert response.status_code == 200
     assert response.context["form"]["runtime"].value() == 100
     assert b"Restore original values" in response.content
+
+
+def test_movie_tracking_saves_and_restores_personal_metadata(client, user, movie_item, provider):
+    movie, = Movie.objects.bulk_create([Movie(user=user, item=movie_item, status="Planning")])
+    client.force_login(user)
+    data = {
+        "instance_id": movie.pk, "media_type": "movie", "source": "tmdb",
+        "media_id": "123", "status": "Planning", "score": "8",
+        "metadata-title": "Custom title", "metadata-image": "https://example.com/custom.jpg",
+        "metadata-runtime": "105",
+    }
+    url = reverse("media_save") + "?next=/"
+    assert client.post(url, {**data, "metadata-runtime": "-1"}).status_code == 302
+    movie.refresh_from_db()
+    assert movie.score is None
+    assert not ItemMetadataOverride.objects.filter(user=user, item=movie_item).exists()
+
+    assert client.post(url, data).status_code == 302
+    movie.refresh_from_db()
+    assert movie.score == 8
+    correction = ItemMetadataOverride.objects.get(user=user, item=movie_item)
+    assert (correction.title, correction.image, correction.runtime) == (
+        "Custom title", "https://example.com/custom.jpg", 105,
+    )
+
+    assert client.post(url, {**data, "metadata-title": "", "metadata-image": "", "metadata-runtime": ""}).status_code == 302
+    assert not ItemMetadataOverride.objects.filter(user=user, item=movie_item).exists()
+    movie_item.refresh_from_db()
+    assert (movie_item.title, movie_item.runtime) == ("Original movie", 90)
 
 
 def test_movie_grid_table_and_home_render_personal_metadata(client, user, movie_item, provider):

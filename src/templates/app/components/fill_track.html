@@ -127,10 +127,22 @@
       </button>
     </div>
 
-    {% if form.poster_url or media %}
+    {% if form.poster_url or metadata_form or media %}
       <details class="mt-4 pt-4 border-t border-gray-600" @invalid.capture="$el.open = true">
         <summary class="text-sm text-gray-300 hover:text-white cursor-pointer">More options</summary>
         <div class="mt-4 space-y-4">
+          {% if metadata_form %}
+            <div class="space-y-3" x-data="{ image: '{{ metadata_form.image.value|default_if_none:''|escapejs }}' }">
+              <p class="text-sm text-gray-400">Leave a field empty to use its original value.</p>
+              {% for field in metadata_form %}
+                <div>
+                  <label class="block text-sm font-medium mb-1 text-gray-300" for="{{ field.id_for_label }}">{{ field.label }}</label>
+                  {{ field }}
+                </div>
+              {% endfor %}
+              <img :src="image" x-show="image" x-cloak alt="Cover preview" loading="lazy" class="h-36 rounded-md object-contain theme-field">
+            </div>
+          {% endif %}
           {% if form.poster_url %}
             <div x-data="{ poster: '{{ form.poster_url.value|default_if_none:''|escapejs }}', originalPoster: '{{ original_poster|escapejs }}' }">
               <label class="block text-sm font-medium mb-1 text-gray-300" for="{{ form.poster_url.id_for_label }}">{{ form.poster_url.label }}</label>

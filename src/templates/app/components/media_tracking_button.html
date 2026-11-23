@@ -9,6 +9,8 @@
         <span class="media-tracking-progress text-gray-300" data-tracking-progress>
           {% if media_type == MediaTypes.SEASON.value %}
             {{ watched_episode_count }}{% if season_episode_count %} / {{ season_episode_count }}{% endif %} watched
+          {% elif media_type == MediaTypes.TV.value %}
+            {{ current_instance.progress }}{% if current_instance.max_progress %} / {{ current_instance.max_progress }}{% endif %} watched
           {% elif media_type == MediaTypes.YOUTUBE.value %}
             {{ current_instance.watched_videos }}{% if current_instance.max_progress %} / {{ current_instance.max_progress }}{% endif %} watched
           {% elif media_type == MediaTypes.GAME.value %}
@@ -38,10 +40,6 @@
             @click="trackOpen = true">
       {% if current_instance %}Edit tracking{% else %}Add to tracker{% endif %}
     </button>
-    {% if media_type == MediaTypes.MOVIE.value %}
-      <a href="{% url 'metadata_edit' media.source media_type media.media_id %}?next={{ request.get_full_path|urlencode }}"
-         class="text-sm text-gray-300 hover:text-indigo-400">Edit metadata</a>
-    {% endif %}
   </div>
 
   {# Track Modal #}
