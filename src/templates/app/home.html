@@ -24,8 +24,41 @@
       opacity: 1;
       pointer-events: auto;
     }
-    .home-card-menu {
+    .home-card-actions.filter-control {
+      padding: 0;
+    }
+    .home-card-actions.filter-control[aria-expanded="true"] {
+      background: var(--theme-selected);
+      color: var(--theme-on-selected);
+      border-color: var(--theme-focus);
+    }
+    .home-card-menu.filter-menu {
       top: 3.5rem;
+      inset-inline: .375rem;
+      z-index: 20;
+      width: auto;
+      min-width: 0;
+      margin-top: 0;
+    }
+    .home-card-menu .filter-option {
+      display: flex;
+      align-items: center;
+      gap: .5rem;
+      min-height: 2.75rem;
+      padding: .375rem .5rem;
+    }
+    .home-card-menu-icon {
+      display: inline-grid;
+      place-items: center;
+      flex: none;
+      width: 1.625rem;
+      height: 1.625rem;
+      border-radius: .4375rem;
+      background: var(--theme-raised);
+    }
+    .home-card-menu .filter-option:first-child .home-card-menu-icon {
+      background: var(--theme-selected);
+      color: var(--theme-on-selected);
     }
     .home-progress-controls {
       gap: .25rem;
