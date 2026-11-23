@@ -53,7 +53,12 @@ class EventManager(models.Manager):
         non_tv_types = [
             media_type
             for media_type in enabled_types
-            if media_type not in [MediaTypes.TV.value, MediaTypes.SEASON.value]
+            if media_type not in {
+                MediaTypes.TV.value,
+                MediaTypes.SEASON.value,
+                MediaTypes.YOUTUBE.value,
+                MediaTypes.YOUTUBE_VIDEO.value,
+            }
         ]
 
         # Build base query for non-TV media types
@@ -68,6 +73,8 @@ class EventManager(models.Manager):
 
         tv_query = self._build_tv_query(user, enabled_types)
         combined_query = (user_query & active_status_query) | tv_query
+        if not combined_query:
+            return self.none()
 
         queryset = self.filter(
             combined_query,
