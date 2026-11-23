@@ -65,12 +65,12 @@
       <input type="hidden" name="q" x-model="query">
     </form>
 
-    <div class="flex flex-col sm:flex-row gap-4 mb-8">
+    <div class="filter-toolbar mb-8">
       {# Search #}
-      <div class="relative flex-1">
+      <div class="filter-search">
         <input id="search-input"
                placeholder="Search in collection..."
-               class="w-full py-2 pl-10 pr-4 theme-field rounded-md text-white focus:outline-none focus:ring-2 theme-focus appearance-none"
+               class="filter-search-input"
                type="text"
                x-model="query"
                autocomplete="off"
@@ -98,10 +98,11 @@
         </div>
       </div>
 
-      <div class="flex items-center gap-2 flex-shrink-0">
+      <div class="filter-actions">
         {# Filter by Type #}
         <div class="relative" x-data="{ open: false }">
-          <button class="h-10 flex items-center gap-2 px-4 theme-field rounded-md theme-hover transition-colors cursor-pointer"
+          <button class="filter-control cursor-pointer"
+                  :aria-expanded="open"
                   @click="open = !open"
                   type="button">
             <svg xmlns="http://www.w3.org/2000/svg"
@@ -131,7 +132,7 @@
             </svg>
           </button>
 
-          <div class="absolute right-0 mt-2 py-1 w-48 theme-field rounded-md shadow-lg overflow-hidden z-10 border border-gray-700"
+          <div class="filter-menu"
                x-cloak
                x-show="open"
                @click.outside="open = false"
@@ -145,8 +146,8 @@
                     {% if items %}hx-target="#items-grid"{% else %}hx-target="this" hx-swap="none"{% endif %}
                     hx-include="#filter-form"
                     hx-indicator="#loading-indicator"
-                    class="block w-full px-4 py-2 text-left text-sm transition-colors cursor-pointer"
-                    :class="type === 'all' ? 'bg-indigo-600 text-white font-medium' : 'text-gray-300 theme-hover hover:text-white'"
+                    class="filter-option"
+                    :aria-pressed="type === 'all'"
                     @click="type = 'all'; open = false"
                     type="button">All</button>
             {% for media_type in media_types %}
@@ -154,8 +155,8 @@
                       {% if items %}hx-target="#items-grid"{% else %}hx-target="this" hx-swap="none"{% endif %}
                       hx-include="#filter-form"
                       hx-indicator="#loading-indicator"
-                      class="block w-full px-4 py-2 text-left text-sm transition-colors cursor-pointer"
-                      :class="type === '{{ media_type }}' ? 'bg-indigo-600 text-white font-medium' : 'text-gray-300 theme-hover hover:text-white'"
+                      class="filter-option"
+                      :aria-pressed="type === '{{ media_type }}'"
                       @click="type = '{{ media_type }}'; open = false"
                       type="button">{{ media_type|media_type_readable_plural }}</button>
             {% endfor %}
@@ -164,7 +165,8 @@
 
         {# Sort by #}
         <div class="relative" x-data="{ open: false }">
-          <button class="h-10 flex items-center gap-2 px-4 theme-field rounded-md theme-hover transition-colors cursor-pointer"
+          <button class="filter-control cursor-pointer"
+                  :aria-expanded="open"
                   @click="open = !open"
                   type="button">
             <svg xmlns="http://www.w3.org/2000/svg"
@@ -198,7 +200,7 @@
             </svg>
           </button>
 
-          <div class="absolute right-0 mt-2 py-1 w-48 theme-field rounded-md shadow-lg overflow-hidden z-10 border border-gray-700"
+          <div class="filter-menu filter-menu-end"
                x-cloak
                x-show="open"
                @click.outside="open = false"
@@ -213,8 +215,8 @@
                       {% if items %}hx-target="#items-grid"{% else %}hx-target="this" hx-swap="none"{% endif %}
                       hx-include="#filter-form"
                       hx-indicator="#loading-indicator"
-                      class="block w-full px-4 py-2 text-left text-sm transition-colors cursor-pointer"
-                      :class="sort === '{{ value }}' ? 'bg-indigo-600 text-white font-medium' : 'text-gray-300 theme-hover hover:text-white'"
+                      class="filter-option"
+                      :aria-pressed="sort === '{{ value }}'"
                       @click="sort = '{{ value }}'; open = false"
                       type="button">{{ label }}</button>
             {% endfor %}

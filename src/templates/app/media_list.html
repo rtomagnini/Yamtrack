@@ -39,11 +39,11 @@
       <input type="hidden" name="layout" x-model="layout">
     </form>
 
-    <div class="flex flex-col md:flex-row gap-4 mb-6">
+    <div class="filter-toolbar mb-6">
       <!-- Search -->
-      <div class="relative flex-grow">
+      <div class="filter-search">
         <input placeholder="Search {{ media_type_plural }} in your list..."
-               class="w-full py-2 pl-10 pr-4 theme-field rounded-md text-white focus:outline-none focus:ring-2 theme-focus appearance-none"
+               class="filter-search-input"
                type="text"
                x-model="search"
                hx-get="{% url 'medialist' media_type %}"
@@ -70,10 +70,11 @@
         </div>
       </div>
 
-  <div class="flex gap-2 flex-wrap items-center">
+      <div class="filter-actions">
         <!-- Filter by Status -->
         <div class="relative" x-data="{ open: false }">
-          <button class="flex items-center px-4 py-2 theme-field rounded-md theme-hover transition-colors cursor-pointer"
+          <button class="filter-control cursor-pointer"
+                  :aria-expanded="open"
                   @click="open = !open"
                   type="button">
             <svg xmlns="http://www.w3.org/2000/svg"
@@ -85,7 +86,7 @@
                  stroke-width="2"
                  stroke-linecap="round"
                  stroke-linejoin="round"
-                 class="w-4 h-4 mr-2">
+                 class="w-4 h-4">
               <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
             </svg>
             <span x-text="statusLabels[status] || status"></span>
@@ -98,12 +99,12 @@
                  stroke-width="2"
                  stroke-linecap="round"
                  stroke-linejoin="round"
-                 class="w-4 h-4 ml-2">
+                 class="w-4 h-4">
               <path d="m6 9 6 6 6-6"></path>
             </svg>
           </button>
 
-          <div class="absolute z-10 mt-2 py-1 w-48 theme-field rounded-md shadow-lg overflow-hidden border border-gray-700"
+          <div class="filter-menu"
                x-cloak
                x-show="open"
                @click.outside="open = false"
@@ -118,8 +119,8 @@
                       {% if media_list %} hx-target="{{ layout_class }}" {% else %} hx-target="#empty_list" {% endif %}
                       hx-include="#filter-form"
                       hx-indicator="#loading-indicator"
-                      class="block w-full px-4 py-2 text-left text-sm transition-colors cursor-pointer"
-                      :class="status === '{{ value }}' ? 'bg-indigo-600 text-white font-medium' : 'text-gray-300 theme-hover hover:text-white'"
+                      class="filter-option"
+                      :aria-pressed="status === '{{ value }}'"
                       @click="status = '{{ value }}'; open = false"
                       type="button">{{ label }}</button>
             {% endfor %}
@@ -128,7 +129,8 @@
 
         <!-- Sort by -->
         <div class="relative" x-data="{ open: false }">
-          <button class="flex items-center px-4 py-2 theme-field rounded-md theme-hover transition-colors cursor-pointer"
+          <button class="filter-control cursor-pointer"
+                  :aria-expanded="open"
                   @click="open = !open"
                   type="button">
             <svg xmlns="http://www.w3.org/2000/svg"
@@ -140,7 +142,7 @@
                  stroke-width="2"
                  stroke-linecap="round"
                  stroke-linejoin="round"
-                 class="w-4 h-4 mr-2">
+                 class="w-4 h-4">
               <path d="m21 16-4 4-4-4"></path>
               <path d="M17 20V4"></path>
               <path d="m3 8 4-4 4 4"></path>
@@ -156,12 +158,12 @@
                  stroke-width="2"
                  stroke-linecap="round"
                  stroke-linejoin="round"
-                 class="w-4 h-4 ml-2">
+                 class="w-4 h-4">
               <path d="m6 9 6 6 6-6"></path>
             </svg>
           </button>
 
-          <div class="absolute z-10 mt-2 py-1 w-48 theme-field rounded-md shadow-lg overflow-hidden border border-gray-700"
+          <div class="filter-menu filter-menu-end"
                x-cloak
                x-show="open"
                @click.outside="open = false"
@@ -177,8 +179,8 @@
                         {% if media_list %} hx-target="{{ layout_class }}" {% else %} hx-target="#empty_list" {% endif %}
                         hx-include="#filter-form"
                         hx-indicator="#loading-indicator"
-                        class="block w-full px-4 py-2 text-left text-sm transition-colors cursor-pointer"
-                        :class="sort === '{{ value }}' ? 'bg-indigo-600 text-white font-medium' : 'text-gray-300 theme-hover hover:text-white'"
+                        class="filter-option"
+                        :aria-pressed="sort === '{{ value }}'"
                         @click="sort = '{{ value }}'; open = false"
                         type="button">{{ label }}</button>
               {% endif %}
@@ -186,11 +188,10 @@
           </div>
         </div>
 
-  <!-- Layout Toggle -->
-  <div class="flex rounded-md overflow-hidden border border-gray-700">
+        <!-- Layout Toggle -->
+        <div class="filter-segments filter-layout" role="group" aria-label="View layout">
           <a :href="`{% url 'medialist' media_type %}?${search ? 'search=' + search + '&' : ''}${status !== 'all' ? 'status=' + status + '&' : ''}${sort !== 'score' ? 'sort=' + sort + '&' : ''}layout=grid`"
-             class="p-2 cursor-pointer"
-             :class="layout === 'grid' ? 'bg-indigo-600 text-white' : 'theme-field theme-hover'"
+             :aria-current="layout === 'grid' ? 'true' : null"
              title="Grid View"
              @click="layout = 'grid'">
             <svg xmlns="http://www.w3.org/2000/svg"
@@ -207,8 +208,7 @@
             </svg>
           </a>
           <a :href="`{% url 'medialist' media_type %}?${search ? 'search=' + search + '&' : ''}${status !== 'all' ? 'status=' + status + '&' : ''}${sort !== 'score' ? 'sort=' + sort + '&' : ''}layout=table`"
-             class="p-2 cursor-pointer"
-             :class="layout === 'table' ? 'bg-indigo-600 text-white' : 'theme-field theme-hover'"
+             :aria-current="layout === 'table' ? 'true' : null"
              title="Table View"
              @click="layout = 'table'">
             <svg xmlns="http://www.w3.org/2000/svg"

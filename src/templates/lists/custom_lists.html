@@ -35,7 +35,7 @@
       </button>
     </div>
 
-    <div class="relative mb-6 flex gap-2"
+    <div class="filter-toolbar mb-6"
          x-data="{ sort: '{{ current_sort }}', query: '{{ request.GET.q|default:'' }}' }">
 
       <!-- Form to manage state -->
@@ -44,9 +44,9 @@
         <input type="hidden" name="q" x-model="query">
       </form>
 
-      <div class="relative flex-1">
+      <div class="filter-search">
         <input placeholder="Search lists..."
-               class="w-full py-2 pl-10 pr-4 theme-field rounded-md text-white focus:outline-none focus:ring-2 theme-focus appearance-none"
+               class="filter-search-input"
                type="text"
                x-model="query"
                autocomplete="off"
@@ -75,7 +75,8 @@
       </div>
 
       <div class="relative" x-data="{ open: false }">
-        <button class="h-10 flex items-center gap-2 px-4 theme-field rounded-md theme-hover transition-colors cursor-pointer"
+        <button class="filter-control cursor-pointer"
+                :aria-expanded="open"
                 @click="open = !open"
                 type="button">
           <svg xmlns="http://www.w3.org/2000/svg"
@@ -109,7 +110,7 @@
           </svg>
         </button>
 
-        <div class="absolute right-0 mt-2 py-1 w-48 theme-field rounded-md shadow-lg overflow-hidden z-10 border border-gray-700"
+        <div class="filter-menu filter-menu-end-desktop"
              x-cloak
              x-show="open"
              @click.outside="open = false"
@@ -124,8 +125,8 @@
                     {% if custom_lists %} hx-target="#lists-grid" {% else %} hx-target="this" hx-swap="none" {% endif %}
                     hx-include="#filter-form"
                     hx-indicator="#loading-indicator"
-                    class="block w-full px-4 py-2 text-left text-sm transition-colors cursor-pointer"
-                    :class="sort === '{{ value }}' ? 'bg-indigo-600 text-white font-medium' : 'text-gray-300 theme-hover hover:text-white'"
+                    class="filter-option"
+                    :aria-pressed="sort === '{{ value }}'"
                     @click="sort = '{{ value }}'; open = false"
                     type="button">{{ label }}</button>
           {% endfor %}
