@@ -3,6 +3,7 @@
 
 {# Track Episode Modal #}
 <div x-cloak x-show="trackOpen"
+     {% if card_dialog %}x-ref="trackDialog" tabindex="-1"{% endif %}
      @keydown.escape.window="trackOpen = false"
      class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
   <div class="w-[400px] max-h-[90vh] px-4 md:px-0 relative z-60"

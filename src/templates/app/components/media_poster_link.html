@@ -1,0 +1,5 @@
+{% load app_tags %}
+<a href="{{ item|media_url }}" class="absolute inset-0" tabindex="-1" aria-hidden="true"
+   data-media-poster-link
+   @pointerdown="posterPointer = $event.pointerType"
+   @click="handlePosterClick($event)"></a>

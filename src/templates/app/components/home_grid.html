@@ -3,16 +3,14 @@
 
 {% for media in media_list.items %}
   {% with item=media.item|metadata_for:request.user %}
-  <div class="flex flex-col theme-surface rounded-lg overflow-hidden shadow-lg transition-all duration-300"
-       x-data="{ actionsOpen: false, posterTapped: false, posterHovered: false, posterPointer: '', trackOpen: false, listsOpen: false, historyOpen: false }"
-       x-init="['trackOpen', 'listsOpen', 'historyOpen'].forEach(name => $watch(name, open => {
-         if (!open) $refs.actions.focus({ preventScroll: true });
-       }))">
-    <div class="relative shrink-0"
+  <div class="media-action-card relative flex flex-col theme-surface rounded-lg shadow-lg transition-all duration-300"
+       x-data="mediaCardActions"
+       :class="{ 'media-action-card-open': actionsOpen }">
+    <div class="media-poster relative shrink-0"
          @pointerenter="posterHovered = $event.pointerType === 'mouse'"
          @pointerleave="posterHovered = false"
-         @click.outside="actionsOpen = false; posterTapped = false"
-         @keydown.escape="if (actionsOpen) { $event.stopPropagation(); actionsOpen = false; $refs.actions.focus() }">
+         @click.outside="dismissPosterActions()"
+         @keydown.escape="closeActionsOnEscape($event)">
       {% with poster=item.image|default:IMG_NONE %}
         {% with srcset=poster|home_poster_srcset %}
           <img alt="{{ item }}"
@@ -67,73 +65,8 @@
         </div>
       {% endif %}
 
-      <a href="{{ item|media_url }}" class="absolute inset-0" tabindex="-1" aria-hidden="true"
-         data-home-poster-link
-         @pointerdown="posterPointer = $event.pointerType"
-         @click="if (!posterTapped && (posterPointer === 'touch' || posterPointer === 'pen' || matchMedia('(hover: none), (pointer: coarse)').matches)) {
-           $event.preventDefault();
-           posterTapped = true;
-         }"></a>
-
-      <div>
-        <button type="button"
-                x-ref="actions"
-                aria-label="Actions for {{ item }}"
-                aria-controls="home-actions-{{ item.media_type }}-{{ media.pk }}"
-                :aria-expanded="actionsOpen.toString()"
-                @click="actionsOpen = !actionsOpen; if (actionsOpen) $nextTick(() => $refs.firstAction.focus())"
-                :class="{ 'home-card-actions-visible': posterHovered || posterTapped || actionsOpen }"
-                class="home-card-actions filter-control absolute top-2 right-2 cursor-pointer">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-            <circle cx="5" cy="12" r="2"></circle><circle cx="12" cy="12" r="2"></circle><circle cx="19" cy="12" r="2"></circle>
-          </svg>
-        </button>
-        <div id="home-actions-{{ item.media_type }}-{{ media.pk }}"
-             x-cloak x-show="actionsOpen"
-             class="home-card-menu filter-menu">
-          <button type="button"
-                  x-ref="firstAction"
-                  title="Add to tracker"
-                  hx-get="{% media_view_url 'track_modal' item %}"
-                  hx-vals='{"return_url": "{{ home_url|urlencode }}", "instance_id": "{{ media.id }}"}'
-                  hx-target="#{% component_id 'track' item media.id %}"
-                  @click="actionsOpen = false; trackOpen = true; $nextTick(() => $refs.trackDialog.focus())"
-                  class="filter-option">
-            <span class="home-card-menu-icon" aria-hidden="true">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="m16 3 5 5M4 20l4-1L21 6a2 2 0 0 0-3-3L5 16z"/>
-              </svg>
-            </span>
-            <span>Edit tracking</span>
-          </button>
-          <button type="button"
-                  hx-get="{% media_view_url 'lists_modal' item %}"
-                  hx-vals='{"return_url": "{{ home_url|urlencode }}"}'
-                  hx-target="#{% component_id 'lists' item %}"
-                  @click="actionsOpen = false; listsOpen = true; $nextTick(() => $refs.listsDialog.focus())"
-                  class="filter-option">
-            <span class="home-card-menu-icon" aria-hidden="true">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-                <path d="M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01"/>
-              </svg>
-            </span>
-            <span>Lists</span>
-          </button>
-          <button type="button"
-                  hx-get="{% media_view_url 'history_modal' item %}"
-                  hx-vals='{"return_url": "{{ home_url|urlencode }}"}'
-                  hx-target="#{% component_id 'history' item %}"
-                  @click="actionsOpen = false; historyOpen = true; $nextTick(() => $refs.historyDialog.focus())"
-                  class="filter-option">
-            <span class="home-card-menu-icon" aria-hidden="true">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M3 12a9 9 0 1 1 2.6 6.4M3 12V6m0 6h6m3-4v4l3 2"/>
-              </svg>
-            </span>
-            <span>History</span>
-          </button>
-        </div>
-      </div>
+      {% include "app/components/media_poster_link.html" %}
+      {% include "app/components/media_card_actions.html" with title=item return_url=home_url %}
     </div>
 
     <div class="flex flex-1 flex-col gap-3 p-3">
@@ -147,38 +80,7 @@
       {% endif %}
     </div>
 
-    {# Track Modal #}
-    <div x-cloak x-show="trackOpen"
-         x-ref="trackDialog" tabindex="-1"
-         @keydown.escape.window="trackOpen = false"
-         class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div class="w-[38rem] max-h-[90vh] px-4 md:px-0 relative z-60"
-           @click.outside="trackOpen = false">
-        <div id="{% component_id 'track' item media.id %}"></div>
-      </div>
-    </div>
-
-    {# Lists Modal #}
-    <div x-cloak x-show="listsOpen"
-         x-ref="listsDialog" tabindex="-1"
-         @keydown.escape.window="listsOpen = false"
-         class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div class="w-96 max-h-[90vh] px-4 md:px-0 relative z-60"
-           @click.outside="listsOpen = false">
-        <div id="{% component_id 'lists' item %}"></div>
-      </div>
-    </div>
-
-    {# History Modal #}
-    <div x-cloak x-show="historyOpen"
-         x-ref="historyDialog" tabindex="-1"
-         @keydown.escape.window="historyOpen = false"
-         class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div class="w-96 max-h-[90vh] px-4 md:px-0 relative z-60"
-           @click.outside="historyOpen = false">
-        <div id="{% component_id 'history' item %}"></div>
-      </div>
-    </div>
+    {% include "app/components/media_card_dialogs.html" with title=item %}
   </div>
 {% endwith %}
 {% endfor %}

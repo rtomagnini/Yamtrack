@@ -1,0 +1,91 @@
+{% load app_tags %}
+<div x-id="['media-actions']"{% if inline_actions %} class="relative" @click.outside="actionsOpen = false" @keydown.escape="closeActionsOnEscape($event)"{% endif %}>
+  <button type="button"
+          x-ref="actions"
+          aria-label="Actions for {{ title }}"
+          :aria-controls="$id('media-actions')"
+          :aria-expanded="actionsOpen.toString()"
+          @click="toggleActions()"
+          class="media-card-actions filter-control{% if not inline_actions %} media-card-actions-on-poster{% endif %}"
+          {% if not inline_actions %}:class="{ 'media-card-actions-visible': posterHovered || posterTapped || actionsOpen }"{% endif %}>
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <circle cx="5" cy="12" r="2"></circle><circle cx="12" cy="12" r="2"></circle><circle cx="19" cy="12" r="2"></circle>
+    </svg>
+  </button>
+  <div :id="$id('media-actions')"
+       x-cloak x-show="actionsOpen"
+       class="media-card-menu filter-menu{% if inline_actions %} media-card-menu-inline{% endif %}">
+    {% if not detail_actions %}
+      <button type="button"
+              x-ref="firstAction"
+              {% if item.media_type != MediaTypes.EPISODE.value %}
+                hx-get="{% media_view_url 'track_modal' item %}"
+                hx-vals='{"return_url": "{{ return_url|default:request.get_full_path|urlencode }}", "instance_id": "{{ media.id }}"}'
+                hx-target="#{% component_id 'track' item media.id %}"
+              {% endif %}
+              @click="openDialog('track')"
+              class="filter-option" data-primary-action>
+        <span class="media-card-menu-icon" aria-hidden="true">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="m16 3 5 5M4 20l4-1L21 6a2 2 0 0 0-3-3L5 16z"/>
+          </svg>
+        </span>
+        <span>{% if item.media_type == MediaTypes.EPISODE.value %}Track episode{% elif media %}Edit tracking{% else %}Add to tracker{% endif %}</span>
+      </button>
+    {% endif %}
+    <button type="button"
+            {% if detail_actions %}x-ref="firstAction"{% endif %}
+            hx-get="{% media_view_url 'lists_modal' item %}"
+            hx-vals='{"return_url": "{{ return_url|default:request.get_full_path|urlencode }}"}'
+            hx-target="#{% component_id 'lists' item %}"
+            @click="openDialog('lists')"
+            class="filter-option">
+      <span class="media-card-menu-icon" aria-hidden="true">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <path d="M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01"/>
+        </svg>
+      </span>
+      <span>Lists</span>
+    </button>
+    <button type="button"
+            hx-get="{% media_view_url 'history_modal' item %}"
+            hx-vals='{"return_url": "{{ return_url|default:request.get_full_path|urlencode }}"}'
+            hx-target="#{% component_id 'history' item %}"
+            @click="openDialog('history')"
+            class="filter-option">
+      <span class="media-card-menu-icon" aria-hidden="true">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 12a9 9 0 1 1 2.6 6.4M3 12V6m0 6h6m3-4v4l3 2"/>
+        </svg>
+      </span>
+      <span>History</span>
+    </button>
+    {% if detail_actions %}
+      {% if item.media_type == MediaTypes.GAME.value and current_instance %}
+        <a href="{% url 'game_sessions' current_instance.id %}" class="filter-option">
+          <span class="media-card-menu-icon" aria-hidden="true">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>
+            </svg>
+          </span>
+          <span>Play sessions</span>
+        </a>
+      {% endif %}
+      <button type="button"
+              class="filter-option disabled:opacity-75"
+              hx-post="{% media_view_url 'sync_metadata' item %}"
+              hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
+              hx-vals='{"next": "{{ request.get_full_path|urlencode }}"}'
+              hx-target="body"
+              hx-swap="none"
+              hx-disabled-elt="this">
+        <span class="media-card-menu-icon" aria-hidden="true">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 12a9 9 0 0 1 15-6.7L21 8m0-5v5h-5M21 12a9 9 0 0 1-15 6.7L3 16m0 5v-5h5"/>
+          </svg>
+        </span>
+        <span>Sync metadata</span>
+      </button>
+    {% endif %}
+  </div>
+</div>

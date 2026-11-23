@@ -2,9 +2,14 @@
 {% with item=item|metadata_for:request.user %}
 {% metadata_title item title request.user as title %}
 
-<div class="{% if secondary_color %}theme-field{% else %}theme-surface{% endif %} rounded-lg overflow-hidden shadow-lg relative"
-     x-data="{ trackOpen: false, listsOpen: false, historyOpen: false }">
-  <div class="relative">
+<div class="{% if secondary_color %}theme-field{% else %}theme-surface{% endif %} media-action-card rounded-lg shadow-lg relative"
+     x-data="mediaCardActions"
+     :class="{ 'media-action-card-open': actionsOpen }">
+  <div class="media-poster relative shrink-0"
+       @pointerenter="posterHovered = $event.pointerType === 'mouse'"
+       @pointerleave="posterHovered = false"
+       @click.outside="dismissPosterActions()"
+       @keydown.escape="closeActionsOnEscape($event)">
     <img alt="{{ title }}"
          class="lazyload w-full {% if from_grid and media_type == MediaTypes.YOUTUBE.value %}youtube-channel-grid-poster{% elif from_grid %}aspect-[2/3]{% else %}h-48{% endif %} theme-field {% if item.image != IMG_NONE %}object-cover{% endif %}"
          data-src="{{ item.image }}"
@@ -96,7 +101,7 @@
     {% endif %}
 
     {% if media.score is not None %}
-      <div class="absolute sm:top-2 sm:right-2 sm:left-auto top-10 left-2 bg-gray-900/90 text-white text-xs px-2 py-1 rounded-md flex items-center shadow-md">
+      <div class="absolute {% if media.status %}top-10{% else %}top-2{% endif %} left-2 bg-gray-900/90 text-white text-xs px-2 py-1 rounded-md flex items-center shadow-md">
         <svg xmlns="http://www.w3.org/2000/svg"
              width="24"
              height="24"
@@ -143,119 +148,8 @@
       </div>
     {% endif %}
 
-    <div class="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 hover-tap:opacity-100">
-      <a href="{{ item|media_url }}" class="absolute inset-0"></a>
-
-      <div class="relative flex items-center justify-center space-x-2.5">
-        {% if item.media_type == MediaTypes.EPISODE.value %}
-          <button @click="trackOpen = true"
-                  class="p-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full transition duration-300 cursor-pointer">
-            {% if media %}
-              <svg xmlns="http://www.w3.org/2000/svg"
-                   width="16"
-                   height="16"
-                   viewBox="0 0 24 24"
-                   fill="none"
-                   stroke="currentColor"
-                   stroke-width="2"
-                   stroke-linecap="round"
-                   stroke-linejoin="round">
-                <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"></path>
-                <circle cx="12" cy="12" r="3"></circle>
-              </svg>
-            {% else %}
-              <svg xmlns="http://www.w3.org/2000/svg"
-                   width="16"
-                   height="16"
-                   viewBox="0 0 24 24"
-                   fill="none"
-                   stroke="currentColor"
-                   stroke-width="2"
-                   stroke-linecap="round"
-                   stroke-linejoin="round">
-                <path d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49"></path>
-                <path d="M14.084 14.158a3 3 0 0 1-4.242-4.242"></path>
-                <path d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143"></path>
-                <path d="m2 2 20 20"></path>
-              </svg>
-            {% endif %}
-          </button>
-        {% else %}
-          {# Track Button #}
-          <button class="p-2.5 bg-indigo-600 text-white rounded-full hover:bg-indigo-500 hover:scale-110 hover:shadow-[0_0_15px_rgba(99,102,241,0.5)] transition-all duration-200 cursor-pointer"
-                  title="Add to tracker"
-                  hx-get="{% media_view_url 'track_modal' item %}"
-                  hx-vals='{"return_url": "{{ request.get_full_path|urlencode }}", "instance_id": "{{ media.id }}"}'
-                  hx-target="#{% component_id 'track' item media.id %}"
-                  hx-trigger="click once"
-                  @click="trackOpen = true">
-            <svg xmlns="http://www.w3.org/2000/svg"
-                 width="16"
-                 height="16"
-                 viewBox="0 0 24 24"
-                 fill="none"
-                 stroke="currentColor"
-                 stroke-width="2"
-                 stroke-linecap="round"
-                 stroke-linejoin="round">
-              <path d="M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-              <path d="M18.375 2.625a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4Z"></path>
-            </svg>
-          </button>
-        {% endif %}
-
-        {# Lists Button #}
-        <button class="p-2.5 bg-emerald-600 text-white rounded-full hover:bg-emerald-500 hover:scale-110 hover:shadow-[0_0_15px_rgba(16,185,129,0.5)] transition-all duration-200 cursor-pointer"
-                title="Add to custom lists"
-                hx-get="{% media_view_url 'lists_modal' item %}"
-                hx-vals='{"return_url": "{{ request.get_full_path|urlencode }}"}'
-                hx-target="#{% component_id 'lists' item %}"
-                hx-trigger="click once"
-                @click="listsOpen = true">
-          <svg xmlns="http://www.w3.org/2000/svg"
-               width="16"
-               height="16"
-               viewBox="0 0 24 24"
-               fill="none"
-               stroke="currentColor"
-               stroke-width="2"
-               stroke-linecap="round"
-               stroke-linejoin="round">
-            <path d="M11 12H3"></path>
-            <path d="M16 6H3"></path>
-            <path d="M16 18H3"></path>
-            <path d="M18 9v6"></path>
-            <path d="M21 12h-6"></path>
-          </svg>
-        </button>
-
-        {# History Button #}
-        <button class="p-2.5 bg-amber-600 text-white rounded-full hover:bg-amber-500 hover:scale-110 hover:shadow-[0_0_15px_rgba(245,158,11,0.5)] transition-all duration-200 cursor-pointer"
-                title="View your activity history"
-                hx-get="{% media_view_url 'history_modal' item %}"
-                hx-vals='{"return_url": "{{ request.get_full_path|urlencode }}"}'
-                hx-target="#{% component_id 'history' item %}"
-                hx-trigger="click once"
-                @click="historyOpen = true">
-          <svg xmlns="http://www.w3.org/2000/svg"
-               width="16"
-               height="16"
-               viewBox="0 0 24 24"
-               fill="none"
-               stroke="currentColor"
-               stroke-width="2"
-               stroke-linecap="round"
-               stroke-linejoin="round">
-            <path d="M21 7.5V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h3.5"></path>
-            <path d="M16 2v4"></path>
-            <path d="M8 2v4"></path>
-            <path d="M3 10h5"></path>
-            <path d="M17.5 17.5 16 16.3V14"></path>
-            <circle cx="16" cy="16" r="6"></circle>
-          </svg>
-        </button>
-      </div>
-    </div>
+    {% include "app/components/media_poster_link.html" %}
+    {% include "app/components/media_card_actions.html" %}
   </div>
 
   <div class="p-3">
@@ -264,39 +158,7 @@
        title="{{ title }}">{{ title }}</a>
   </div>
 
-  {% if item.media_type == MediaTypes.EPISODE.value %}
-    {% include "app/components/fill_track_episode.html" with request=request media=item episode=item episode_title=title csrf_token=csrf_token TRACK_TIME=TRACK_TIME only %}
-  {% else %}
-    {# Track Modal #}
-    <div x-show="trackOpen"
-         @keydown.escape.window="trackOpen = false"
-         class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div class="w-[38rem] max-h-[90vh] px-4 md:px-0 relative z-60"
-           @click.outside="trackOpen = false">
-        <div id="{% component_id 'track' item media.id %}"></div>
-      </div>
-    </div>
-  {% endif %}
-
-  {# Lists Modal #}
-  <div x-show="listsOpen"
-       @keydown.escape.window="listsOpen = false"
-       class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-    <div class="w-96 max-h-[90vh] px-4 md:px-0 relative z-60"
-         @click.outside="listsOpen = false">
-      <div id="{% component_id 'lists' item %}"></div>
-    </div>
-  </div>
-
-  {# History Modal #}
-  <div x-show="historyOpen"
-       @keydown.escape.window="historyOpen = false"
-       class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-    <div class="w-96 max-h-[90vh] px-4 md:px-0 relative z-60"
-         @click.outside="historyOpen = false">
-      <div id="{% component_id 'history' item %}"></div>
-    </div>
-  </div>
+  {% include "app/components/media_card_dialogs.html" %}
 </div>
 
 {% endwith %}

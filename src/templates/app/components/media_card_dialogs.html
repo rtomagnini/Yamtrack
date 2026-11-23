@@ -1,0 +1,39 @@
+{% load app_tags %}
+{% if not detail_actions %}
+  {% if item.media_type == MediaTypes.EPISODE.value %}
+    {% include "app/components/fill_track_episode.html" with request=request media=item episode=item episode_title=title csrf_token=csrf_token TRACK_TIME=TRACK_TIME card_dialog=True only %}
+  {% else %}
+    {# Track Modal #}
+    <div x-cloak x-show="trackOpen"
+         x-ref="trackDialog" tabindex="-1"
+         @keydown.escape.window="trackOpen = false"
+         class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+      <div class="w-[38rem] max-h-[90vh] px-4 md:px-0 relative z-60"
+           @click.outside="trackOpen = false">
+        <div id="{% component_id 'track' item media.id %}"></div>
+      </div>
+    </div>
+  {% endif %}
+{% endif %}
+
+{# Lists Modal #}
+<div x-cloak x-show="listsOpen"
+     x-ref="listsDialog" tabindex="-1"
+     @keydown.escape.window="listsOpen = false"
+     class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+  <div class="w-96 max-h-[90vh] px-4 md:px-0 relative z-60"
+       @click.outside="listsOpen = false">
+    <div id="{% component_id 'lists' item %}"></div>
+  </div>
+</div>
+
+{# History Modal #}
+<div x-cloak x-show="historyOpen"
+     x-ref="historyDialog" tabindex="-1"
+     @keydown.escape.window="historyOpen = false"
+     class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+  <div class="w-96 max-h-[90vh] px-4 md:px-0 relative z-60"
+       @click.outside="historyOpen = false">
+    <div id="{% component_id 'history' item %}"></div>
+  </div>
+</div>

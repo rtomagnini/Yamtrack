@@ -180,7 +180,7 @@ class IntegrationTest(StaticLiveServerTestCase):
             page = context.new_page()
             page.goto(f"{self.live_server_url}/", wait_until="domcontentloaded")
             actions = page.get_by_role("button", name="Actions for Show 2000 S1")
-            poster = page.locator("[data-home-poster-link]")
+            poster = page.locator("[data-media-poster-link]")
             expect(actions).to_have_attribute("aria-expanded", "false")
             expect(actions).to_have_css("opacity", "0")
             expect(actions).to_have_css("pointer-events", "none")
@@ -216,6 +216,69 @@ class IntegrationTest(StaticLiveServerTestCase):
             expect(actions).to_have_css("opacity", "1")
             poster.tap()
             expect(page).to_have_url(details_url)
+
+    def test_media_actions_in_listings_and_tv_details(self):
+        season = _create_home_season(
+            self.user, "2001", [1, 2], watched=(1,), source=Sources.TMDB.value,
+        )
+        item = season.related_tv.item
+        metadata = {
+            "title": item.title,
+            "media_id": item.media_id,
+            "media_type": item.media_type,
+            "source": item.source,
+            "image": item.image,
+        }
+        related_season = {
+            **metadata,
+            "media_type": MediaTypes.SEASON.value,
+            "season_number": 1,
+            "season_title": "Season 1",
+        }
+        listing = reverse("medialist", args=[MediaTypes.TV.value])
+        details = reverse("media_details", args=[item.source, item.media_type, item.media_id, "show-2001"])
+        search = reverse("search") + "?media_type=tv&q=2001&layout=list"
+
+        with (
+            patch("app.providers.services.get_media_metadata", return_value={
+                **metadata, "related": {"seasons": [related_season]},
+            }),
+            patch("app.providers.services.search", return_value={
+                "results": [metadata], "page": 1, "total_pages": 1, "total_results": 1,
+            }),
+            self.browser.new_context(
+                viewport={"width": 320, "height": 720}, is_mobile=True, has_touch=True,
+            ) as context,
+        ):
+            context.add_cookies(self.page.context.cookies())
+            page = context.new_page()
+            page.goto(self.live_server_url + listing, wait_until="domcontentloaded")
+            actions = page.get_by_role("button", name="Actions for Show 2001", exact=True)
+            expect(actions).to_have_css("opacity", "0")
+            poster = page.locator("[data-media-poster-link]")
+            poster.tap()
+            expect(actions).to_have_css("opacity", "1")
+            expect(page).to_have_url(self.live_server_url + listing)
+            poster.tap()
+            expect(page).to_have_url(self.live_server_url + details)
+
+            actions.tap()
+            expect(page.get_by_role("button", name="Sync metadata")).to_be_visible()
+            page.get_by_role("button", name="History", exact=True).tap()
+            expect(page.get_by_role("heading", name="Activity History")).to_be_visible()
+            page.keyboard.press("Escape")
+            expect(actions).to_be_focused()
+
+            season_poster = page.locator("[data-media-poster-link]")
+            season_actions = page.get_by_role("button", name="Actions for Season 1")
+            expect(season_actions).to_have_css("opacity", "0")
+            season_poster.tap()
+            season_actions.tap()
+            expect(page.get_by_role("button", name="Add to tracker", exact=True)).to_be_visible()
+
+            page.goto(self.live_server_url + search, wait_until="domcontentloaded")
+            actions.tap()
+            expect(page.get_by_role("button", name="Lists", exact=True)).to_be_visible()
 
     def test_tv_completed(self):
         """Test the completed status of a TV show."""
@@ -323,10 +386,10 @@ class IntegrationTest(StaticLiveServerTestCase):
             card = self.page.locator("#media-grid-season > div")
             actions = card.get_by_role("button", name="Actions for Show 101 S1")
             expect(actions).to_have_attribute("aria-expanded", "false")
-            card.locator("[data-home-poster-link]").hover()
+            card.locator("[data-media-poster-link]").hover()
             expect(actions).to_have_css("opacity", "1")
             actions.click()
-            card.get_by_title("Add to tracker").click()
+            card.get_by_role("button", name="Edit tracking", exact=True).click()
             status = self.page.get_by_label("Status", exact=True)
             save = self.page.get_by_role("button", name="Update", exact=True)
             more = self.page.get_by_text("More options", exact=True)
