@@ -206,7 +206,7 @@
                             class="px-4 py-2 theme-field theme-hover rounded-md text-sm cursor-pointer">Restore to unwatched</button>
                   {% else %}
                     <button type="button" :disabled="busy" @click="submitEpisode('', 'skip')"
-                            class="text-sm text-gray-300 hover:text-white cursor-pointer">Skip episode</button>
+                            class="px-4 py-2 bg-gray-700 text-white rounded-md hover:bg-gray-600 transition-colors cursor-pointer">Skip episode</button>
                   {% endif %}
                 </div>
               {% endif %}
