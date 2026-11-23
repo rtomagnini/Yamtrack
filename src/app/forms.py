@@ -297,6 +297,38 @@ class MediaForm(forms.ModelForm):
     source = forms.CharField(widget=forms.HiddenInput(), required=True)
     media_id = forms.CharField(widget=forms.HiddenInput(), required=True)
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        item = self.instance.item if self.instance.item_id else None
+        source = item.source if item else self.initial.get("source")
+        if self._meta.model in (TV, Season, Movie) and source in (Sources.MANUAL.value, Sources.TMDB.value):
+            is_tmdb = source == Sources.TMDB.value
+            is_season = self._meta.model is Season
+            help_text = "This ID comes from TMDB."
+            if not is_tmdb:
+                help_text = (
+                    "Optional. Plex matches episodes using the ID on the parent series."
+                    if self._meta.model in (TV, Season)
+                    else "Optional reference ID for this movie."
+                )
+            self.fields["tmdb_id"] = forms.RegexField(
+                regex=r"\A[0-9]+\Z",
+                max_length=Item._meta.get_field("tmdb_id").max_length,
+                required=False,
+                disabled=is_tmdb,
+                label="TMDB series ID" if is_tmdb and is_season else "TMDB ID",
+                help_text=help_text,
+                widget=forms.TextInput(attrs={"inputmode": "numeric"}),
+                error_messages={"invalid": "Enter a TMDB ID using digits only."},
+            )
+            if is_tmdb:
+                self.initial["tmdb_id"] = item.media_id if item else self.initial.get("media_id")
+            elif item:
+                self.initial["tmdb_id"] = item.tmdb_id
+
+    def tracking_options(self):
+        return [self[name] for name in ("tmdb_id", "broadcast_time") if name in self.fields]
+
     class Meta:
         """Define fields and input types."""
 
@@ -458,6 +490,13 @@ class SeasonForm(PosterMediaForm):
 
     season_number = forms.IntegerField(widget=forms.HiddenInput(), required=False, min_value=0, max_value=9999)
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if "tmdb_id" not in self.fields or (
+            self.is_bound and self.add_prefix("broadcast_time") not in self.data
+        ):
+            self.fields.pop("broadcast_time")
+
     class Meta(MediaForm.Meta):
         """Bind form to model."""
 
@@ -466,7 +505,14 @@ class SeasonForm(PosterMediaForm):
             "score",
             "status",
             "notes",
+            "broadcast_time",
         ]
+        widgets = {
+            **MediaForm.Meta.widgets,
+            "broadcast_time": forms.TimeInput(format="%H:%M:%S", attrs={"type": "time", "step": "1"}),
+        }
+        labels = {"broadcast_time": "Broadcast time"}
+        help_texts = {"broadcast_time": "Optional local time used to decide when episodes become available on Home."}
 
     def save(self, commit=True):
         """Save season with intelligent status assignment."""

@@ -1,5 +1,6 @@
 """Personal metadata must survive syncs and consistently affect watch statistics."""
 
+from datetime import time
 from unittest.mock import patch
 
 import pytest
@@ -320,6 +321,55 @@ def poster_payload(season, **changes):
         "season_number": season.item.season_number, "status": "Planning", "notes": "",
         **changes,
     }
+
+
+def test_season_tracking_saves_broadcast_time_and_handles_tmdb_id(client, user, poster_season):
+    season = poster_season
+    item = season.item
+    client.force_login(user)
+    url = reverse("track_modal", args=[item.source, "season", item.media_id, 0])
+    form = client.get(url, {"return_url": "/", "instance_id": season.pk}).context["form"]
+    assert form.fields["tmdb_id"].disabled == (item.source == "tmdb")
+    assert form["tmdb_id"].value() == (item.media_id if item.source == "tmdb" else None)
+    assert form["broadcast_time"].value() is None
+
+    save = reverse("media_save")
+    assert client.post(save, poster_payload(season, tmdb_id="456", broadcast_time="20:30")).status_code == 302
+    season.refresh_from_db()
+    assert season.broadcast_time == time(20, 30)
+    assert season.item.tmdb_id == ("456" if item.source == "manual" else None)
+    form = client.get(url, {"return_url": "/", "instance_id": season.pk}).context["form"]
+    assert form["broadcast_time"].value() == time(20, 30)
+
+    client.post(save, poster_payload(season))
+    season.refresh_from_db()
+    assert season.broadcast_time == time(20, 30)
+    client.post(save, poster_payload(season, tmdb_id="", broadcast_time=""))
+    season.refresh_from_db()
+    assert season.broadcast_time is None
+    assert season.item.tmdb_id is None
+
+
+@pytest.mark.parametrize(("media_type", "model"), [("tv", TV), ("movie", Movie)])
+def test_manual_tracking_saves_tmdb_id(client, user, media_type, model):
+    item = Item.objects.create(source="manual", media_type=media_type, media_id="7", title="Manual entry")
+    tracked, = model.objects.bulk_create([model(user=user, item=item, status="Planning")])
+    client.force_login(user)
+    url = reverse("track_modal", args=["manual", media_type, "7"])
+    form = client.get(url, {"return_url": "/", "instance_id": tracked.pk}).context["form"]
+    assert not form.fields["tmdb_id"].disabled
+    assert "broadcast_time" not in form.fields
+
+    data = {
+        "instance_id": tracked.pk, "source": "manual", "media_type": media_type,
+        "media_id": "7", "status": "Planning",
+    }
+    client.post(reverse("media_save"), {**data, "tmdb_id": "not-an-id"})
+    item.refresh_from_db()
+    assert item.tmdb_id is None
+    client.post(reverse("media_save"), {**data, "tmdb_id": "12345"})
+    item.refresh_from_db()
+    assert item.tmdb_id == "12345"
 
 
 def test_season_tracking_modal_saves_personal_poster_and_status(client, user, poster_season):

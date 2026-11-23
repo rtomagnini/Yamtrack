@@ -960,6 +960,14 @@ def media_save(request):
     if all(bound_form.is_valid() for bound_form in forms):
         with transaction.atomic():
             form.save()
+            if (
+                "tmdb_id" in request.POST
+                and "tmdb_id" in form.cleaned_data
+                and form.instance.item.source == Sources.MANUAL.value
+            ):
+                tmdb_id = form.cleaned_data["tmdb_id"] or None
+                if tmdb_id != form.instance.item.tmdb_id:
+                    Item.objects.filter(pk=form.instance.item_id).update(tmdb_id=tmdb_id)
             if "poster_url" in form.cleaned_data and "poster_url" in request.POST:
                 save_poster_override(form.instance.item, request.user, form.cleaned_data["poster_url"])
             if metadata_form is not None:
