@@ -1285,8 +1285,6 @@ def episode_save(request):
         from django.middleware.csrf import get_token
         context = {
             'video': video,
-            'today': timezone.now().date(),
-            'now': timezone.now(),
             'csrf_token': get_token(request),
         }
         return render(request, 'app/components/youtube_grid_items_card.html', context)

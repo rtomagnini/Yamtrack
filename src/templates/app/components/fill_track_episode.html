@@ -85,7 +85,7 @@
           busy: false,
           error: '',
           confirmedDate: '',
-          inputDateTime: '{% if TRACK_TIME %}{% now "Y-m-d\TH:i" %}{% else %}{% now "Y-m-d" %}{% endif %}',
+          inputDateTime: '{% if media.source != "youtube" %}{% if TRACK_TIME %}{% now "Y-m-d\TH:i" %}{% else %}{% now "Y-m-d" %}{% endif %}{% endif %}',
           inputType: '{% if TRACK_TIME %}datetime-local{% else %}date{% endif %}',
           async submitEpisode(answer = '', skipAction = '') {
             const form = this.$refs.watchDateForm;
@@ -166,6 +166,7 @@
                 <input class="w-full p-3 theme-field rounded-md text-white border border-gray-600 focus:outline-none focus:ring-2 theme-focus appearance-none"
                        x-bind:type="inputType"
                        name="end_date"
+                       {% if media.source == "youtube" %}aria-describedby="{% component_id 'watch-date-hint' episode %}"{% endif %}
                        onfocus="this.showPicker?.()"
                        x-model="inputDateTime">
                 {% if episode.air_date %}
@@ -192,6 +193,11 @@
                 {% endif %}
               </div>
               {# djlint:on #}
+              {% if media.source == "youtube" %}
+                <p id="{% component_id 'watch-date-hint' episode %}" class="mt-2 text-sm text-gray-400">
+                  Leave blank to use the current time.
+                </p>
+              {% endif %}
 
               <div class="flex justify-end-safe gap-3 mt-6">
                 <button type="submit" :disabled="busy"

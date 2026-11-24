@@ -20,7 +20,7 @@
         {% if video.end_date_sub %}disabled{% endif %}
         {% if not video.end_date_sub %}
           hx-post="{% url 'episode_save' %}"
-          hx-vals='{"media_id": "{{ video.media_id }}", "source": "{{ video.source }}", "season_number": "{{ video.season_number }}", "episode_number": "{{ video.episode_number }}", "end_date": "{{ now|date:'Y-m-d H:i' }}"}'
+          hx-vals='{"media_id": "{{ video.media_id }}", "source": "{{ video.source }}", "season_number": "{{ video.season_number }}", "episode_number": "{{ video.episode_number }}"}'
           hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
           hx-target="closest [data-video-card]"
           hx-swap="outerHTML swap:0.5s"

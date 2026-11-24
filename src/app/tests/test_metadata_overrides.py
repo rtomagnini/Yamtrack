@@ -1,6 +1,6 @@
 """Personal metadata must survive syncs and consistently affect watch statistics."""
 
-from datetime import date, time
+from datetime import date, time, timedelta
 from unittest.mock import patch
 
 import pytest
@@ -705,6 +705,48 @@ def test_youtube_logo_survives_provider_refresh_and_renders_in_all_views(
     client.force_login(other)
     response = client.get(reverse("youtubes"), {"status": "all"})
     assert b"https://example.com/custom-logo.jpg" not in response.content
+
+
+@pytest.mark.parametrize("channel_form", [False, True], ids=["quick-action", "channel-form"])
+def test_youtube_watch_without_date_records_when_button_is_pressed(
+    client, user, youtube_channel, provider, channel_form,
+):
+    client.force_login(user)
+    opened_at = timezone.now().replace(hour=23, minute=55, second=0, microsecond=0)
+    clicked_at = opened_at + timedelta(minutes=10, seconds=17)
+    provider.return_value = {
+        "source": "youtube", "media_type": "youtube", "media_id": "UCTestChannel",
+        "title": "Channel", "image": youtube_channel.item.image,
+    }
+
+    with patch("django.utils.timezone.now", return_value=opened_at):
+        if channel_form:
+            response = client.get(reverse("youtube_channel_details", args=["youtube", "55", "channel"]))
+        else:
+            response = client.get(reverse("youtubes"))
+    assert response.status_code == 200
+    payload = {
+        "source": "youtube", "media_id": "55", "season_number": 2026,
+        "episode_number": 1,
+    }
+    if channel_form:
+        assert b"inputDateTime: ''" in response.content
+        payload["end_date"] = ""
+    else:
+        assert b'title="Mark as watched"' in response.content
+        assert b'"end_date":' not in response.content
+
+    with (
+        patch("django.utils.timezone.now", return_value=clicked_at),
+        patch("integrations.youtube_watched.queue_watched"),
+    ):
+        response = client.post(
+            reverse("episode_save"),
+            payload,
+            **({} if channel_form else {"HTTP_HX_REQUEST": "true"}),
+        )
+    assert response.status_code == (302 if channel_form else 200)
+    assert Episode.objects.get(related_season__related_tv=youtube_channel).end_date == clicked_at
 
 
 def test_youtube_restore_logo_preserves_channel_and_videos(client, user, youtube_channel):

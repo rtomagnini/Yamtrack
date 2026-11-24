@@ -2,7 +2,6 @@ from django.db.models import CharField, Exists, OuterRef, Subquery
 from django.db.models.functions import Coalesce
 from django.middleware.csrf import get_token
 from django.shortcuts import render
-from django.utils import timezone
 from django.views.decorators.http import require_GET
 
 from app.models import Episode, Item, ItemMetadataOverride, MediaTypes, Season, Sources
@@ -78,7 +77,6 @@ def youtubes_view(request):
         'current_status': filter_status,
         'current_sort': sort,
         'current_layout': layout,
-        'today': timezone.now().date(),
         'csrf_token': get_token(request),
     }
     if request.headers.get('HX-Request'):
