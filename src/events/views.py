@@ -14,7 +14,7 @@ from django.views.decorators.http import require_GET, require_http_methods, requ
 
 from events import tasks
 from events.models import Event
-from users.models import User
+from users.models import CalendarLayoutChoices, User
 
 logger = logging.getLogger(__name__)
 
@@ -30,16 +30,14 @@ def calendar(request):
 
     month = request.GET.get("month")
     year = request.GET.get("year")
+    today = timezone.localdate()
 
     try:
-        current_date = (
-            date(int(year), int(month), 1) if month and year else timezone.localdate()
-        )
-        month, year = current_date.month, current_date.year
+        current_date = date(int(year), int(month), 1) if month and year else today
     except (ValueError, TypeError):
         logger.warning("Invalid month or year provided: %s, %s", month, year)
-        current_date = timezone.localdate()
-        month, year = current_date.month, current_date.year
+        current_date = today
+    month, year = current_date.month, current_date.year
 
     # Calculate navigation dates
     is_december = month == 12  # noqa: PLR2004
@@ -75,8 +73,14 @@ def calendar(request):
             release_dict[day] = []
         release_dict[day].append(release)
 
-    # Get today's date for highlighting
-    today = timezone.localdate()
+    today_in_month = today.day if (year, month) == (today.year, today.month) else None
+    if (
+        view_type == CalendarLayoutChoices.LIST
+        and today_in_month is not None
+        and today_in_month not in release_dict
+    ):
+        release_dict[today_in_month] = []
+        release_dict = dict(sorted(release_dict.items()))
 
     context = {
         "calendar": calendar_format,
@@ -89,6 +93,7 @@ def calendar(request):
         "next_year": next_year,
         "release_dict": release_dict,
         "today": today,
+        "today_in_month": today_in_month,
         "view_type": view_type,
     }
     return render(request, "events/calendar.html", context)

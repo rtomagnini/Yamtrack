@@ -21,6 +21,26 @@ class CalendarViewTests(TestCase):
         self.user = get_user_model().objects.create_user(**self.credentials)
         self.client.login(**self.credentials)
 
+    @patch("events.models.Event.objects.get_user_events", return_value=[])
+    def test_today_link_targets_current_day_in_both_layouts(self, _mock_events):
+        url = reverse("calendar")
+        for layout in ("grid", "list"):
+            with self.subTest(layout=layout):
+                destination = f"{url}?view={layout}"
+                with patch("events.views.timezone.localdate", return_value=date(2026, 11, 30)):
+                    response = self.client.get(url, {"month": 10, "year": 2026, "view": layout})
+                self.assertContains(response, f'href="{destination}#calendar-today"')
+                self.assertNotContains(response, 'id="calendar-today"')
+
+                with patch("events.views.timezone.localdate", return_value=date(2026, 12, 1)):
+                    response = self.client.get(destination)
+                self.assertEqual(response.context["month"], 12)
+                self.assertEqual(response.context["today_in_month"], 1)
+                self.assertEqual(response.context["view_type"], layout)
+                self.assertContains(response, 'id="calendar-today" aria-current="date"', count=1)
+                if layout == "list":
+                    self.assertContains(response, "No releases scheduled for today.")
+
     @patch("events.models.Event.objects.get_user_events")
     @patch.object(get_user_model(), "update_preference")
     def test_calendar_default_view(
