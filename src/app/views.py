@@ -28,6 +28,7 @@ from app.models import TV, BasicMedia, Episode, Item, ItemMetadataOverride, Mang
 from app.models import SkippedEpisode
 from app.providers import manual, services, tmdb, youtube
 from app.templatetags import app_tags
+from app.views_youtubes import with_video_details
 from integrations.youtube_watched import queue_watched
 from users.models import HomeSortChoices, MediaSortChoices, MediaStatusChoices
 
@@ -1273,37 +1274,14 @@ def episode_save(request):
 
     # If HTMX request, return only the updated card HTML
     if request.headers.get('HX-Request'):
-        # Find the updated video item - include season_number to avoid MultipleObjectsReturned
-        item = Item.objects.filter(
+        videos = Item.objects.filter(
             media_id=media_id,
             source=source,
             media_type=MediaTypes.EPISODE.value,
             episode_number=episode_number,
             season_number=season_number,
-        ).first()
-        # Annotate with channel info and watched status for template
-        from django.db.models import OuterRef, Exists, Subquery, CharField
-        from app.models import TV, BasicMedia, Episode, Item, MediaTypes, Season, Sources, Status, GameSession, Game
-        item_qs = Item.objects.filter(pk=item.pk)
-        item_qs = item_qs.annotate(
-            is_watched=Exists(
-                Episode.objects.filter(item=OuterRef('pk'), end_date__isnull=False)
-            ),
-            end_date_sub=Episode.objects.filter(item=OuterRef('pk'), end_date__isnull=False).values('end_date')[:1]
         )
-        season_qs = Season.objects.filter(
-            item__media_id=OuterRef('media_id'),
-            item__source=OuterRef('source'),
-            item__media_type=MediaTypes.SEASON.value,
-            item__season_number=OuterRef('season_number'),
-        )
-        tv_title_qs = season_qs.filter(related_tv__isnull=False).values('related_tv__item__title')[:1]
-        tv_image_qs = season_qs.filter(related_tv__isnull=False).values('related_tv__item__image')[:1]
-        item_qs = item_qs.annotate(
-            channel_name=Subquery(tv_title_qs, output_field=CharField()),
-            channel_image=Subquery(tv_image_qs, output_field=CharField()),
-        )
-        video = item_qs.first()
+        video = with_video_details(videos, request.user).first()
         from django.middleware.csrf import get_token
         context = {
             'video': video,

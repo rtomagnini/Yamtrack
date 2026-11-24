@@ -1,11 +1,7 @@
 {% for video in videos %}
   <tr>
     <td class="p-2 w-15">
-      {% if video.channel_image %}
-        <img src="{{ video.channel_image }}" alt="{{ video.channel_name }}" class="w-8 h-8 rounded-full border border-gray-700 bg-[#222] object-cover" loading="lazy" />
-      {% else %}
-        <span class="text-sm text-gray-400">—</span>
-      {% endif %}
+      {% include "app/components/youtube_channel_logo.html" with video=video only %}
     </td>
     <td class="p-2 pe-8 w-2/5">
       <div class="font-semibold">{{ video.title }}</div>

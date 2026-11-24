@@ -1,0 +1,16 @@
+{% load app_tags %}
+
+{% if video.channel_image %}
+  {% if video.source == "youtube" %}
+    {% url "youtube_channel_details" video.source video.media_id video.channel_name|default:"channel"|slug|default:"channel" as channel_url %}
+  {% endif %}
+  {% if channel_url %}
+    <a href="{{ channel_url }}" class="inline-flex rounded-full"
+       aria-label="Open channel{% if video.channel_name %}: {{ video.channel_name }}{% endif %}">
+  {% endif %}
+  <img src="{{ video.channel_image }}" alt="{{ video.channel_name|default:'Channel logo' }}"
+       class="w-8 h-8 rounded-full border border-gray-700 bg-[#222] object-cover" loading="lazy">
+  {% if channel_url %}</a>{% endif %}
+{% else %}
+  <span class="text-sm text-gray-400">—</span>
+{% endif %}

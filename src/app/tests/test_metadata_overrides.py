@@ -670,7 +670,8 @@ def test_youtube_logo_survives_provider_refresh_and_renders_in_all_views(
     }
     provider.return_value = original
     client.force_login(user)
-    response = client.get(reverse("youtube_channel_details", args=["youtube", "55", "channel"]))
+    channel_url = reverse("youtube_channel_details", args=["youtube", "55", "channel"])
+    response = client.get(channel_url)
     assert response.status_code == 200
     assert response.context["media"]["image"] == "https://example.com/custom-logo.jpg"
     assert response.context["media"]["media_id"] == "55"
@@ -686,9 +687,23 @@ def test_youtube_logo_survives_provider_refresh_and_renders_in_all_views(
         response = client.get(reverse("youtubes"), {"layout": layout})
         assert response.status_code == 200
         assert b"https://example.com/custom-logo.jpg" in response.content
+        assert f'href="{channel_url}"'.encode() in response.content
+        assert b'aria-label="Open channel: Channel"' in response.content
+    with patch("integrations.youtube_watched.queue_watched"):
+        response = client.post(
+            reverse("episode_save"),
+            {
+                "source": "youtube", "media_id": "55", "season_number": 2026,
+                "episode_number": 1, "end_date": timezone.localdate().isoformat(),
+            },
+            HTTP_HX_REQUEST="true",
+        )
+    assert response.status_code == 200
+    assert b"https://example.com/custom-logo.jpg" in response.content
+    assert f'href="{channel_url}"'.encode() in response.content
     other = get_user_model().objects.create_user(username="other-channel-viewer")
     client.force_login(other)
-    response = client.get(reverse("youtubes"))
+    response = client.get(reverse("youtubes"), {"status": "all"})
     assert b"https://example.com/custom-logo.jpg" not in response.content
 
 

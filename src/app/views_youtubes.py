@@ -1,8 +1,42 @@
-from django.shortcuts import render
-from django.db.models import Q, OuterRef, Exists, Subquery, Value, CharField
+from django.db.models import CharField, Exists, OuterRef, Subquery
 from django.db.models.functions import Coalesce
-from app.models import Item, ItemMetadataOverride, TV, Season, Episode, Sources, MediaTypes
+from django.middleware.csrf import get_token
+from django.shortcuts import render
+from django.utils import timezone
 from django.views.decorators.http import require_GET
+
+from app.models import Episode, Item, ItemMetadataOverride, MediaTypes, Season, Sources
+
+
+def with_video_details(videos, user):
+    """Add watch dates and channel details for the video cards."""
+    watches = Episode.objects.filter(
+        item=OuterRef("pk"), end_date__isnull=False,
+    )
+    channel_seasons = Season.objects.filter(
+        item__media_id=OuterRef("media_id"),
+        item__source=OuterRef("source"),
+        item__media_type=MediaTypes.SEASON.value,
+        item__season_number=OuterRef("season_number"),
+        related_tv__isnull=False,
+    )
+    personal_logo_qs = ItemMetadataOverride.objects.filter(
+        user=user,
+        item__source=OuterRef("source"),
+        item__media_type=MediaTypes.YOUTUBE.value,
+        item__media_id=OuterRef("media_id"),
+    )
+    return videos.annotate(
+        is_watched=Exists(watches),
+        end_date_sub=Subquery(watches.values("end_date")[:1]),
+        channel_name=Subquery(channel_seasons.values("related_tv__item__title")[:1]),
+        channel_image=Coalesce(
+            Subquery(personal_logo_qs.values("image")[:1]),
+            Subquery(channel_seasons.values("related_tv__item__image")[:1]),
+            output_field=CharField(),
+        ),
+    )
+
 
 @require_GET
 def youtubes_view(request):
@@ -11,14 +45,9 @@ def youtubes_view(request):
     sort = request.GET.get('sort', 'air_date')
 
     # Base queryset: Items that are YouTube videos
-    qs = Item.objects.filter(source=Sources.YOUTUBE.value, media_type=MediaTypes.EPISODE.value)
-
-    # Annotate with whether watched (has Episode with end_date)
-    qs = qs.annotate(
-        is_watched=Exists(
-            Episode.objects.filter(item=OuterRef('pk'), end_date__isnull=False)
-        ),
-        end_date_sub=Episode.objects.filter(item=OuterRef('pk'), end_date__isnull=False).values('end_date')[:1]
+    qs = with_video_details(
+        Item.objects.filter(source=Sources.YOUTUBE.value, media_type=MediaTypes.EPISODE.value),
+        request.user,
     )
 
     # Search by title
@@ -42,31 +71,7 @@ def youtubes_view(request):
     else:  # default to air_date
         qs = qs.order_by('-air_date', '-id')
 
-
-    # Annotate with channel (TV) name and image (logo) by joining through Season
-    season_qs = Season.objects.filter(
-        item__media_id=OuterRef('media_id'),
-        item__source=OuterRef('source'),
-        item__media_type=MediaTypes.SEASON.value,
-        item__season_number=OuterRef('season_number'),
-    )
-    tv_title_qs = season_qs.filter(related_tv__isnull=False).values('related_tv__item__title')[:1]
-    tv_image_qs = season_qs.filter(related_tv__isnull=False).values('related_tv__item__image')[:1]
-    personal_logo_qs = ItemMetadataOverride.objects.filter(
-        user=request.user, item__source=Sources.YOUTUBE.value,
-        item__media_type=MediaTypes.YOUTUBE.value, item__media_id=OuterRef('media_id'),
-    ).values('image')[:1]
-    qs = qs.annotate(
-        channel_name=Subquery(tv_title_qs, output_field=CharField()),
-        channel_image=Coalesce(
-            Subquery(personal_logo_qs, output_field=CharField()),
-            Subquery(tv_image_qs, output_field=CharField()),
-        ),
-    )
-
     layout = request.GET.get('layout', 'grid')
-    from django.utils import timezone
-    from django.middleware.csrf import get_token
     context = {
         'videos': qs,
         'search': search,
