@@ -48,15 +48,28 @@
         padding-inline: 2.5rem .5rem;
       }
       .app-header-query input,
-      .app-header-search select,
       .app-header-icon {
         min-height: 2.75rem;
       }
-      .app-header-search select {
-        width: clamp(5.5rem, 22vw, 9rem);
-        padding-inline-start: .5rem;
-        padding-inline-end: .375rem;
+      .app-header-media-type {
+        position: relative;
+      }
+      .app-header-media-type select {
+        display: block;
+        -webkit-appearance: none;
+        appearance: none;
+        width: clamp(6rem, 22vw, 9rem);
+        height: 2.75rem;
+        padding-inline: .5rem 1.375rem;
         cursor: pointer;
+      }
+      .app-header-media-type svg {
+        position: absolute;
+        inset-inline-end: .4375rem;
+        inset-block-start: 50%;
+        transform: translateY(-50%);
+        color: #d1d5db;
+        pointer-events: none;
       }
       .app-header-search-button {
         position: absolute;
@@ -298,13 +311,20 @@
                              placeholder="Search {{ search_type|media_type_readable_plural|lower }}..."
                              :placeholder="placeholder || undefined">
                     </div>
-                    <select name="media_type" aria-label="Media type" class="filter-control"
-                            x-init="updatePlaceholder($el)"
-                            @change="updatePlaceholder($el)">
-                      {% for type in search_types %}
-                        <option value="{{ type.value }}" {% if type.value == search_type %}selected{% endif %}>{{ type.display }}</option>
-                      {% endfor %}
-                    </select>
+                    <div class="app-header-media-type">
+                      <select name="media_type" aria-label="Media type" class="filter-control"
+                              x-init="updatePlaceholder($el)"
+                              @change="updatePlaceholder($el)">
+                        {% for type in search_types %}
+                          <option value="{{ type.value }}" {% if type.value == search_type %}selected{% endif %}>{{ type.display }}</option>
+                        {% endfor %}
+                      </select>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
+                           stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                           stroke-linejoin="round" aria-hidden="true">
+                        <path d="m6 9 6 6 6-6"/>
+                      </svg>
+                    </div>
                   </form>
                   <button type="button" class="filter-control app-header-icon"
                           title="Recargar página" aria-label="Recargar página"
