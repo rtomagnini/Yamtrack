@@ -270,6 +270,8 @@ class IntegrationTest(StaticLiveServerTestCase):
             expect(actions).to_be_focused()
 
             season_poster = page.locator("[data-media-poster-link]")
+            cover = page.locator(".media-poster > img").bounding_box()
+            self.assertAlmostEqual(cover["width"] / cover["height"], 2 / 3, places=2)
             season_actions = page.get_by_role("button", name="Actions for Season 1")
             expect(season_actions).to_have_css("opacity", "0")
             season_poster.tap()

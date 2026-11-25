@@ -199,7 +199,19 @@
   z-index: 2;
 }
 
+.media-poster {
+  aspect-ratio: 2 / 3;
+}
+
+.media-poster-square {
+  aspect-ratio: 1 / 1;
+}
+
 .media-poster > img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
   border-radius: .5rem .5rem 0 0;
 }
 

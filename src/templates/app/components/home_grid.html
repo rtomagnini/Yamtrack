@@ -6,7 +6,7 @@
   <div class="media-action-card relative flex flex-col theme-surface rounded-lg shadow-lg transition-all duration-300"
        x-data="mediaCardActions"
        :class="{ 'media-action-card-open': actionsOpen }">
-    <div class="media-poster relative shrink-0"
+    <div class="media-poster relative shrink-0{% if item.media_type == MediaTypes.YOUTUBE.value %} media-poster-square{% endif %}"
          @pointerenter="posterHovered = $event.pointerType === 'mouse'"
          @pointerleave="posterHovered = false"
          @click.outside="dismissPosterActions()"
@@ -14,7 +14,7 @@
       {% with poster=item.image|default:IMG_NONE %}
         {% with srcset=poster|home_poster_srcset %}
           <img alt="{{ item }}"
-               class="w-full {% if item.media_type == 'youtube' %}aspect-square{% else %}aspect-[2/3]{% endif %} {% if poster != IMG_NONE %}object-cover{% endif %}{% if not priority_posters or forloop.counter > 2 %} lazyload{% endif %}"
+               class="{% if poster != IMG_NONE %}object-cover{% endif %}{% if not priority_posters or forloop.counter > 2 %} lazyload{% endif %}"
                width="200"
                height="{% if item.media_type == 'youtube' %}200{% else %}300{% endif %}"
                decoding="async"
