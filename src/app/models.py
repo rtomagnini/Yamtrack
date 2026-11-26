@@ -898,7 +898,9 @@ class MediaManager(models.Manager):
             return True
         if event.is_max_datetime:
             return False
-        if event.is_sentinel_time:
+        if broadcast_time is not None and event.air_date is not None:
+            air_date = event.air_date
+        elif event.is_sentinel_time:
             air_date = event.datetime.date()
         elif broadcast_time is not None:
             air_date = timezone.localtime(event.datetime).date()

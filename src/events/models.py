@@ -185,6 +185,8 @@ class Event(models.Model):
     item = models.ForeignKey(Item, on_delete=models.CASCADE)
     content_number = models.IntegerField(null=True)
     datetime = models.DateTimeField()
+    # The provider's air date can differ from the local date of the timestamp.
+    air_date = models.DateField(null=True, blank=True)
     notification_sent = models.BooleanField(default=False)
     objects = EventManager()
 

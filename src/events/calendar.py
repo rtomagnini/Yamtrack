@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime
+from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
 import requests
@@ -88,12 +88,14 @@ def save_events(events_bulk):
             if key in existing_with_content:
                 existing_event = existing_with_content[key]
                 existing_event.datetime = event.datetime
+                existing_event.air_date = event.air_date
                 to_update.append(existing_event)
             else:
                 to_create.append(event)
         elif event.item_id in existing_without_content:
             existing_event = existing_without_content[event.item_id]
             existing_event.datetime = event.datetime
+            existing_event.air_date = event.air_date
             to_update.append(existing_event)
         else:
             to_create.append(event)
@@ -103,7 +105,7 @@ def save_events(events_bulk):
         Event.objects.bulk_create(to_create)
 
     if to_update:
-        Event.objects.bulk_update(to_update, ["datetime"])
+        Event.objects.bulk_update(to_update, ["datetime", "air_date"])
 
     logger.info(
         "Successfully processed %d events (%d created, %d updated)",
@@ -628,6 +630,10 @@ def process_season_episodes(item, metadata, events_bulk):
     for episode in metadata["episodes"]:
         episode_number = episode["episode_number"]
         season_number = metadata["season_number"]
+        try:
+            air_date = date.fromisoformat(episode["air_date"] or "")
+        except (ValueError, TypeError):
+            air_date = None
 
         episode_datetime = get_episode_datetime(
             episode,
@@ -641,6 +647,7 @@ def process_season_episodes(item, metadata, events_bulk):
                 item=item,
                 content_number=episode_number,
                 datetime=episode_datetime,
+                air_date=air_date,
             ),
         )
 

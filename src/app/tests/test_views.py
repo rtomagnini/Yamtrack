@@ -20,7 +20,7 @@ from app.models import (
     Status,
 )
 from app.templatetags import app_tags
-from events.calendar import date_parser
+from events.calendar import date_parser, process_season_episodes, save_events
 from events.models import Event
 from users.models import HomeSortChoices
 
@@ -191,6 +191,50 @@ class HomeViewTests(TestCase):
                     self.assertEqual(entry.max_progress, 1 + len(pending))
                     self.assertFalse(entry.completes_on_next_episode)
         tmdb.assert_not_called()
+
+    @timezone.override("Europe/Madrid")
+    def test_home_uses_tmdb_air_date_for_a_broadcast_time_override(self):
+        season = _create_home_season(
+            self.user, "97", [1], watched=(1,), source=Sources.TMDB.value,
+        )
+        Season.objects.filter(pk=season.pk).update(broadcast_time=datetime.time(23, 59, 59))
+        episode_stamp = datetime.datetime.fromisoformat("2026-11-26T00:30:00+00:00")
+        # Simulate a previously synced event, then refresh it with the original air date.
+        Event.objects.create(item=season.item, content_number=2, datetime=episode_stamp)
+        releases = []
+        with patch("events.calendar.get_tvmaze_episode_map", return_value={
+            "1_2": episode_stamp.isoformat(),
+            "1_3": "2026-11-27T00:30:00+00:00",
+        }):
+            process_season_episodes(season.item, {
+                "season_number": 1,
+                "tvdb_id": 195851,
+                "episodes": [
+                    {"episode_number": 2, "air_date": "2026-11-25"},
+                    {"episode_number": 3, "air_date": "2026-11-26"},
+                ],
+            }, releases)
+        save_events(releases)
+        event = Event.objects.get(item=season.item, content_number=2)
+        self.assertEqual(event.datetime, episode_stamp)
+        self.assertEqual(event.air_date, datetime.date(2026, 11, 25))
+
+        for now, expected_pending in [
+            ("2026-11-25T23:59:58+01:00", None),
+            ("2026-11-25T23:59:59+01:00", [2]),
+            ("2026-11-26T08:00:00+01:00", [2]),
+        ]:
+            with (
+                self.subTest(now=now),
+                patch("app.models.timezone.now", return_value=datetime.datetime.fromisoformat(now)),
+            ):
+                response = self.client.get(reverse("home"))
+                items = response.context["list_by_type"][MediaTypes.SEASON.value]["items"]
+                tracked = next((item for item in items if item.pk == season.pk), None)
+                self.assertEqual(
+                    tracked.pending_episode_numbers if tracked else None,
+                    expected_pending,
+                )
 
     def test_unsynced_tmdb_season_still_shows_saved_progress(self):
         season = _create_home_season(
