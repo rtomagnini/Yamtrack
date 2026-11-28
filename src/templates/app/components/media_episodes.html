@@ -70,7 +70,7 @@
             </div>
             <div class="py-3 flex-1 flex flex-col">
               <div class="flex-1">
-                <div class="flex justify-between items-start mb-2 space-x-2 px-4">
+                <div class="flex justify-between items-start mb-2 px-4 {% if is_youtube_channel %}youtube-episode-header gap-2{% else %}space-x-2{% endif %}">
                   <div class="min-w-0">
                     {# Title with tooltip: show full title on hover (desktop) and on tap/select (mobile) #}
                     <div x-data="{ open: false }" class="relative">
@@ -85,9 +85,9 @@
                       {% if is_youtube_channel %}Video{% else %}Episode{% endif %} {{ episode.episode_number }} • {% if episode.air_date %}{{ episode.air_date }}{% elif is_youtube_channel %}Unknown year{% else %}Unknown air date{% endif %}{% if episode.runtime %} • {{ episode.runtime }} min{% endif %}
                     </p>
                   </div>
-                  <div class="flex space-x-2">
+                  <div class="flex space-x-2{% if is_youtube_channel %} youtube-episode-actions{% endif %}">
                     {% if is_youtube_channel %}
-                      {% include "app/components/youtube_comments_button.html" with video=episode compact=True only %}
+                      {% include "app/components/youtube_video_links.html" with video=episode compact=True only %}
                     {% endif %}
                     <div class="flex items-start gap-2" x-data="{ trackOpen: false }">
                       <button @click="trackOpen = true"

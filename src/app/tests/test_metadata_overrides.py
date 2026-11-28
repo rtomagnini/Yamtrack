@@ -681,6 +681,7 @@ def test_youtube_logo_survives_provider_refresh_and_renders_in_all_views(
     assert b"fixed inset-0 bg-black/50" in response.content
     assert b'hx-get="/track_modal/youtube/youtube/55"' in response.content
     assert f'data-youtube-comments-url="{comments_url}"'.encode() in response.content
+    assert b'href="https://www.youtube.com/watch?v=jNQXAC9IVRw"' in response.content
     assert original["media_id"] == "UCTestChannel"
     assert original["image"] == "https://example.com/new-logo.jpg"
     assert "episodes" not in original

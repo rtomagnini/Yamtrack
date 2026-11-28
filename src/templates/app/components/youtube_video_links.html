@@ -1,5 +1,5 @@
 {% if video.source == "youtube" and video.youtube_video_id %}
-  <button type="button" class="youtube-comments-trigger{% if compact %} youtube-comments-trigger-compact{% endif %}"
+  <button type="button" class="youtube-comments-trigger{% if compact %} youtube-video-action-compact{% endif %}"
           aria-label="Comments" aria-haspopup="dialog" title="Comments"
           data-youtube-comments-url="{% url 'youtube_comments' video.id %}" data-video-title="{{ video.title }}">
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -8,4 +8,12 @@
       <path d="M9 11h6"/>
     </svg>
   </button>
+  <a class="youtube-watch-link{% if compact %} youtube-video-action-compact{% endif %}"
+     href="https://www.youtube.com/watch?v={{ video.youtube_video_id|urlencode }}"
+     target="_blank" rel="noopener noreferrer" aria-label="Open on YouTube in a new tab" title="Open on YouTube">
+    <svg width="20" height="14" viewBox="0 0 24 17" aria-hidden="true">
+      <rect width="24" height="17" rx="4" fill="#ff0033"/>
+      <path d="m9.5 5 6 3.5-6 3.5z" fill="white"/>
+    </svg>
+  </a>
 {% endif %}

@@ -280,25 +280,34 @@
   color: var(--theme-on-selected);
 }
 
-.youtube-comments-trigger {
+.youtube-comments-trigger,
+.youtube-watch-link {
   display: inline-grid;
   place-items: center;
   flex: none;
   width: 2.5rem;
   height: 2.5rem;
   border-radius: 50%;
-  background: var(--color-emerald-700, #047857);
   color: white;
   cursor: pointer;
   transition: background-color .15s;
 }
 
-.youtube-comments-trigger-compact {
+.youtube-comments-trigger {
+  background: var(--color-emerald-700, #047857);
+}
+
+.youtube-watch-link {
+  background: var(--theme-field);
+}
+
+.youtube-video-action-compact {
   width: 2rem;
   height: 2rem;
 }
 
-.youtube-comments-trigger:focus-visible {
+.youtube-comments-trigger:focus-visible,
+.youtube-watch-link:focus-visible {
   outline: 2px solid var(--theme-focus);
   outline-offset: 2px;
 }
@@ -307,6 +316,21 @@
   .youtube-comments-trigger:hover {
     background: var(--color-emerald-600, #059669);
   }
+  .youtube-watch-link:hover {
+    background: var(--theme-hover);
+  }
+}
+
+.youtube-episode-header {
+  flex-wrap: wrap;
+}
+
+.youtube-episode-header > :first-child {
+  flex: 1 1 12rem;
+}
+
+.youtube-episode-actions {
+  margin-inline-start: auto;
 }
 
 .youtube-comments-close.filter-control {

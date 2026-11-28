@@ -25,6 +25,8 @@ def test_comments_load_on_demand_and_paginate(client, video):
     with patch("integrations.invidious.requests.get", autospec=True) as upstream:
         listing = client.get(reverse("youtubes"))
         assert b"data-youtube-comments-url" in listing.content
+        assert b'href="https://www.youtube.com/watch?v=abcdefghijk"' in listing.content
+        assert b'target="_blank" rel="noopener noreferrer"' in listing.content
         upstream.assert_not_called()
 
         upstream.return_value.status_code = 200
