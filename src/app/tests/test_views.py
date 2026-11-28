@@ -12,6 +12,8 @@ from app.models import (
     Anime,
     BasicMedia,
     Episode,
+    Game,
+    GameSession,
     Item,
     MediaTypes,
     Movie,
@@ -690,6 +692,43 @@ class MediaDetailsViewTests(TestCase):
         self.credentials = {"username": "test", "password": "12345"}
         self.user = get_user_model().objects.create_user(**self.credentials)
         self.client.login(**self.credentials)
+
+    @patch("app.providers.services.get_media_metadata")
+    def test_game_details_show_recorded_and_older_play_sessions(self, metadata):
+        item = Item.objects.create(
+            title="Test Game", media_id="501", media_type=MediaTypes.GAME.value,
+            source=Sources.IGDB.value,
+        )
+        now = timezone.now()
+        game = Game(
+            user=self.user, item=item, play_time=12, progress=12,
+            status=Status.IN_PROGRESS.value,
+        )
+        game._history_date = now - datetime.timedelta(days=30)
+        game.save()
+        GameSession.objects.bulk_create([
+            GameSession(
+                game=game, minutes=30 + index, percentage_progress=index,
+                session_date=now - datetime.timedelta(days=index),
+            )
+            for index in range(11)
+        ])
+        metadata.return_value = {
+            "title": item.title, "media_id": item.media_id,
+            "media_type": item.media_type, "source": item.source,
+        }
+        url = reverse("media_details", args=[item.source, item.media_type, item.media_id, "test-game"])
+
+        response = self.client.get(url)
+        self.assertContains(response, 'id="play-sessions"')
+        self.assertContains(response, "30min")
+        self.assertContains(response, "?sessions=2#play-sessions")
+        self.assertEqual(response.context["play_sessions"].paginator.count, 12)
+        self.assertEqual(response.context["play_sessions"][0]["percentage_progress"], 0)
+
+        response = self.client.get(url, {"sessions": 2})
+        self.assertEqual([session["play_time"] for session in response.context["play_sessions"]], [40, 12])
+        self.assertContains(response, "12min")
 
     @patch("app.providers.services.get_media_metadata")
     def test_media_details_view(self, mock_get_metadata):

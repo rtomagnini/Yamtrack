@@ -581,6 +581,10 @@ def media_details(request, source, media_type, media_id, title):  # noqa: ARG001
         "user_medias": user_medias,
         "current_instance": current_instance,
     }
+    if media_type == MediaTypes.GAME.value and current_instance:
+        context["play_sessions"] = _game_sessions_page(
+            current_instance, request.GET.get("sessions"),
+        )
     return render(request, "app/media_details.html", context)
 
 
@@ -2208,20 +2212,10 @@ def delete_youtube_video(request, video_id):
         return HttpResponseBadRequest(str(error))
 
 
-@login_required
-@require_GET
-def game_sessions(request, game_id):
-    """View game play sessions from history."""
-    from app.models import TV, BasicMedia, Episode, Item, MediaTypes, Season, Sources, Status, GameSession, Game
-    
-    try:
-        game = Game.objects.select_related('item', 'user').get(id=game_id, user=request.user)
-    except Game.DoesNotExist:
-        messages.error(request, "Game not found")
-        return redirect('home')
-    
-    # Get all historical records for this game, ordered by date (oldest first)
-    sessions = game.history.all().order_by('history_date')
+def _legacy_game_sessions(game, *, before=None):
+    sessions = game.history.order_by("history_date", "history_id")
+    if before is not None:
+        sessions = sessions.filter(history_date__lt=before)
     
     # Calculate play_time and percentage_progress for each session
     session_list = []
@@ -2242,9 +2236,40 @@ def game_sessions(request, game_id):
             })
         prev_play_time = record.play_time or 0
     
-    # Reverse to show most recent first
     session_list.reverse()
-    
+    return session_list
+
+
+def _game_sessions_page(game, page_number):
+    recorded = game.sessions.values(
+        "percentage_progress",
+        date=models.F("session_date"),
+        play_time=models.F("minutes"),
+    )
+    first_date = recorded.values_list("date", flat=True).last()
+    # Older history predates the individual session records. Later history
+    # also reflects those records, so including it would show duplicate play time.
+    older_sessions = _legacy_game_sessions(game, before=first_date)
+    sessions = [*recorded, *older_sessions] if older_sessions else recorded
+    page = Paginator(sessions, 10).get_page(page_number)
+    page.object_list = [
+        {**entry, "play_time_formatted": helpers.minutes_to_hhmm(entry["play_time"])}
+        for entry in page
+    ]
+    return page
+
+
+@login_required
+@require_GET
+def game_sessions(request, game_id):
+    """View game play sessions from history."""
+    try:
+        game = Game.objects.select_related("item", "user").get(id=game_id, user=request.user)
+    except Game.DoesNotExist:
+        messages.error(request, "Game not found")
+        return redirect("home")
+
+    session_list = _legacy_game_sessions(game)
     context = {
         'game': game,
         'sessions': session_list,
