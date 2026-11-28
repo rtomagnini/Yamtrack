@@ -432,3 +432,42 @@
   text-align: end;
   white-space: nowrap;
 }
+
+.game-sessions-table .game-session-remove {
+  width: 1%;
+}
+
+.game-session-mobile-detail {
+  display: none;
+}
+
+.game-session-delete {
+  display: inline-grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: .5rem;
+  background: rgb(220 38 38 / 20%);
+  color: #fca5a5;
+  cursor: pointer;
+}
+
+.game-session-delete:hover {
+  background: rgb(220 38 38 / 35%);
+}
+
+.game-session-delete:focus-visible {
+  outline: 2px solid var(--theme-focus);
+  outline-offset: 2px;
+}
+
+@media (max-width: 39.999rem) {
+  .game-sessions-table .game-sessions-desktop-column {
+    display: none;
+  }
+
+  .game-session-mobile-detail {
+    display: block;
+    font-size: .75rem;
+  }
+}

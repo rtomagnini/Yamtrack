@@ -1,4 +1,5 @@
 ﻿import logging
+from collections import deque
 
 from copy import deepcopy
 from urllib.parse import urlencode
@@ -10,6 +11,7 @@ from django.core.cache import cache
 from django.core.paginator import Paginator
 from django.db import IntegrityError, transaction
 from django.db import models
+from django.db.models.functions import Greatest
 from django.http import Http404, HttpResponse, HttpResponseBadRequest, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -582,7 +584,7 @@ def media_details(request, source, media_type, media_id, title):  # noqa: ARG001
         "current_instance": current_instance,
     }
     if media_type == MediaTypes.GAME.value and current_instance:
-        context["play_sessions"] = _game_sessions_page(
+        context["play_sessions"], context["play_sessions_total"] = _game_sessions_page(
             current_instance, request.GET.get("sessions"),
         )
     return render(request, "app/media_details.html", context)
@@ -2212,134 +2214,121 @@ def delete_youtube_video(request, video_id):
         return HttpResponseBadRequest(str(error))
 
 
-def _legacy_game_sessions(game, *, before=None):
-    sessions = game.history.order_by("history_date", "history_id")
-    if before is not None:
-        sessions = sessions.filter(history_date__lt=before)
-    
-    # Calculate play_time and percentage_progress for each session
-    session_list = []
-    prev_play_time = 0
-    
-    for record in sessions:
-        session_time = (record.play_time or 0) - prev_play_time
-        if session_time > 0:  # Only show sessions where time was added
-            session_list.append({
-                'history_id': record.history_id,
-                'session_number': len(session_list) + 1,
-                'play_time': session_time,
-                'play_time_formatted': helpers.minutes_to_hhmm(session_time),
-                'total_play_time': record.play_time,
-                'total_play_time_formatted': helpers.minutes_to_hhmm(record.play_time),
-                'percentage_progress': record.percentage_progress,
-                'date': record.history_date,
+def _game_session_records(game):
+    """Combine saved sessions and any additional play time from older history."""
+    recorded = [
+        {
+            "id": session.pk,
+            "kind": "recorded",
+            "date": session.session_date,
+            "play_time": session.minutes,
+            "percentage_progress": session.percentage_progress,
+            "history_minutes": 0,
+        }
+        for session in game.sessions.order_by("session_date", "id")
+    ]
+    pending = deque(recorded)
+    sessions = list(recorded)
+    previous_time = 0
+
+    history = game.history.order_by("history_date", "history_id").only(
+        "history_id", "history_date", "play_time", "percentage_progress",
+    )
+    for snapshot in history:
+        remaining = max(0, (snapshot.play_time or 0) - previous_time)
+        previous_time = snapshot.play_time or 0
+        # A saved session can already be included in this cumulative snapshot.
+        while pending and pending[0]["date"] <= snapshot.history_date:
+            session = pending.popleft()
+            covered = min(session["play_time"], remaining)
+            session.update(history=snapshot, history_minutes=covered)
+            remaining -= covered
+
+        if remaining:
+            sessions.append({
+                "id": snapshot.history_id,
+                "kind": "history",
+                "date": snapshot.history_date,
+                "play_time": remaining,
+                "percentage_progress": snapshot.percentage_progress,
+                "history": snapshot,
+                "history_minutes": remaining,
             })
-        prev_play_time = record.play_time or 0
-    
-    session_list.reverse()
-    return session_list
+
+    return sorted(sessions, key=lambda session: session["date"])
 
 
 def _game_sessions_page(game, page_number):
-    recorded = game.sessions.values(
-        "percentage_progress",
-        date=models.F("session_date"),
-        play_time=models.F("minutes"),
-    )
-    first_date = recorded.values_list("date", flat=True).last()
-    # Older history predates the individual session records. Later history
-    # also reflects those records, so including it would show duplicate play time.
-    older_sessions = _legacy_game_sessions(game, before=first_date)
-    sessions = [*recorded, *older_sessions] if older_sessions else recorded
-    page = Paginator(sessions, 10).get_page(page_number)
-    page.object_list = [
-        {**entry, "play_time_formatted": helpers.minutes_to_hhmm(entry["play_time"])}
-        for entry in page
-    ]
-    return page
+    sessions = _game_session_records(game)
+    total = 0
+    for number, session in enumerate(sessions, start=1):
+        total += session["play_time"]
+        session.update(
+            number=number,
+            play_time_formatted=helpers.minutes_to_hhmm(session["play_time"]),
+            total_formatted=helpers.minutes_to_hhmm(total),
+        )
+    sessions.reverse()
+    return Paginator(sessions, 10).get_page(page_number), helpers.minutes_to_hhmm(total)
+
+
+def _game_sessions_url(game, page=None):
+    url = app_tags.media_url(game.item)
+    if page:
+        url += "?" + urlencode({"sessions": page})
+    return url + "#play-sessions"
 
 
 @login_required
 @require_GET
 def game_sessions(request, game_id):
-    """View game play sessions from history."""
-    try:
-        game = Game.objects.select_related("item", "user").get(id=game_id, user=request.user)
-    except Game.DoesNotExist:
-        messages.error(request, "Game not found")
-        return redirect("home")
-
-    session_list = _legacy_game_sessions(game)
-    context = {
-        'game': game,
-        'sessions': session_list,
-        'total_sessions': len(session_list),
-    }
-    
-    return render(request, 'app/game_sessions.html', context)
+    """Redirect old session bookmarks to the game's session table."""
+    game = get_object_or_404(Game.objects.select_related("item"), pk=game_id, user=request.user)
+    return redirect(_game_sessions_url(game, request.GET.get("sessions")))
 
 
 @login_required
 @require_POST
-def delete_game_session(request, game_id, history_id):
-    """Delete a specific game session from history."""
-    from app.models import TV, BasicMedia, Episode, Item, MediaTypes, Season, Sources, Status, GameSession, Game
-    
-    try:
-        game = Game.objects.get(id=game_id, user=request.user)
-        
-        # Find the historical record
-        historical_record = game.history.filter(history_id=history_id).first()
-        
-        if not historical_record:
-            return HttpResponseBadRequest("Session not found")
-        
-        # Get the play_time and percentage_progress of this session and all sessions
-        sessions = list(game.history.all().order_by('history_date'))
-        
-        # Find the session to delete and calculate its time
-        session_index = None
-        session_time = 0
-        
-        for i, record in enumerate(sessions):
-            if record.history_id == history_id:
-                session_index = i
-                prev_time = sessions[i-1].play_time if i > 0 else 0
-                session_time = record.play_time - prev_time
-                break
-        
-        if session_index is None:
-            return HttpResponseBadRequest("Session not found")
-        
-        # Delete the historical record
-        historical_record.delete()
-        
-        # Recalculate game's current state from remaining history
-        # Get the most recent history record after deletion
-        latest_history = game.history.order_by('-history_date').first()
-        
-        if latest_history:
-            # Set current values to match the latest remaining session
-            game.play_time = latest_history.play_time or 0
-            game.progress = latest_history.progress or 0
-            game.percentage_progress = latest_history.percentage_progress or 0
-        else:
-            # No history left, reset to zero
-            game.play_time = 0
-            game.progress = 0
-            game.percentage_progress = 0
-        
-        game.save(update_fields=['play_time', 'progress', 'percentage_progress'])
-        
-        logger.info(f"Deleted game session {history_id} for {game.item.title}, removed {session_time} minutes")
-        
-        # Return success - HTMX will handle the removal
-        return HttpResponse(status=200)
-        
-    except Game.DoesNotExist:
-        return HttpResponseBadRequest("Game not found")
-    except Exception as e:
-        logger.error(f"Error deleting game session: {str(e)}")
-        return HttpResponseBadRequest(f"Error: {str(e)}")
+@transaction.atomic
+def delete_game_session(request, game_id, session_kind, session_id):
+    """Remove one session and its contribution to cumulative play time."""
+    game = get_object_or_404(
+        Game.objects.select_related("item").select_for_update(),
+        pk=game_id,
+        user=request.user,
+    )
+    sessions = _game_session_records(game)
+    session = next(
+        (row for row in sessions if (row["kind"], row["id"]) == (session_kind, session_id)),
+        None,
+    )
+    if session is None:
+        raise Http404
 
+    if session_kind == "recorded":
+        game.sessions.filter(pk=session_id).delete()
 
+    if minutes := session["history_minutes"]:
+        snapshot = session["history"]
+        game.history.filter(
+            models.Q(history_date__gt=snapshot.history_date)
+            | models.Q(history_date=snapshot.history_date, history_id__gte=snapshot.history_id),
+        ).update(
+            play_time=Greatest(models.F("play_time") - minutes, 0),
+            progress=Greatest(models.F("progress") - minutes, 0),
+        )
+
+    game.play_time = max(0, game.play_time - session["play_time"])
+    game.progress = max(0, game.progress - session["play_time"])
+    if session is sessions[-1] and game.percentage_progress == session["percentage_progress"]:
+        game.percentage_progress = next(
+            (row["percentage_progress"] for row in reversed(sessions[:-1])
+             if row["percentage_progress"] is not None),
+            0,
+        )
+    game.save(update_fields=["play_time", "progress", "percentage_progress"])
+
+    destination = _game_sessions_url(game, request.POST.get("sessions"))
+    if request.headers.get("HX-Request") == "true":
+        return HttpResponse(status=200, headers={"HX-Redirect": destination})
+    return redirect(destination)

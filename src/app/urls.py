@@ -100,5 +100,5 @@ urlpatterns = [
     ),
     path("statistics", views.statistics, name="statistics"),
     path("game-sessions/<int:game_id>", views.game_sessions, name="game_sessions"),
-    path("game-sessions/<int:game_id>/delete/<int:history_id>", views.delete_game_session, name="delete_game_session"),
+    path("game-sessions/<int:game_id>/delete/<str:session_kind>/<int:session_id>", views.delete_game_session, name="delete_game_session"),
 ]

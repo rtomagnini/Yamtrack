@@ -1,23 +1,55 @@
 <section id="play-sessions" class="mb-8" style="scroll-margin-top: 5rem" aria-labelledby="play-sessions-heading">
-  <h2 id="play-sessions-heading" class="text-xl font-bold mb-4">Play sessions</h2>
+  <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
+    <h2 id="play-sessions-heading" class="text-xl font-bold">Play sessions</h2>
+    {% if play_sessions.paginator.count %}
+      <div class="flex flex-wrap items-center gap-2 text-sm text-gray-300">
+        <span>{{ play_sessions.paginator.count }} session{{ play_sessions.paginator.count|pluralize }}</span>
+        <span aria-hidden="true">·</span>
+        <span>Total <strong class="text-white">{{ play_sessions_total }}</strong></span>
+      </div>
+    {% endif %}
+  </div>
   {% if play_sessions.object_list %}
     <div class="theme-surface rounded-lg overflow-hidden border theme-divider">
       <table class="game-sessions-table text-sm" aria-labelledby="play-sessions-heading">
         <thead>
           <tr>
-            <th scope="col">Date</th>
+            <th scope="col">Session</th>
             <th scope="col">Duration</th>
-            <th scope="col">Progress</th>
+            <th scope="col" class="game-sessions-desktop-column">Progress</th>
+            <th scope="col" class="game-sessions-desktop-column">Total</th>
+            <th scope="col" class="game-session-remove"><span class="sr-only">Delete</span></th>
           </tr>
         </thead>
         <tbody>
           {% for session in play_sessions %}
             <tr>
               <td>
+                <span class="font-semibold">#{{ session.number }}</span>
                 <time datetime="{{ session.date|date:'c' }}" class="text-gray-300">{{ session.date|date:"M j, Y · H:i" }}</time>
+                <span class="game-session-mobile-detail text-gray-400">Total {{ session.total_formatted }}</span>
               </td>
-              <td class="font-semibold">{{ session.play_time_formatted }}</td>
-              <td class="text-gray-300">{{ session.percentage_progress|default_if_none:"—" }}{% if session.percentage_progress is not None %}%{% endif %}</td>
+              <td>
+                <span class="font-semibold">{{ session.play_time_formatted }}</span>
+                {% if session.percentage_progress is not None %}
+                  <span class="game-session-mobile-detail text-gray-300">{{ session.percentage_progress }}%</span>
+                {% endif %}
+              </td>
+              <td class="game-sessions-desktop-column text-gray-300">{{ session.percentage_progress|default_if_none:"—" }}{% if session.percentage_progress is not None %}%{% endif %}</td>
+              <td class="game-sessions-desktop-column text-gray-300">{{ session.total_formatted }}</td>
+              <td class="game-session-remove">
+                <button type="button" class="game-session-delete"
+                        aria-label="Delete session #{{ session.number }}" title="Delete session"
+                        hx-post="{% url 'delete_game_session' current_instance.id session.kind session.id %}"
+                        hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
+                        hx-vals='{"sessions": "{{ play_sessions.number }}"}'
+                        hx-confirm="Delete session #{{ session.number }} ({{ session.play_time_formatted }})?">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                       stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M3 6h18m-2 0-1 14H6L5 6m4 0V3h6v3m-5 4v6m4-6v6"/>
+                  </svg>
+                </button>
+              </td>
             </tr>
           {% endfor %}
         </tbody>

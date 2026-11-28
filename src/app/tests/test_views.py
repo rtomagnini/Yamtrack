@@ -742,6 +742,63 @@ class MediaDetailsViewTests(TestCase):
         self.assertContains(response, "12min")
 
     @patch("app.providers.services.get_media_metadata")
+    def test_game_details_deletes_one_session_and_keeps_totals_in_sync(self, metadata):
+        item = Item.objects.create(
+            title="Another Test Game", media_id="503", media_type=MediaTypes.GAME.value,
+            source=Sources.IGDB.value,
+        )
+        game = Game(
+            user=self.user, item=item, progress=12, play_time=12,
+            status=Status.IN_PROGRESS.value,
+        )
+        game._history_date = timezone.now() - datetime.timedelta(days=1)
+        game.save()
+        old_history = game.history.first().history_id
+        metadata.return_value = {
+            "title": item.title, "media_id": item.media_id,
+            "media_type": item.media_type, "source": item.source,
+        }
+        details = app_tags.media_url(item)
+        progress_url = reverse("progress_edit", args=[item.media_type, game.pk])
+        for minutes, percentage in [(30, 20), (40, 30)]:
+            response = self.client.post(progress_url, {
+                "operation": "increase", "play_time": minutes, "percentage_progress": percentage,
+            })
+            self.assertEqual(response.status_code, 200)
+
+        destination = details + "#play-sessions"
+        self.assertRedirects(
+            self.client.get(reverse("game_sessions", args=[game.pk])), destination,
+        )
+        first = game.sessions.get(minutes=30)
+        url = reverse("delete_game_session", args=[game.pk, "recorded", first.pk])
+        other_user = get_user_model().objects.create_user(username="another-player")
+        self.client.force_login(other_user)
+        self.assertEqual(self.client.post(url).status_code, 404)
+        self.client.force_login(self.user)
+
+        deleted = self.client.post(url, {"sessions": 1}, HTTP_HX_REQUEST="true")
+        self.assertEqual(deleted["HX-Redirect"], details + "?sessions=1#play-sessions")
+        self.assertEqual(self.client.post(url).status_code, 404)
+        game.refresh_from_db()
+        self.assertEqual((game.play_time, game.progress, game.percentage_progress), (52, 52, 30))
+        self.assertEqual(list(game.sessions.values_list("minutes", flat=True)), [40])
+        response = self.client.get(details)
+        self.assertEqual([row["play_time"] for row in response.context["play_sessions"]], [40, 12])
+
+        legacy_url = reverse("delete_game_session", args=[game.pk, "history", old_history])
+        self.assertRedirects(self.client.post(legacy_url), destination)
+        game.refresh_from_db()
+        self.assertEqual((game.play_time, game.progress), (40, 40))
+        self.assertEqual([row["play_time"] for row in self.client.get(details).context["play_sessions"]], [40])
+
+        final_url = reverse("delete_game_session", args=[game.pk, "recorded", game.sessions.get().pk])
+        self.assertRedirects(self.client.post(final_url), destination)
+        game.refresh_from_db()
+        self.assertEqual((game.play_time, game.progress, game.percentage_progress), (0, 0, 0))
+        self.assertContains(self.client.get(details), "No play sessions recorded yet.")
+
+    @patch("app.providers.services.get_media_metadata")
     def test_media_details_view(self, mock_get_metadata):
         """Test the media details view."""
         # Mock the metadata
