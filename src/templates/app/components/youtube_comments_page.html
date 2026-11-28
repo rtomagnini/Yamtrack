@@ -1,0 +1,28 @@
+{% url 'youtube_comments' video_id as comments_url %}
+{% for comment in page.comments %}
+  <article class="youtube-comment">
+    <p class="text-sm">
+      <strong>{{ comment.author|default:"YouTube user" }}</strong>
+      {% if comment.publishedText %}<span class="text-gray-300">{{ comment.publishedText }}</span>{% endif %}
+    </p>
+    <p class="youtube-comment-text text-sm">{{ comment.content }}</p>
+    {% if not replies and comment.replies.continuation %}
+      <div class="youtube-comment-replies">
+        <button type="button" class="filter-control cursor-pointer"
+                data-comments-more="{{ comments_url }}?replies=1&amp;continuation={{ comment.replies.continuation|urlencode }}">
+          View replies{% if comment.replies.replyCount %} ({{ comment.replies.replyCount }}){% endif %}
+        </button>
+      </div>
+    {% endif %}
+  </article>
+{% empty %}
+  {% if not page.continuation %}
+    <p class="text-sm text-gray-300">{% if replies %}No replies available.{% else %}No comments available.{% endif %}</p>
+  {% endif %}
+{% endfor %}
+{% if page.continuation %}
+  <button type="button" class="filter-control cursor-pointer"
+          data-comments-more="{{ comments_url }}?continuation={{ page.continuation|urlencode }}{% if replies %}&amp;replies=1{% endif %}">
+    {% if replies %}Load more replies{% else %}Load more comments{% endif %}
+  </button>
+{% endif %}

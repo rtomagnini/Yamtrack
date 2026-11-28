@@ -279,3 +279,71 @@
   background: var(--theme-selected);
   color: var(--theme-on-selected);
 }
+
+.youtube-comments-trigger.filter-control {
+  flex: none;
+  width: 2.75rem;
+  height: 2.75rem;
+  padding: 0;
+  cursor: pointer;
+}
+
+.youtube-comments-dialog {
+  position: fixed;
+  inset: 0;
+  width: min(36rem, calc(100% - 2rem));
+  max-height: 85vh;
+  max-height: 85dvh;
+  margin: auto;
+  border: 1px solid var(--theme-outline);
+  color: white;
+  overflow: hidden;
+}
+
+.youtube-comments-dialog[open] {
+  display: flex;
+  flex-direction: column;
+}
+
+.youtube-comments-dialog::backdrop {
+  background: rgb(0 0 0 / 70%);
+}
+
+.youtube-comments-dialog [hidden] {
+  display: none;
+}
+
+.youtube-comments-header,
+.youtube-comments-body {
+  padding: 1rem;
+}
+
+.youtube-comments-header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: .75rem;
+  border-bottom: 1px solid var(--theme-outline);
+  overflow-wrap: anywhere;
+}
+
+.youtube-comments-body {
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.youtube-comment {
+  padding-block: .625rem;
+  border-bottom: 1px solid var(--theme-outline);
+}
+
+.youtube-comment-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.youtube-comment-replies {
+  margin: .5rem 0 0 .5rem;
+  padding-inline-start: .625rem;
+  border-inline-start: 1px solid var(--theme-outline);
+}

@@ -662,6 +662,9 @@ def test_youtube_logo_survives_provider_refresh_and_renders_in_all_views(
     client, user, youtube_channel, provider,
 ):
     channel = youtube_channel
+    video = Item.objects.get(source="youtube", media_type="episode", media_id=channel.item.media_id)
+    Item.objects.filter(pk=video.pk).update(youtube_video_id="jNQXAC9IVRw")
+    comments_url = reverse("youtube_comments", args=[video.pk])
     ItemMetadataOverride.objects.create(user=user, item=channel.item, image="https://example.com/custom-logo.jpg")
     Item.objects.filter(pk=channel.item_id).update(image="https://example.com/new-logo.jpg")
     original = {
@@ -677,6 +680,7 @@ def test_youtube_logo_survives_provider_refresh_and_renders_in_all_views(
     assert response.context["media"]["media_id"] == "55"
     assert b"fixed inset-0 bg-black/50" in response.content
     assert b'hx-get="/track_modal/youtube/youtube/55"' in response.content
+    assert f'data-youtube-comments-url="{comments_url}"'.encode() in response.content
     assert original["media_id"] == "UCTestChannel"
     assert original["image"] == "https://example.com/new-logo.jpg"
     assert "episodes" not in original
@@ -701,6 +705,7 @@ def test_youtube_logo_survives_provider_refresh_and_renders_in_all_views(
     assert response.status_code == 200
     assert b"https://example.com/custom-logo.jpg" in response.content
     assert f'href="{channel_url}"'.encode() in response.content
+    assert f'data-youtube-comments-url="{comments_url}"'.encode() in response.content
     other = get_user_model().objects.create_user(username="other-channel-viewer")
     client.force_login(other)
     response = client.get(reverse("youtubes"), {"status": "all"})

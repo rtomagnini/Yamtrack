@@ -1,0 +1,21 @@
+{% load static %}
+{% load app_tags %}
+
+<dialog id="youtube-comments-dialog" class="theme-dialog youtube-comments-dialog" aria-labelledby="youtube-comments-heading">
+  <div class="youtube-comments-header">
+    <div>
+      <h2 id="youtube-comments-heading" class="text-xl font-bold">Comments</h2>
+      <p class="text-sm text-gray-300" data-comments-title></p>
+    </div>
+    <form method="dialog">
+      <button type="submit" class="filter-control cursor-pointer" aria-label="Close comments" autofocus>Close</button>
+    </form>
+  </div>
+  <div class="youtube-comments-body">
+    <p data-comments-status role="status" class="text-sm text-gray-300" hidden>Loading comments…</p>
+    <div data-comments-content></div>
+    <p data-comments-error role="alert" class="text-sm text-red-300" hidden></p>
+    <button type="button" data-comments-retry class="filter-control cursor-pointer" hidden>Try again</button>
+  </div>
+</dialog>
+<script defer src="{% static 'js/youtubeComments.js' %}{% get_static_file_mtime 'js/youtubeComments.js' %}"></script>

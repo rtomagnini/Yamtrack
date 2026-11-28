@@ -4,7 +4,10 @@
       {% include "app/components/youtube_channel_logo.html" with video=video only %}
     </td>
     <td class="p-2 pe-8 w-2/5">
-      <div class="font-semibold">{{ video.title }}</div>
+      <div class="flex items-center gap-2">
+        <span class="font-semibold">{{ video.title }}</span>
+        {% include "app/components/youtube_comments_button.html" with video=video only %}
+      </div>
     </td>
     <td class="p-2 text-center">{{ video.runtime|default:'—' }}</td>
     <td class="p-2 text-center">{{ video.status|default:'—' }}</td>

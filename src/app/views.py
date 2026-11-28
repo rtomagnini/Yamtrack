@@ -2024,6 +2024,7 @@ def youtube_channel_details(request, source, media_id, title):  # noqa: ARG001 t
             "id": item.id,
             "watched": bool(episode_history),
             "history": episode_history,
+            "youtube_video_id": item.youtube_video_id,
             # Add required fields for template tags
             "source": item.source,
             "media_type": item.media_type,

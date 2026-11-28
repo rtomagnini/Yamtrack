@@ -1,14 +1,16 @@
-"""Authenticated Invidious history updates with redacted errors."""
+"""Invidious history updates and public comments."""
 
 # These API failures are short messages safe to display on the status page.
 # ruff: noqa: EM101, TRY003
 
 import json
+from hashlib import sha256
 from http import HTTPStatus
 from urllib.parse import quote, unquote, urlsplit
 
 import requests
 from django.conf import settings
+from django.core.cache import cache
 
 from integrations.tubearchivist import TubeArchivistError, validate_video_id
 
@@ -22,33 +24,69 @@ class InvidiousError(Exception):
         self.permanent = permanent
 
 
+def _invidious_url():
+    url = settings.INVIDIOUS_URL.strip().rstrip("/")
+    try:
+        parsed = urlsplit(url)
+        valid = (
+            parsed.scheme in {"http", "https"}
+            and parsed.hostname
+            and not (parsed.username or parsed.password or parsed.query or parsed.fragment)
+        )
+    except ValueError:
+        valid = False
+    if not valid:
+        raise InvidiousError("Invalid Invidious URL.", permanent=True)
+    return url
+
+
+def get_video_comments(video_id, continuation=""):
+    """Fetch a page of public comments or replies without account credentials."""
+    validate_video_id(video_id)
+    url = _invidious_url()
+    cache_key = "invidious_comments:" + sha256(
+        f"{url}\n{video_id}\n{continuation}".encode(),
+    ).hexdigest()
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    params = {"source": "youtube", "sort_by": "top"}
+    if continuation:
+        params["continuation"] = continuation
+    try:
+        response = requests.get(
+            f"{url}/api/v1/comments/{video_id}",
+            params=params,
+            headers={"Accept": "application/json"},
+            timeout=(3, 8),
+            allow_redirects=False,
+        )
+        page = response.json() if response.status_code == HTTPStatus.OK else None
+    except (requests.RequestException, ValueError):
+        page = None
+    if not isinstance(page, dict) or not isinstance(page.get("comments"), list):
+        raise InvidiousError("Could not load comments from Invidious.")
+
+    result = {
+        "comments": [comment for comment in page["comments"] if isinstance(comment, dict)],
+        "continuation": page.get("continuation"),
+    }
+    cache.set(cache_key, result, timeout=180)
+    return result
+
+
 class InvidiousClient:
     """Mark history for the account belonging to the configured API token."""
 
     def __init__(self):
         """Validate configuration without contacting the server."""
-        self.url = settings.INVIDIOUS_URL.strip().rstrip("/")
         raw_token = settings.INVIDIOUS_TOKEN.strip()
-        if not self.url or not raw_token:
+        if not settings.INVIDIOUS_URL.strip().rstrip("/") or not raw_token:
             raise InvidiousError(
                 "Configure INVIDIOUS_URL and INVIDIOUS_TOKEN.", permanent=True,
             )
-        try:
-            parsed = urlsplit(self.url)
-            valid = (
-                parsed.scheme in {"http", "https"}
-                and parsed.hostname
-                and not (
-                    parsed.username
-                    or parsed.password
-                    or parsed.query
-                    or parsed.fragment
-                )
-            )
-        except ValueError:
-            valid = False
-        if not valid:
-            raise InvidiousError("Invalid Invidious URL.", permanent=True)
+        self.url = _invidious_url()
         self.token = self._token(raw_token)
 
     @staticmethod

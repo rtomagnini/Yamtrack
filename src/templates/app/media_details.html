@@ -331,6 +331,9 @@
     {% if media_type == MediaTypes.SEASON.value %}</div>{% endif %}
 
   </div>
+  {% if is_youtube_channel %}
+    {% include "app/components/youtube_comments_dialog.html" %}
+  {% endif %}
 {% endblock content %}
 
 {% block js %}

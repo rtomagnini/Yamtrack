@@ -1,6 +1,6 @@
 from django.urls import path, register_converter
 
-from app import converters, views, views_metadata
+from app import converters, views, views_metadata, views_youtubes
 
 register_converter(converters.MediaTypeChecker, "media_type")
 register_converter(converters.SourceChecker, "source")
@@ -8,7 +8,8 @@ register_converter(converters.SourceChecker, "source")
 
 urlpatterns = [
     path("metadata/edit/<source:source>/<media_type:media_type>/<str:media_id>", views_metadata.edit_metadata, name="metadata_edit"),
-    path("youtubes", __import__('app.views_youtubes').views_youtubes.youtubes_view, name="youtubes"),
+    path("youtubes", views_youtubes.youtubes_view, name="youtubes"),
+    path("youtubes/<int:video_id>/comments", views_youtubes.youtube_comments, name="youtube_comments"),
     path("", views.home, name="home"),
     path("medialist/<media_type:media_type>", views.media_list, name="medialist"),
     path("search", views.media_search, name="search"),
