@@ -1,0 +1,36 @@
+{% load app_tags %}
+
+{% include "app/components/media_tracking_history.html" %}
+
+<div class="flex items-center justify-between mb-6" x-data="mediaCardActions">
+  <h2 class="text-xl font-bold">Actions</h2>
+  {% include "app/components/media_card_actions.html" with item=media title=media.title inline_actions=True detail_actions=True %}
+  {% include "app/components/media_card_dialogs.html" with item=media detail_actions=True %}
+</div>
+
+{# Media Details #}
+<h2 class="text-xl font-bold mb-4">Details</h2>
+<div class="theme-surface p-4 rounded-lg text-center md:text-start">
+  {% if media.details.items %}
+    {% for key, value in media.details.items %}
+      <div class="mb-4">
+        <h3 class="text-sm font-semibold text-gray-400">{{ key|no_underscore|upper }}</h3>
+        {% if value|is_list %}
+          {% for item in value %}<p class="text-gray-200">{{ item }}</p>{% endfor %}
+        {% else %}
+          <p class="text-gray-200">{{ value|default_if_none:"Unknown" }}</p>
+        {% endif %}
+      </div>
+    {% endfor %}
+    {% if media.source != Sources.MANUAL.value %}
+      <div>
+        <h3 class="text-sm font-semibold text-gray-400">Source</h3>
+        <a href="{{ media.source_url }}"
+           class="text-gray-200 hover:text-indigo-500 transition-colors duration-200"
+           target="_blank">{{ media.source|source_readable }}</a>
+      </div>
+    {% endif %}
+  {% else %}
+    <div class="text-gray-200">No details available</div>
+  {% endif %}
+</div>

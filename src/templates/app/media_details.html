@@ -22,6 +22,17 @@
     .media-overview-heading { grid-area: heading; }
     .media-overview-heading h1 { overflow-wrap: anywhere; }
     .media-overview-description { grid-area: description; }
+    .media-overview-game {
+      grid-template-areas:
+        "poster heading"
+        "history history"
+        "description description"
+        "content content";
+    }
+    .game-detail-sidebar,
+    .game-detail-main { display: contents; }
+    .game-detail-history { grid-area: history; }
+    .game-detail-content { grid-area: content; }
     .media-tracking-summary { gap: .375rem .75rem; }
     .media-tracking-status { padding: .25rem .625rem; }
     .media-tracking-progress { font-variant-numeric: tabular-nums; }
@@ -31,12 +42,25 @@
         grid-template: "poster heading" auto "poster description" 1fr / minmax(0, min(25%, 250px)) minmax(0, 1fr);
         column-gap: 2.5rem;
       }
+      .media-overview-game {
+        grid-template:
+          "sidebar heading" auto
+          "sidebar main" 1fr / minmax(0, min(25%, 250px)) minmax(0, 1fr);
+      }
+      .game-detail-sidebar,
+      .game-detail-main {
+        display: flex;
+        flex-direction: column;
+        gap: 1.5rem;
+      }
+      .game-detail-sidebar { grid-area: sidebar; }
+      .game-detail-main { grid-area: main; }
     }
   </style>
 {% endblock extra_head %}
 
 {% block content %}
-  <div class="media-overview mb-8{% if media.media_type == MediaTypes.SEASON.value %} media-overview-season{% endif %}">
+  <div class="media-overview mb-8{% if media.media_type == MediaTypes.SEASON.value %} media-overview-season{% elif media_type == MediaTypes.GAME.value %} media-overview-game{% endif %}">
     <div class="media-overview-heading">
       {% if media.media_type == MediaTypes.SEASON.value %}
         <a class="text-sm font-semibold hover:text-indigo-400 text-gray-400"
@@ -94,9 +118,17 @@
       {% include "app/components/media_tracking_button.html" %}
     </div>
 
-    <img alt="{{ media.title }}"
-         class="media-overview-poster w-full rounded-lg theme-surface object-cover"
-         src="{{ media.image }}">
+    {% if media_type == MediaTypes.GAME.value %}
+      <div class="game-detail-sidebar">
+        {% include "app/components/media_overview_poster.html" %}
+        <div class="game-detail-history">
+          {% include "app/components/media_details_sidebar.html" %}
+        </div>
+      </div>
+      <div class="game-detail-main">
+    {% else %}
+      {% include "app/components/media_overview_poster.html" %}
+    {% endif %}
 
     <div class="media-overview-description">
       {# Genres #}
@@ -260,74 +292,31 @@
         {% endif %}
       </div>
     </div>
+    {% if media_type == MediaTypes.GAME.value %}
+        <div class="game-detail-content" data-game-content>
+          {% if current_instance %}
+            {% include "app/components/game_play_sessions.html" %}
+          {% endif %}
+          {% include "app/components/media_related_items.html" %}
+        </div>
+      </div>
+    {% endif %}
   </div>
 
+  {% if media_type != MediaTypes.GAME.value %}
   <div class="flex flex-col md:flex-row gap-12 md:gap-10">
     {# Details Column #}
 
     <div class="w-full md:w-1/4 md:max-w-[250px] mx-auto lg:mx-0">
-      {% include "app/components/media_tracking_history.html" %}
-
-      <div class="flex items-center justify-between mb-6" x-data="mediaCardActions">
-        <h2 class="text-xl font-bold">Actions</h2>
-        {% include "app/components/media_card_actions.html" with item=media title=media.title inline_actions=True detail_actions=True %}
-        {% include "app/components/media_card_dialogs.html" with item=media detail_actions=True %}
-      </div>
-
-      {# Media Details #}
-      <h2 class="text-xl font-bold mb-4">Details</h2>
-      <div class="theme-surface p-4 rounded-lg text-center md:text-start">
-        {% if media.details.items %}
-          {% for key, value in media.details.items %}
-            <div class="mb-4">
-              <h3 class="text-sm font-semibold text-gray-400">{{ key|no_underscore|upper }}</h3>
-              {% if value|is_list %}
-                {% for item in value %}<p class="text-gray-200">{{ item }}</p>{% endfor %}
-              {% else %}
-                <p class="text-gray-200">{{ value|default_if_none:"Unknown" }}</p>
-              {% endif %}
-            </div>
-          {% endfor %}
-          {% if media.source != Sources.MANUAL.value %}
-            <div>
-              <h3 class="text-sm font-semibold text-gray-400">Source</h3>
-              <a href="{{ media.source_url }}"
-                 class="text-gray-200 hover:text-indigo-500 transition-colors duration-200"
-                 target="_blank">{{ media.source|source_readable }}</a>
-            </div>
-          {% endif %}
-        {% else %}
-          <div class="text-gray-200">No details available</div>
-        {% endif %}
-      </div>
+      {% include "app/components/media_details_sidebar.html" %}
     </div>
-
-    {% if media_type == MediaTypes.GAME.value %}
-      <div class="w-full min-w-0 flex-1" data-game-content>
-        {% if current_instance %}
-          {% include "app/components/game_play_sessions.html" %}
-        {% endif %}
-    {% endif %}
 
     {# Related Media #}
     {% if media.related %}
-      <div class="w-full{% if media_type != MediaTypes.GAME.value %} md:w-3/4{% endif %}">
-        {% for name, related_items in media.related.items %}
-          {% if related_items %}
-            <section class="{% if not forloop.last %}mb-8{% endif %}">
-              <h2 class="text-xl font-bold mb-4">{{ name|no_underscore|title }}</h2>
-              <div class="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-4">
-                {% for item in related_items %}
-                  {% include "app/components/media_card.html" with item=item title=item.season_title|default:item.title media=None %}
-                {% endfor %}
-              </div>
-            </section>
-          {% endif %}
-        {% endfor %}
+      <div class="w-full md:w-3/4">
+        {% include "app/components/media_related_items.html" %}
       </div>
     {% endif %}
-
-    {% if media_type == MediaTypes.GAME.value %}</div>{% endif %}
 
     {% if media_type == MediaTypes.SEASON.value %}
       <div class="w-full">
@@ -342,6 +331,7 @@
     {% if media_type == MediaTypes.SEASON.value %}</div>{% endif %}
 
   </div>
+  {% endif %}
   {% if is_youtube_channel %}
     {% include "app/components/youtube_comments_dialog.html" %}
   {% endif %}
