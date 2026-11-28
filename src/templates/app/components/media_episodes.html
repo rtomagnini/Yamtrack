@@ -86,9 +86,6 @@
                     </p>
                   </div>
                   <div class="flex space-x-2{% if is_youtube_channel %} youtube-episode-actions{% endif %}">
-                    {% if is_youtube_channel %}
-                      {% include "app/components/youtube_video_links.html" with video=episode compact=True only %}
-                    {% endif %}
                     <div class="flex items-start gap-2" x-data="{ trackOpen: false }">
                       <button @click="trackOpen = true"
                               data-episode-track
@@ -170,6 +167,7 @@
 
                     {# Delete (YouTube only) #}
                     {% if is_youtube_channel %}
+                      {% include "app/components/youtube_video_links.html" with video=episode compact=True only %}
                       <div>
                         <button class="p-2 bg-red-600 hover:bg-red-500 text-white rounded-full transition duration-200 cursor-pointer"
                                 title="Delete video"

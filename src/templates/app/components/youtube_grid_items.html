@@ -18,7 +18,6 @@
           {% endif %}
         </div>
         <div class="flex gap-2 items-center ml-auto">
-          {% include "app/components/youtube_video_links.html" with video=video only %}
           {# Mark as Watched Button #}
           <button
             class="p-2.5 bg-blue-600 text-white rounded-full flex items-center justify-center transition-all duration-200 min-w-[44px] min-h-[44px]{% if video.end_date_sub %} opacity-50 cursor-not-allowed{% else %} hover:bg-blue-500 hover:scale-110 hover:shadow-[0_0_15px_rgba(37,99,235,0.5)] cursor-pointer{% endif %}"
@@ -35,6 +34,7 @@
           >
             {% include "app/components/youtube_watch_icon.html" with watched=video.end_date_sub only %}
           </button>
+          {% include "app/components/youtube_video_links.html" with video=video only %}
           {# Delete Video Button #}
           <div x-data="{ confirmDelete: false }">
             <button @click="confirmDelete = true"
