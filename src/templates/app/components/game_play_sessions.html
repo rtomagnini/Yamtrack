@@ -1,19 +1,28 @@
 <section id="play-sessions" class="mb-8" style="scroll-margin-top: 5rem" aria-labelledby="play-sessions-heading">
   <h2 id="play-sessions-heading" class="text-xl font-bold mb-4">Play sessions</h2>
   {% if play_sessions.object_list %}
-    <ul class="theme-surface rounded-lg divide-y divide-gray-700">
-      {% for session in play_sessions %}
-        <li class="px-4 py-3 flex flex-wrap items-center justify-between gap-2 text-sm">
-          <time datetime="{{ session.date|date:'c' }}" class="text-gray-300">{{ session.date|date:"M j, Y · H:i" }}</time>
-          <div class="flex items-center gap-3">
-            <span class="font-semibold">{{ session.play_time_formatted }}</span>
-            {% if session.percentage_progress is not None %}
-              <span class="text-gray-300">{{ session.percentage_progress }}%</span>
-            {% endif %}
-          </div>
-        </li>
-      {% endfor %}
-    </ul>
+    <div class="theme-surface rounded-lg overflow-hidden border theme-divider">
+      <table class="game-sessions-table text-sm" aria-labelledby="play-sessions-heading">
+        <thead>
+          <tr>
+            <th scope="col">Date</th>
+            <th scope="col">Duration</th>
+            <th scope="col">Progress</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for session in play_sessions %}
+            <tr>
+              <td>
+                <time datetime="{{ session.date|date:'c' }}" class="text-gray-300">{{ session.date|date:"M j, Y · H:i" }}</time>
+              </td>
+              <td class="font-semibold">{{ session.play_time_formatted }}</td>
+              <td class="text-gray-300">{{ session.percentage_progress|default_if_none:"—" }}{% if session.percentage_progress is not None %}%{% endif %}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
     {% if play_sessions.has_other_pages %}
       <nav class="flex flex-wrap items-center gap-2 mt-3" aria-label="Play sessions pagination">
         {% if play_sessions.has_previous %}

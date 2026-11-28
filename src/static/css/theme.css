@@ -404,3 +404,31 @@
   padding-inline-start: .625rem;
   border-inline-start: 1px solid var(--theme-outline);
 }
+
+.game-sessions-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+.game-sessions-table th,
+.game-sessions-table td {
+  padding: .625rem clamp(.375rem, 2vw, .875rem);
+  text-align: start;
+}
+
+.game-sessions-table thead {
+  background: var(--theme-raised);
+}
+
+.game-sessions-table tbody tr {
+  border-top: 1px solid var(--theme-outline);
+}
+
+.game-sessions-table th + th,
+.game-sessions-table td + td {
+  width: clamp(4.25rem, 14%, 9rem);
+  border-inline-start: 1px solid var(--theme-outline);
+  text-align: end;
+  white-space: nowrap;
+}

@@ -721,6 +721,8 @@ class MediaDetailsViewTests(TestCase):
 
         response = self.client.get(url)
         self.assertContains(response, 'id="play-sessions"')
+        self.assertContains(response, '<th scope="col">Duration</th>', html=True)
+        self.assertNotContains(response, ">Episodes</h2>")
         self.assertContains(response, "30min")
         self.assertContains(response, "?sessions=2#play-sessions")
         self.assertEqual(response.context["play_sessions"].paginator.count, 12)

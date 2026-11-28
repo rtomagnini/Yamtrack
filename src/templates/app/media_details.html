@@ -331,7 +331,9 @@
           <button type="button" class="ml-2 underline text-indigo-300 cursor-pointer">Refresh list</button>
         </div>
     {% endif %}
-    {% include "app/components/media_episodes.html" %}
+    {% if media_type == MediaTypes.SEASON.value or is_youtube_channel %}
+      {% include "app/components/media_episodes.html" %}
+    {% endif %}
     {% if media_type == MediaTypes.SEASON.value %}</div>{% endif %}
 
   </div>
