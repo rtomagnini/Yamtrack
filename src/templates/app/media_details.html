@@ -262,10 +262,6 @@
     </div>
   </div>
 
-  {% if media_type == MediaTypes.GAME.value and current_instance %}
-    {% include "app/components/game_play_sessions.html" %}
-  {% endif %}
-
   <div class="flex flex-col md:flex-row gap-12 md:gap-10">
     {# Details Column #}
 
@@ -306,9 +302,16 @@
       </div>
     </div>
 
+    {% if media_type == MediaTypes.GAME.value %}
+      <div class="w-full min-w-0 flex-1" data-game-content>
+        {% if current_instance %}
+          {% include "app/components/game_play_sessions.html" %}
+        {% endif %}
+    {% endif %}
+
     {# Related Media #}
     {% if media.related %}
-      <div class="w-full md:w-3/4">
+      <div class="w-full{% if media_type != MediaTypes.GAME.value %} md:w-3/4{% endif %}">
         {% for name, related_items in media.related.items %}
           {% if related_items %}
             <section class="{% if not forloop.last %}mb-8{% endif %}">
@@ -323,6 +326,8 @@
         {% endfor %}
       </div>
     {% endif %}
+
+    {% if media_type == MediaTypes.GAME.value %}</div>{% endif %}
 
     {% if media_type == MediaTypes.SEASON.value %}
       <div class="w-full">

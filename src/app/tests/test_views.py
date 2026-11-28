@@ -716,6 +716,10 @@ class MediaDetailsViewTests(TestCase):
         metadata.return_value = {
             "title": item.title, "media_id": item.media_id,
             "media_type": item.media_type, "source": item.source,
+            "related": {"recommendations": [{
+                "title": "Another game", "media_id": "502",
+                "media_type": item.media_type, "source": item.source,
+            }]},
         }
         url = reverse("media_details", args=[item.source, item.media_type, item.media_id, "test-game"])
 
@@ -723,6 +727,11 @@ class MediaDetailsViewTests(TestCase):
         self.assertContains(response, 'id="play-sessions"')
         self.assertContains(response, '<th scope="col">Duration</th>', html=True)
         self.assertNotContains(response, ">Episodes</h2>")
+        markup = response.content.decode()
+        self.assertLess(markup.index("Your History</h2>"), markup.index('id="play-sessions"'))
+        self.assertLess(markup.index("Actions</h2>"), markup.index('id="play-sessions"'))
+        self.assertLess(markup.index("Details</h2>"), markup.index('id="play-sessions"'))
+        self.assertLess(markup.index('id="play-sessions"'), markup.index("Recommendations</h2>"))
         self.assertContains(response, "30min")
         self.assertContains(response, "?sessions=2#play-sessions")
         self.assertEqual(response.context["play_sessions"].paginator.count, 12)
