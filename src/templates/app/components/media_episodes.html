@@ -87,7 +87,7 @@
                   </div>
                   <div class="flex space-x-2">
                     {% if is_youtube_channel %}
-                      {% include "app/components/youtube_comments_button.html" with video=episode only %}
+                      {% include "app/components/youtube_comments_button.html" with video=episode compact=True only %}
                     {% endif %}
                     <div class="flex items-start gap-2" x-data="{ trackOpen: false }">
                       <button @click="trackOpen = true"
